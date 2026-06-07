@@ -751,7 +751,7 @@
   }
 
   .meeting-composer {
-    margin-top: 12px;
+    margin-top: 0;
     display: flex;
     gap: 8px;
     align-items: center;
@@ -766,6 +766,68 @@
     border-radius: 16px;
     background: rgba(255, 255, 255, 0.08);
     padding: 16px;
+  }
+
+  /* Role-specific styles for simplified Live Meeting UI */
+  .meet-stage.signer-mode {
+    grid-template-columns: 1fr;
+  }
+  .meet-stage.signer-mode .meet-aside {
+    display: none !important;
+  }
+  .meet-stage.signer-mode #remote_video {
+    position: absolute;
+    left: 14px;
+    top: 14px;
+    width: 200px !important;
+    height: 150px !important;
+    border-radius: 12px;
+    border: 1.5px solid rgba(255, 255, 255, 0.25);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
+    object-fit: cover;
+    z-index: 10;
+    display: block !important;
+  }
+  .meet-stage.signer-mode .meeting-avatar-corner {
+    display: none !important;
+  }
+  .meet-stage.signer-mode .meet-controls {
+    display: none !important; /* Signer has auto controls, no mic/composer controls needed */
+  }
+
+  .meet-stage.speaker-mode {
+    grid-template-columns: 1fr;
+  }
+  .meet-stage.speaker-mode .meet-aside {
+    display: none !important;
+  }
+  .meet-stage.speaker-mode #remote_video {
+    display: none !important;
+  }
+  .meet-stage.speaker-mode .meeting-avatar-corner {
+    position: absolute;
+    left: 14px;
+    top: 14px;
+    width: 200px !important;
+    height: 150px !important;
+    border-radius: 12px;
+    border: 1.5px solid rgba(255, 255, 255, 0.25);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
+    background: rgba(0, 0, 0, 0.9);
+    z-index: 10;
+    display: block !important;
+  }
+  .meet-stage.speaker-mode .meet-controls {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    width: 100%;
+  }
+  .meet-stage.speaker-mode #meeting-composer {
+    display: flex !important;
+    flex: 1;
+    margin-top: 0;
+    gap: 8px;
   }
 
   @media (max-width: 1100px) {
@@ -1904,6 +1966,10 @@
               <input id="meeting-room-id" class="input-field" placeholder="Enter a meeting code" value="general"
                 onkeypress="if(event.key==='Enter')joinMeeting()">
             </div>
+            <select id="meeting-role-select" class="input-field" style="max-width: 160px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.14); color: #fff; cursor: pointer;">
+              <option value="signer" style="background: #111;">Signer (Deaf/HoH)</option>
+              <option value="speaker" style="background: #111;">Speaker</option>
+            </select>
             <button class="btn btn-secondary" onclick="joinMeeting()">Join</button>
           </div>
 
@@ -1932,6 +1998,10 @@
               </div>
               <video id="remote_video" autoplay playsinline
                 style="width:100%;border-radius:14px;background:#111;display:none;max-height:380px;object-fit:cover;" muted></video>
+              <div id="meeting-subtitle-overlay"
+                style="display:none; border-radius:14px; background:rgba(0,0,0,0.45); color:#ffffff; min-height:240px; align-items:center; justify-content:center; font-size:24px; font-weight:700; text-align:center; padding:30px; line-height:1.5; border: 1px solid rgba(255,255,255,0.1);">
+                Waiting for speaker...
+              </div>
               <div id="meeting-video-placeholder"
                 style="border-radius:14px;background:#121212;color:#ffffff;min-height:240px;display:flex;align-items:center;justify-content:center;font-size:13px;letter-spacing:0.04em;text-transform:uppercase;">
                 Join a room to start receiving live captions
@@ -1941,6 +2011,11 @@
               <button class="toggle-btn" id="meeting-cam-btn" onclick="toggleMeetingCamera()">📷 Camera Off</button>
               <button class="toggle-btn" id="meeting-mic-btn" onclick="toggleMeetingMic()">🔇 Mic Off</button>
               <button class="toggle-btn" id="meeting-sign-btn" onclick="toggleMeetingSignInput()" style="display:none;">🤟 Sign Input Off</button>
+              <div class="meeting-composer" id="meeting-composer" style="display:none; flex:1; gap:8px; align-items:center;">
+                <input id="meeting-text-input" class="input-field" placeholder="Type a message to convert for Deaf/HoH participant"
+                  onkeypress="if(event.key==='Enter')sendMeetingText()" style="padding:10px 14px; border-radius:999px;">
+                <button class="btn btn-primary btn-sm" onclick="sendMeetingText()">Send</button>
+              </div>
             </div>
           </div>
 
@@ -1948,11 +2023,6 @@
             <div class="remote-label" id="meeting-caption-label">Live captions from participants</div>
             <div class="remote-sentence-box" id="remote-sentence-box" style="display:block; margin-top:8px; min-height:128px;">
               <div class="remote-text" id="remote-sentence" style="color:var(--gray-500);">No messages yet.</div>
-            </div>
-            <div class="meeting-composer" id="meeting-composer" style="display:none;">
-              <input id="meeting-text-input" class="input-field" placeholder="Type a message to convert for Deaf/HoH participant"
-                onkeypress="if(event.key==='Enter')sendMeetingText()">
-              <button class="btn btn-primary" onclick="sendMeetingText()">Send</button>
             </div>
             <button class="toggle-btn" id="meeting-speech-out-btn" onclick="toggleMeetingSpeechOut()" style="margin-top:12px; display:none;">🔊 Read captions</button>
           </div>
@@ -2067,8 +2137,8 @@
   const initials = getInitials();
   const userRole = ((user && user.role) || '').toString();
   const userRoleLower = userRole.toLowerCase();
-  const isDeafHohUser = userRoleLower.includes('deaf') || userRoleLower.includes('hoh') || userRoleLower.includes('hard of hearing');
-  const isSpeakerUser = userRoleLower.includes('speaker') || !isDeafHohUser;
+  let isDeafHohUser = userRoleLower.includes('deaf') || userRoleLower.includes('hoh') || userRoleLower.includes('hard of hearing');
+  let isSpeakerUser = userRoleLower.includes('speaker') || !isDeafHohUser;
 
   function getDefaultModuleForRole(role) {
     const r = (role || '').toString().toLowerCase();
@@ -3454,15 +3524,17 @@
   // ═══════════════════════════════════════════════════════════
 
   function generateMeetingRoomId() {
-    const now = new Date();
-    const stamp = now.toISOString().replace(/[-:.TZ]/g, '').slice(0, 12);
-    const rand = Math.random().toString(36).slice(2, 7);
-    return `room-${stamp}-${rand}`;
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+    let result = '';
+    for (let i = 0; i < 5; i++) {
+      result += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    return result;
   }
 
   function sanitizeMeetingCode(value) {
-    const normalized = (value || '').toLowerCase().trim();
-    return normalized.replace(/[^a-z0-9-]/g, '').slice(0, 48);
+    const normalized = (value || '').toUpperCase().trim();
+    return normalized.replace(/[^A-Z]/g, '').slice(0, 5);
   }
 
   function buildMeetingLink(roomId) {
@@ -3486,6 +3558,12 @@
 
     sentence.textContent = payloadText;
     sentence.style.color = '#111111';
+
+    const overlay = document.getElementById('meeting-subtitle-overlay');
+    if (overlay) {
+      overlay.textContent = payloadText;
+      overlay.style.color = '#ffffff';
+    }
 
     if (localEcho) return;
 
@@ -3538,6 +3616,53 @@
     const composer = document.getElementById('meeting-composer');
     const signBtn = document.getElementById('meeting-sign-btn');
     const speechBtn = document.getElementById('meeting-speech-out-btn');
+    const stage = document.querySelector('.meet-stage');
+    const subtitleOverlay = document.getElementById('meeting-subtitle-overlay');
+    const placeholder = document.getElementById('meeting-video-placeholder');
+
+    if (stage) {
+      if (inMeeting) {
+        if (isDeafHohUser) {
+          stage.classList.add('signer-mode');
+          stage.classList.remove('speaker-mode');
+        } else {
+          stage.classList.add('speaker-mode');
+          stage.classList.remove('signer-mode');
+        }
+      } else {
+        stage.classList.remove('signer-mode', 'speaker-mode');
+      }
+    }
+
+    if (inMeeting) {
+      if (subtitleOverlay) {
+        subtitleOverlay.style.display = 'flex';
+        if (isDeafHohUser) {
+          subtitleOverlay.textContent = forcedLang === 'ar' ? 'بانتظار المتحدث...' : 'Waiting for speaker...';
+        } else {
+          subtitleOverlay.textContent = forcedLang === 'ar' ? 'بانتظار الإشارة...' : 'Waiting for signer...';
+        }
+      }
+      if (placeholder) placeholder.style.display = 'none';
+
+      if (!isDeafHohUser) {
+        const corner = document.getElementById('meeting-avatar-corner');
+        const canvas = document.getElementById('meeting-avatar-canvas');
+        if (corner && canvas) {
+          corner.classList.add('visible');
+          const ctx = canvas.getContext('2d');
+          canvas.width = 440;
+          canvas.height = 320;
+          drawAuraAvatar(ctx, null, canvas.width, canvas.height);
+        }
+      }
+    } else {
+      if (subtitleOverlay) subtitleOverlay.style.display = 'none';
+      if (placeholder) {
+        placeholder.style.display = 'flex';
+        placeholder.textContent = forcedLang === 'ar' ? 'انضم إلى غرفة لتلقي الترجمة المباشرة' : 'Join a room to start receiving live captions';
+      }
+    }
 
     if (isDeafHohUser) {
       captionLabel.textContent = 'Speaker captions';
@@ -3764,6 +3889,14 @@
     input.value = roomId;
     let roomJoined = false;
 
+    const roleSelect = document.getElementById('meeting-role-select');
+    if (roleSelect) {
+      const selectedRole = roleSelect.value;
+      isDeafHohUser = (selectedRole === 'signer');
+      isSpeakerUser = !isDeafHohUser;
+      userRole = isDeafHohUser ? 'Deaf/HoH' : 'Speaker';
+    }
+
     const syncMeetingConnection = () => {
       if (!socket || !socket.connected || roomJoined) return;
       roomJoined = true;
@@ -3809,7 +3942,31 @@
     setMeetingUiState(true);
     setStatus(`Meeting: ${roomId}`, true);
     renderMobileQuickActions();
-    await startMeetingCamera();
+
+    if (isDeafHohUser) {
+      await startMeetingCamera();
+      if (!meetingSignInputOn) {
+        startCamera();
+        meetingSignInputOn = true;
+        const signBtn = document.getElementById('meeting-sign-btn');
+        if (signBtn) {
+          signBtn.textContent = '🤟 Sign Input On';
+          signBtn.classList.add('on');
+        }
+      }
+    } else {
+      stopMeetingCamera();
+      if (meetingSignInputOn) {
+        stopCamera();
+        meetingSignInputOn = false;
+        const signBtn = document.getElementById('meeting-sign-btn');
+        if (signBtn) {
+          signBtn.textContent = '🤟 Sign Input Off';
+          signBtn.classList.remove('on');
+        }
+      }
+    }
+    initMeetingRoleUi();
 
     const url = new URL(window.location.href);
     url.searchParams.set('room', roomId);
@@ -3828,9 +3985,11 @@
     meetingMicAudioChunks = [];
     meetingMicOn = false;
     const micBtn = document.getElementById('meeting-mic-btn');
-    micBtn.textContent = '🔇 Mic Off';
-    micBtn.style.background = '';
-    micBtn.style.color = '';
+    if (micBtn) {
+      micBtn.textContent = '🔇 Mic Off';
+      micBtn.style.background = '';
+      micBtn.style.color = '';
+    }
 
     if (socket && socket.connected && currentMeetingRoom) {
       socket.emit('leave_room', { room: currentMeetingRoom });
@@ -3841,12 +4000,14 @@
       stopCamera();
       meetingSignInputOn = false;
       const signBtn = document.getElementById('meeting-sign-btn');
-      signBtn.textContent = '🤟 Sign Input Off';
-      signBtn.classList.remove('on');
+      if (signBtn) {
+        signBtn.textContent = '🤟 Sign Input Off';
+        signBtn.classList.remove('on');
+      }
     }
 
     const avatarCorner = document.getElementById('meeting-avatar-corner');
-    avatarCorner.classList.remove('visible');
+    if (avatarCorner) avatarCorner.classList.remove('visible');
 
     stopMeetingCamera();
 
@@ -3856,6 +4017,7 @@
     document.getElementById('remote-sentence').textContent = 'No messages yet.';
     document.getElementById('remote-sentence').style.color = 'var(--gray-500)';
     setMeetingUiState(false);
+    initMeetingRoleUi();
 
     const url = new URL(window.location.href);
     url.searchParams.delete('room');
