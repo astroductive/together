@@ -252,14 +252,22 @@ socket_app = socketio.ASGIApp(sio, app)
 
 _sign_db = None
 _sign_db_error = None
+_sign_db_last_error_time = 0
 _sign_db_lock = Lock()
 
 def get_sign_db():
-    global _sign_db, _sign_db_error
+    global _sign_db, _sign_db_error, _sign_db_last_error_time
     if _sign_db is not None:
         return _sign_db
+    
+    now = time.time()
     if _sign_db_error is not None:
-        return None
+        if now - _sign_db_last_error_time > 5:
+            print("[SignDB] Clearing previous init error to retry...")
+            _sign_db_error = None
+        else:
+            return None
+
     with _sign_db_lock:
         if _sign_db is not None:
             return _sign_db
@@ -271,6 +279,7 @@ def get_sign_db():
             return _sign_db
         except Exception as e:
             _sign_db_error = str(e)
+            _sign_db_last_error_time = now
             print(f"[ERROR] SignDB init failed: {e}")
             return None
 
@@ -329,14 +338,22 @@ def get_asl_engine():
 # ── Lazy Arabic Sign DB (separate from English signs.db) ──
 _arabic_sign_db = None
 _arabic_sign_db_error = None
+_arabic_sign_db_last_error_time = 0
 _arabic_sign_db_lock = Lock()
 
 def get_arabic_sign_db():
-    global _arabic_sign_db, _arabic_sign_db_error
+    global _arabic_sign_db, _arabic_sign_db_error, _arabic_sign_db_last_error_time
     if _arabic_sign_db is not None:
         return _arabic_sign_db
+    
+    now = time.time()
     if _arabic_sign_db_error is not None:
-        return None
+        if now - _arabic_sign_db_last_error_time > 5:
+            print("[ArabicSignDB] Clearing previous init error to retry...")
+            _arabic_sign_db_error = None
+        else:
+            return None
+
     with _arabic_sign_db_lock:
         if _arabic_sign_db is not None:
             return _arabic_sign_db
@@ -353,20 +370,29 @@ def get_arabic_sign_db():
             return _arabic_sign_db
         except Exception as e:
             _arabic_sign_db_error = str(e)
+            _arabic_sign_db_last_error_time = now
             print(f"[ERROR] ArabicSignDB init failed: {e}")
             return None
 
 # ── Lazy Arabic inference engine (PyTorch) ──
 _arabic_engine = None
 _arabic_engine_error = None
+_arabic_engine_last_error_time = 0
 _arabic_engine_lock = Lock()
 
 def get_arabic_engine():
-    global _arabic_engine, _arabic_engine_error
+    global _arabic_engine, _arabic_engine_error, _arabic_engine_last_error_time
     if _arabic_engine is not None:
         return _arabic_engine
+    
+    now = time.time()
     if _arabic_engine_error is not None:
-        return None
+        if now - _arabic_engine_last_error_time > 5:
+            print("[ArabicPredictor] Clearing previous init error to retry...")
+            _arabic_engine_error = None
+        else:
+            return None
+
     with _arabic_engine_lock:
         if _arabic_engine is not None:
             return _arabic_engine
@@ -388,6 +414,7 @@ def get_arabic_engine():
             return _arabic_engine
         except Exception as e:
             _arabic_engine_error = str(e)
+            _arabic_engine_last_error_time = now
             print(f"[ERROR] ArabicPredictor init failed: {e}")
             return None
 
