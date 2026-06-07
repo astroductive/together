@@ -1089,7 +1089,18 @@ async def join_room(sid, data):
 async def leave_room(sid, data):
     room_id = data.get("room", "general")
     await sio.leave_room(sid, room_id)
+    await sio.emit("peer_left", {"sid": sid}, room=room_id, skip_sid=sid)
     print(f"[WS] {sid} left room '{room_id}'")
+
+@sio.on("announce_presence")
+async def announce_presence(sid, data):
+    room = data.get("room", "general")
+    await sio.emit("presence_announced", data, room=room, skip_sid=sid)
+
+@sio.on("announce_presence_reply")
+async def announce_presence_reply(sid, data):
+    room = data.get("room", "general")
+    await sio.emit("presence_reply", data, room=room, skip_sid=sid)
 
 @sio.on("webrtc_offer")
 async def webrtc_offer(sid, data):

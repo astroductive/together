@@ -770,7 +770,7 @@
 
   /* Role-specific styles for simplified Live Meeting UI */
   .meet-stage.signer-mode {
-    grid-template-columns: 1fr;
+    grid-template-columns: 200px 1fr;
   }
   .meet-stage.signer-mode .meet-aside {
     display: none !important;
@@ -792,11 +792,14 @@
     display: none !important;
   }
   .meet-stage.signer-mode .meet-controls {
-    display: none !important; /* Signer has auto controls, no mic/composer controls needed */
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    width: 100%;
   }
 
   .meet-stage.speaker-mode {
-    grid-template-columns: 1fr;
+    grid-template-columns: 200px 1fr;
   }
   .meet-stage.speaker-mode .meet-aside {
     display: none !important;
@@ -1910,14 +1913,30 @@
                   <path stroke-linecap="round" stroke-linejoin="round" d="M8 7V3m8 4V3M4 11h16M6 5h12a2 2 0 012 2v12a2 2 0 01-2 2H6a2 2 0 01-2-2V7a2 2 0 012-2z" />
                 </svg>
               </span>
-              <input id="meeting-room-id" class="input-field" placeholder="Enter a meeting code" value="general"
-                onkeypress="if(event.key==='Enter')joinMeeting()">
+          <div class="meet-entry-row" style="display:flex; flex-direction:column; gap:16px; margin-bottom:20px; align-items:center; justify-content:center;">
+            <div style="display:flex; align-items:center; gap:10px;">
+              <span class="label">Choose your role:</span>
+              <select id="meeting-role-select" class="input-field" style="max-width: 200px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.14); color: #fff; cursor: pointer;">
+                <option value="signer" style="background: #111;">Signer (Deaf/HoH)</option>
+                <option value="speaker" style="background: #111;">Speaker</option>
+              </select>
             </div>
-            <select id="meeting-role-select" class="input-field" style="max-width: 160px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.14); color: #fff; cursor: pointer;">
-              <option value="signer" style="background: #111;">Signer (Deaf/HoH)</option>
-              <option value="speaker" style="background: #111;">Speaker</option>
-            </select>
-            <button class="btn btn-secondary" onclick="joinMeeting()">Join</button>
+            
+            <div style="display:flex; gap:24px; flex-wrap:wrap; align-items:center; justify-content:center; width:100%;">
+              <div style="background:rgba(255,255,255,0.04); border:1px solid rgba(255,255,255,0.1); padding:20px; border-radius:14px; text-align:center; min-width:240px; flex:1;">
+                <div class="label" style="margin-bottom:12px;">Start a New Call</div>
+                <button class="btn btn-primary" onclick="createMeetingRoom()" style="width:100%;">Create Meeting</button>
+              </div>
+
+              <div style="background:rgba(255,255,255,0.04); border:1px solid rgba(255,255,255,0.1); padding:20px; border-radius:14px; text-align:center; min-width:280px; flex:1;">
+                <div class="label" style="margin-bottom:12px;">Join Existing Call</div>
+                <div style="display:flex; gap:10px; align-items:center;">
+                  <input id="meeting-room-id" class="input-field" placeholder="Enter 5-Letter Code" value="" maxlength="5"
+                    style="text-transform: uppercase;" onkeypress="if(event.key==='Enter')joinMeeting()">
+                  <button class="btn btn-secondary" onclick="joinMeeting()">Join</button>
+                </div>
+              </div>
+            </div>
           </div>
 
           <div class="meet-room-bar">
@@ -1933,6 +1952,15 @@
         </div>
 
         <div class="meet-stage">
+          <!-- Participants List -->
+          <div class="meet-participants-panel" style="border: 1px solid rgba(255, 255, 255, 0.16); border-radius: 16px; background: rgba(255, 255, 255, 0.08); padding: 16px; display: flex; flex-direction: column; gap: 12px; min-height: 240px;">
+            <div class="label" style="border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 8px;">Participants (1-1)</div>
+            <div id="participants-list" style="display:flex; flex-direction:column; gap:10px; font-size:13px;">
+              <div id="participant-self" style="font-weight:600; color:#fff; display:flex; align-items:center; gap:6px;">You</div>
+              <div id="participant-peer" style="color:var(--gray-400); display:flex; align-items:center; gap:6px; font-style:italic;">Waiting for peer...</div>
+            </div>
+          </div>
+
           <div class="meet-video-panel">
             <div class="meet-video-header">
               <div class="meet-video-title">Meeting stage</div>
@@ -3569,8 +3597,9 @@
   }
 
   function initMeetingRoleUi() {
-    const captionLabel = document.getElementById('meeting-caption-label');
     const composer = document.getElementById('meeting-composer');
+    const camBtn = document.getElementById('meeting-cam-btn');
+    const micBtn = document.getElementById('meeting-mic-btn');
     const signBtn = document.getElementById('meeting-sign-btn');
     const speechBtn = document.getElementById('meeting-speech-out-btn');
     const stage = document.querySelector('.meet-stage');
@@ -3602,7 +3631,23 @@
       }
       if (placeholder) placeholder.style.display = 'none';
 
-      if (!isDeafHohUser) {
+      if (isDeafHohUser) {
+        if (camBtn) camBtn.style.display = 'inline-flex';
+        if (micBtn) micBtn.style.display = 'none';
+        if (signBtn) signBtn.style.display = 'none';
+        if (composer) composer.style.display = 'none';
+        if (speechBtn) speechBtn.style.display = 'none';
+      } else {
+        if (camBtn) camBtn.style.display = 'none';
+        if (micBtn) micBtn.style.display = 'inline-flex';
+        if (signBtn) signBtn.style.display = 'none';
+        if (composer) composer.style.display = 'flex';
+        if (speechBtn) speechBtn.style.display = 'inline-flex';
+        if (speechBtn) {
+          speechBtn.classList.toggle('on', meetingSpeechOutOn);
+          speechBtn.textContent = meetingSpeechOutOn ? '🔊 Read captions' : '🔇 Captions only';
+        }
+
         const corner = document.getElementById('meeting-avatar-corner');
         const canvas = document.getElementById('meeting-avatar-canvas');
         if (corner && canvas) {
@@ -3613,26 +3658,26 @@
           drawAuraAvatar(ctx, null, canvas.width, canvas.height);
         }
       }
+
+      const selfP = document.getElementById('participant-self');
+      const peerP = document.getElementById('participant-peer');
+      if (selfP) {
+        selfP.innerHTML = `<strong>${displayName}</strong> <span style="font-size:10px; opacity:0.75;">(${isDeafHohUser ? 'Signer' : 'Speaker'})</span>`;
+      }
+      if (peerP) {
+        peerP.innerHTML = '<span style="color:var(--gray-400); font-style:italic;">Waiting for peer...</span>';
+      }
     } else {
       if (subtitleOverlay) subtitleOverlay.style.display = 'none';
       if (placeholder) {
         placeholder.style.display = 'flex';
         placeholder.textContent = forcedLang === 'ar' ? 'انضم إلى غرفة لتلقي الترجمة المباشرة' : 'Join a room to start receiving live captions';
       }
-    }
-
-    if (isDeafHohUser) {
-      captionLabel.textContent = 'Speaker captions';
-      composer.style.display = 'none';
-      signBtn.style.display = 'inline-flex';
-      speechBtn.style.display = 'none';
-    } else {
-      captionLabel.textContent = 'Sign translation captions';
-      composer.style.display = 'flex';
-      signBtn.style.display = 'none';
-      speechBtn.style.display = 'inline-flex';
-      speechBtn.classList.toggle('on', meetingSpeechOutOn);
-      speechBtn.textContent = meetingSpeechOutOn ? '🔊 Read captions' : '🔇 Captions only';
+      if (camBtn) camBtn.style.display = 'inline-flex';
+      if (micBtn) micBtn.style.display = 'inline-flex';
+      if (signBtn) signBtn.style.display = 'none';
+      if (composer) composer.style.display = 'none';
+      if (speechBtn) speechBtn.style.display = 'none';
     }
   }
 
@@ -3798,12 +3843,32 @@
 
     if (meetingCamOn) {
       stopMeetingCamera();
+      if (isDeafHohUser && meetingSignInputOn) {
+        stopCamera();
+        meetingSignInputOn = false;
+        const signBtn = document.getElementById('meeting-sign-btn');
+        if (signBtn) {
+          signBtn.textContent = '🤟 Sign Input Off';
+          signBtn.classList.remove('on');
+        }
+      }
       setStatus('Meeting camera off', false);
       return;
     }
 
     const started = await startMeetingCamera();
-    if (started) setStatus('Meeting camera on', true);
+    if (started) {
+      if (isDeafHohUser && !meetingSignInputOn) {
+        startCamera();
+        meetingSignInputOn = true;
+        const signBtn = document.getElementById('meeting-sign-btn');
+        if (signBtn) {
+          signBtn.textContent = '🤟 Sign Input On';
+          signBtn.classList.add('on');
+        }
+      }
+      setStatus('Meeting camera on', true);
+    }
   }
 
   function initMeetingFromUrl() {
@@ -3858,6 +3923,11 @@
       if (!socket || !socket.connected || roomJoined) return;
       roomJoined = true;
       socket.emit('join_room', { room: roomId });
+      socket.emit('announce_presence', {
+        room: roomId,
+        name: displayName,
+        role: isDeafHohUser ? 'Signer' : 'Speaker'
+      });
       setStatus(`Meeting: ${roomId}`, true);
       setMeetingUiState(true);
     };
@@ -3891,6 +3961,39 @@
 
       socket.on('new_peer', () => {
         console.log('[Meeting] New peer joined');
+        socket.emit('announce_presence', {
+          room: currentMeetingRoom,
+          name: displayName,
+          role: isDeafHohUser ? 'Signer' : 'Speaker'
+        });
+      });
+
+      socket.on('presence_announced', (data) => {
+        const peerDiv = document.getElementById('participant-peer');
+        if (peerDiv) {
+          peerDiv.innerHTML = `<strong>${data.name}</strong> <span style="font-size:10px; opacity:0.75;">(${data.role})</span>`;
+          peerDiv.style.fontStyle = 'normal';
+        }
+        socket.emit('announce_presence_reply', {
+          room: currentMeetingRoom,
+          name: displayName,
+          role: isDeafHohUser ? 'Signer' : 'Speaker'
+        });
+      });
+
+      socket.on('presence_reply', (data) => {
+        const peerDiv = document.getElementById('participant-peer');
+        if (peerDiv) {
+          peerDiv.innerHTML = `<strong>${data.name}</strong> <span style="font-size:10px; opacity:0.75;">(${data.role})</span>`;
+          peerDiv.style.fontStyle = 'normal';
+        }
+      });
+
+      socket.on('peer_left', () => {
+        const peerDiv = document.getElementById('participant-peer');
+        if (peerDiv) {
+          peerDiv.innerHTML = '<span style="color:var(--gray-400); font-style:italic;">Waiting for peer...</span>';
+        }
       });
     }
 
