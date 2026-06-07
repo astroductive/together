@@ -1,0 +1,26 @@
+version: '3.8'
+
+services:
+  asl_web:
+    build: .
+    ports:
+      - "8000:8000"
+    depends_on:
+      - ollama
+    environment:
+      # Tell the Python app to look for Ollama at this local network address
+      - OLLAMA_HOST=http://ollama:11434
+    volumes:
+      - .:/app # Sync files for hot reloading during development
+
+  ollama:
+    image: ollama/ollama:latest
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_models:/root/.ollama
+    # Note: On first launch, you will need to exec into this container and run:
+    # `ollama run llama3` (or whichever model you prefer) to download the LLM.
+
+volumes:
+  ollama_models:
