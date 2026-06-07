@@ -1958,7 +1958,7 @@
             <span class="meet-status-pill" id="meeting-status-pill">Not connected</span>
           </div>
 
-          <div class="meet-entry-row" style="display:flex; flex-direction:column; gap:16px; margin-bottom:20px; align-items:center; justify-content:center;">
+          <div class="meet-entry-row" style="display:flex; flex-direction:column; gap:16px; margin-bottom:20px; align-items:center; justify-content:center; width:100%;">
             <div style="display:flex; align-items:center; gap:10px;">
               <span class="label">Choose your role:</span>
               <select id="meeting-role-select" class="input-field" style="max-width: 200px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.14); color: #fff; cursor: pointer;">
@@ -1967,21 +1967,11 @@
               </select>
             </div>
             
-            <div style="display:flex; gap:24px; flex-wrap:wrap; align-items:center; justify-content:center; width:100%;">
-              <div style="background:rgba(255,255,255,0.04); border:1px solid rgba(255,255,255,0.1); padding:20px; border-radius:14px; text-align:center; min-width:240px; flex:1;">
-                <div class="label" style="margin-bottom:12px;">Start a New Call</div>
-                <button class="btn btn-primary" onclick="createMeetingRoom()" style="width:100%;">Create Meeting</button>
-              </div>
-
-              <div style="background:rgba(255,255,255,0.04); border:1px solid rgba(255,255,255,0.1); padding:20px; border-radius:14px; text-align:center; min-width:280px; flex:1;">
-                <div class="label" style="margin-bottom:12px;">Join Existing Call</div>
-                <div style="display:flex; gap:10px; align-items:center;">
-                  <input id="meeting-room-id" class="input-field" placeholder="Enter 5-Letter Code" value="" maxlength="5"
-                    style="text-transform: uppercase;" onkeypress="if(event.key==='Enter')joinMeeting()">
-                  <button class="btn btn-secondary" onclick="joinMeeting()">Join</button>
-                </div>
-              </div>
+            <div style="display:flex; gap:16px; justify-content:center; width:100%;">
+              <button class="btn btn-primary" onclick="triggerCreateMeeting()" style="min-width: 160px;">Create Meeting</button>
+              <button class="btn btn-secondary" onclick="triggerJoinMeeting()" style="min-width: 160px;">Join Meeting</button>
             </div>
+            <input id="meeting-room-id" type="hidden" value="general">
           </div>
 
           <div class="meet-room-bar">
@@ -2045,6 +2035,29 @@
               <div class="remote-text" id="remote-sentence" style="color:var(--gray-500);">No messages yet.</div>
             </div>
             <button class="toggle-btn" id="meeting-speech-out-btn" onclick="toggleMeetingSpeechOut()" style="margin-top:12px; display:none;">🔊 Read captions</button>
+          </div>
+        </div>
+
+        <!-- Modals for simplified join/create meeting -->
+        <div id="join-meeting-modal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.85); align-items:center; justify-content:center; z-index:9999; backdrop-filter:blur(8px);">
+          <div style="background:#111; border:1px solid rgba(255,255,255,0.15); border-radius:18px; padding:24px; width:340px; text-align:center; box-shadow:0 20px 50px rgba(0,0,0,0.8);">
+            <div class="label" style="margin-bottom:14px; color:rgba(255,255,255,0.72);">Join Meeting</div>
+            <input id="modal-meeting-code" class="input-field" placeholder="Enter 5-Letter Code" maxlength="5" style="text-transform:uppercase; text-align:center; font-size:18px; letter-spacing:4px; font-weight:700; margin-bottom:16px; background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.14); color:#fff;">
+            <div style="display:flex; gap:10px; justify-content:center;">
+              <button class="btn btn-secondary btn-sm" onclick="closeJoinModal()">Cancel</button>
+              <button class="btn btn-primary btn-sm" onclick="submitJoinModal()">Join</button>
+            </div>
+          </div>
+        </div>
+
+        <div id="create-meeting-modal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.85); align-items:center; justify-content:center; z-index:9999; backdrop-filter:blur(8px);">
+          <div style="background:#111; border:1px solid rgba(255,255,255,0.15); border-radius:18px; padding:24px; width:340px; text-align:center; box-shadow:0 20px 50px rgba(0,0,0,0.8);">
+            <div class="label" style="margin-bottom:14px; color:rgba(255,255,255,0.72);">Meeting Created</div>
+            <div id="modal-created-code" style="font-size:32px; font-weight:800; letter-spacing:6px; color:#fff; margin-bottom:16px;">ABCDE</div>
+            <div style="display:flex; flex-direction:column; gap:10px;">
+              <button class="btn btn-primary btn-sm" id="modal-copy-btn" onclick="copyCreatedCode()">Copy Code & Link</button>
+              <button class="btn btn-secondary btn-sm" onclick="closeCreateModal()">Start Meeting</button>
+            </div>
           </div>
         </div>
       </div>
@@ -3914,6 +3927,69 @@
     }
     setMeetingUiState(false);
     initMeetingRoleUi();
+  }
+
+  function triggerCreateMeeting() {
+    const roomId = generateMeetingRoomId();
+    const input = document.getElementById('meeting-room-id');
+    if (input) input.value = roomId;
+
+    const modal = document.getElementById('create-meeting-modal');
+    const codeDisplay = document.getElementById('modal-created-code');
+    if (modal && codeDisplay) {
+      codeDisplay.textContent = roomId;
+      modal.style.display = 'flex';
+    }
+
+    joinMeeting();
+  }
+
+  function triggerJoinMeeting() {
+    const modal = document.getElementById('join-meeting-modal');
+    const codeInput = document.getElementById('modal-meeting-code');
+    if (codeInput) codeInput.value = '';
+    if (modal) modal.style.display = 'flex';
+  }
+
+  function closeJoinModal() {
+    const modal = document.getElementById('join-meeting-modal');
+    if (modal) modal.style.display = 'none';
+  }
+
+  function submitJoinModal() {
+    const codeInput = document.getElementById('modal-meeting-code');
+    const code = sanitizeMeetingCode(codeInput ? codeInput.value : '');
+    if (!code || code.length < 5) {
+      alert('Please enter a valid 5-letter code.');
+      return;
+    }
+    const input = document.getElementById('meeting-room-id');
+    if (input) input.value = code;
+
+    closeJoinModal();
+    joinMeeting();
+  }
+
+  function closeCreateModal() {
+    const modal = document.getElementById('create-meeting-modal');
+    if (modal) modal.style.display = 'none';
+  }
+
+  async function copyCreatedCode() {
+    const codeDisplay = document.getElementById('modal-created-code');
+    if (!codeDisplay) return;
+    const code = codeDisplay.textContent;
+    const link = buildMeetingLink(code);
+    try {
+      await navigator.clipboard.writeText(`Meeting Code: ${code}\nLink: ${link}`);
+      const btn = document.getElementById('modal-copy-btn');
+      if (btn) {
+        btn.textContent = 'Code Copied!';
+        setTimeout(() => { btn.textContent = 'Copy Code & Link'; }, 1500);
+      }
+    } catch (_) {
+      alert('Unable to copy code.');
+    }
   }
 
   function createMeetingRoom() {
