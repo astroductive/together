@@ -2670,10 +2670,12 @@
       return;
     }
 
-    navigator.mediaDevices.getUserMedia({ video: true }).then(stream => {
+    const handleStream = (stream) => {
       console.log("[Camera] Stream acquired.");
       if (!cameraOn) {
-        stream.getTracks().forEach(t => t.stop());
+        if (!(inMeeting && meetingCamStream && stream === meetingCamStream)) {
+          stream.getTracks().forEach(t => t.stop());
+        }
         return;
       }
       video.srcObject = stream;
@@ -2710,28 +2712,52 @@
         holistic.onResults(onHolisticResults);
       }
 
-      console.log("[Camera] Initializing MediaPipe Camera helper...");
-      if (!window.Camera) {
-        console.error("[Camera] MediaPipe Camera helper not loaded.");
-        setStatus('Library Error', false);
-        return;
+      if (inMeeting && meetingCamStream && stream === meetingCamStream) {
+        console.log("[Camera] Reusing meeting stream frame loop...");
+        const runFrame = async () => {
+          if (!cameraOn || !inMeeting) return;
+          if (video.readyState >= 2 && holistic) {
+            try {
+              await holistic.send({ image: video });
+            } catch (e) {
+              console.error("[Camera] Holistic send frame error:", e);
+            }
+          }
+          requestAnimationFrame(runFrame);
+        };
+        requestAnimationFrame(runFrame);
+      } else {
+        console.log("[Camera] Initializing MediaPipe Camera helper...");
+        if (!window.Camera) {
+          console.error("[Camera] MediaPipe Camera helper not loaded.");
+          setStatus('Library Error', false);
+          return;
+        }
+
+        mpCamera = new window.Camera(video, {
+          onFrame: async () => {
+            if (holistic) await holistic.send({ image: video });
+          },
+          width: 640, height: 480,
+        });
+        mpCamera.start().then(() => console.log("[Camera] MediaPipe Camera started."));
       }
 
-      mpCamera = new window.Camera(video, {
-        onFrame: async () => {
-          if (holistic) await holistic.send({ image: video });
-        },
-        width: 640, height: 480,
-      });
-      mpCamera.start().then(() => console.log("[Camera] MediaPipe Camera started."));
+    };
 
-    }).catch(err => {
-      console.error("[Camera] Error:", err);
-      cameraOn = false;
-      setStatus('Camera Error', false);
-      renderMobileQuickActions();
-      alert(`Camera access failed: ${err.name || err.message || err}. Please check permissions.`);
-    });
+    if (inMeeting && meetingCamStream) {
+      handleStream(meetingCamStream);
+    } else {
+      navigator.mediaDevices.getUserMedia({ video: true })
+        .then(handleStream)
+        .catch(err => {
+          console.error("[Camera] Error:", err);
+          cameraOn = false;
+          setStatus('Camera Error', false);
+          renderMobileQuickActions();
+          alert(`Camera access failed: ${err.name || err.message || err}. Please check permissions.`);
+        });
+    }
   }
 
   function stopCamera() {
@@ -2749,7 +2775,9 @@
     // 2. Kill the Video Stream
     const video = document.getElementById('webcam');
     if (video && video.srcObject) {
-      video.srcObject.getTracks().forEach(t => t.stop());
+      if (!(inMeeting && meetingCamStream && video.srcObject === meetingCamStream)) {
+        video.srcObject.getTracks().forEach(t => t.stop());
+      }
       video.srcObject = null;
     }
 
@@ -3577,8 +3605,13 @@
     const roomLabel = document.getElementById('meeting-current-code');
     const stageLabel = document.getElementById('meeting-stage-label');
     const placeholder = document.getElementById('meeting-video-placeholder');
+    const entryRow = document.querySelector('.meet-entry-row');
 
     if (!pill || !leaveBtn || !copyBtn || !roomLabel || !stageLabel || !placeholder) return;
+
+    if (entryRow) {
+      entryRow.style.display = connected ? 'none' : 'flex';
+    }
 
     if (connected && currentMeetingRoom) {
       pill.textContent = 'Connected';
