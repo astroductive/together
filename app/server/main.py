@@ -397,10 +397,17 @@ _pyttsx3_lock = Lock()
 def text_to_speech_arabic(text: str) -> bytes:
     import tempfile
     import os
-    import pyttsx3
+    try:
+        import pyttsx3
+    except ImportError:
+        raise Exception("pyttsx3 is not installed on this system.")
     
     with _pyttsx3_lock:
-        engine = pyttsx3.init()
+        try:
+            engine = pyttsx3.init()
+        except Exception as e:
+            raise Exception(f"Failed to initialize pyttsx3: {e}")
+
         
         # Look for an Arabic voice
         voices = engine.getProperty('voices')

@@ -11,10 +11,6 @@ mediapipe
 opencv-python
 ai-edge-litert
 sentence-transformers
-pyttsx3
 requests
 scipy
 python-multipart
-SpeechRecognition
-PyAudio
-playwright
