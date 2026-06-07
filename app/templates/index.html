@@ -7,7 +7,7 @@
 <script src="https://unpkg.com/@mediapipe/holistic/holistic.js"></script>
 <script src="https://unpkg.com/@mediapipe/camera_utils/camera_utils.js"></script>
 <script src="https://unpkg.com/@mediapipe/drawing_utils/drawing_utils.js"></script>
-<script src="https://cdn.socket.io/4.7.5/socket.io.min.js" onerror="(function(){var s=document.createElement('script');s.src='https://unpkg.com/socket.io-client@4.7.5/dist/socket.io.min.js';document.head.appendChild(s);})();"></script>
+<script src="/socket.io/socket.io.js"></script>
 {% endblock %}
 
 {% block content %}
@@ -4050,6 +4050,13 @@
 
 
   async function joinMeeting() {
+    if (socket) {
+      try {
+        socket.disconnect();
+      } catch (_) {}
+      socket = null;
+    }
+
     const input = document.getElementById('meeting-room-id');
     const roomId = sanitizeMeetingCode(input.value) || 'general';
     input.value = roomId;
