@@ -2846,7 +2846,9 @@
     if (cameraOn) return; // If the switch is already flipped, stop here!
     cameraOn = true;
     console.log("[Camera] Starting Sign-to-Text camera...");
-    const video = document.getElementById('webcam');
+    const video = (inMeeting && meetingCamStream)
+      ? document.getElementById('meeting-local-video')
+      : document.getElementById('webcam');
     const canvas = document.getElementById('output_canvas');
     const placeholder = document.getElementById('cam-placeholder');
     const badge = document.getElementById('live-badge');
@@ -2871,12 +2873,16 @@
         return;
       }
       video.srcObject = stream;
-      video.style.display = 'block';
-      canvas.style.display = 'block';
-      placeholder.style.display = 'none';
-      badge.style.display = 'block';
-      btn.textContent = forcedLang === 'ar' ? 'إيقاف الكاميرا' : 'Stop Camera';
-      btn.classList.add('on');
+      
+      if (!(inMeeting && meetingCamStream)) {
+        video.style.display = 'block';
+        canvas.style.display = 'block';
+        placeholder.style.display = 'none';
+        badge.style.display = 'block';
+        btn.textContent = forcedLang === 'ar' ? '\u0625\u064a\u0642\u0627\u0641 \u0627\u0644\u0643\u0627\u0645\u064a\u0631\u0627' : 'Stop Camera';
+        btn.classList.add('on');
+      }
+      
       cameraOn = true;
       setStatus('Camera Live', true);
       renderMobileQuickActions();
@@ -2965,23 +2971,30 @@
     // if (holistic) { holistic.close(); holistic = null; } <-- DELETED
 
     // 2. Kill the Video Stream
-    const video = document.getElementById('webcam');
+    const video = (inMeeting && meetingCamStream)
+      ? document.getElementById('meeting-local-video')
+      : document.getElementById('webcam');
+      
     if (video && video.srcObject) {
       if (!(inMeeting && meetingCamStream && video.srcObject === meetingCamStream)) {
         video.srcObject.getTracks().forEach(t => t.stop());
+        video.srcObject = null;
       }
-      video.srcObject = null;
     }
 
     // 3. Reset UI Elements
-    video.style.display = 'none';
-    document.getElementById('output_canvas').style.display = 'none';
-    document.getElementById('live-badge').style.display = 'none';
-    document.getElementById('cam-placeholder').style.display = 'flex';
+    if (!(inMeeting && meetingCamStream)) {
+      if (video) video.style.display = 'none';
+      document.getElementById('output_canvas').style.display = 'none';
+      document.getElementById('live-badge').style.display = 'none';
+      document.getElementById('cam-placeholder').style.display = 'flex';
 
-    const btn = document.getElementById('cam-btn');
-    btn.textContent = forcedLang === 'ar' ? 'تشغيل الكاميرا' : 'Start Camera';
-    btn.classList.remove('on');
+      const btn = document.getElementById('cam-btn');
+      if (btn) {
+        btn.textContent = forcedLang === 'ar' ? '\u062a\u0634\u063a\u064a\u0644 \u0627\u0644\u0643\u0627\u0645\u064a\u0631\u0627' : 'Start Camera';
+        btn.classList.remove('on');
+      }
+    }
 
     // 4. Reset ALL inference + gloss state
     cameraOn = false;
