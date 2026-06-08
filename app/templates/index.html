@@ -2225,7 +2225,7 @@
   const user = getUser();
   const displayName = getDisplayName();
   const initials = getInitials();
-  const userRole = ((user && user.role) || '').toString();
+  let userRole = ((user && user.role) || '').toString();
   const userRoleLower = userRole.toLowerCase();
   let isDeafHohUser = userRoleLower.includes('deaf') || userRoleLower.includes('hoh') || userRoleLower.includes('hard of hearing');
   let isSpeakerUser = userRoleLower.includes('speaker') || !isDeafHohUser;
