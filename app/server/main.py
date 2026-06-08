@@ -204,32 +204,45 @@ app.add_middleware(
 app.add_middleware(GZipMiddleware, minimum_size=1024)
 
 # ── MIME Fix (Windows) ──────────────────────────────────────────
-from starlette.middleware.base import BaseHTTPMiddleware
 import mimetypes
 mimetypes.init()
 mimetypes.add_type('application/javascript', '.js', True)
 
-class ForceJSMimeMiddleware(BaseHTTPMiddleware):
-    async def dispatch(self, request, call_next):
+class ForceJSMimeMiddleware:
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, scope, receive, send):
+        # We only want to process HTTP requests. If it's a websocket (e.g. Socket.IO upgrade), pass through directly.
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+
+        path = scope.get("path", "").lower()
         started = time.perf_counter()
-        response = await call_next(request)
-        path = request.url.path.lower()
-        elapsed_ms = (time.perf_counter() - started) * 1000.0
 
-        response.headers.setdefault("X-Process-Time-ms", f"{elapsed_ms:.1f}")
+        async def send_wrapper(message):
+            if message["type"] == "http.response.start":
+                headers = message.setdefault("headers", [])
+                
+                # Check for X-Process-Time-ms (calculate when response starts)
+                elapsed_ms = (time.perf_counter() - started) * 1000.0
+                headers.append((b"x-process-time-ms", f"{elapsed_ms:.1f}".encode("latin1")))
 
-        if path.endswith(".js"):
-            response.headers["Content-Type"] = "application/javascript"
+                # Check if it is a .js file
+                if path.endswith(".js"):
+                    # Remove any existing Content-Type header
+                    headers[:] = [h for h in headers if h[0].lower() != b"content-type"]
+                    headers.append((b"content-type", b"application/javascript"))
+                
+                # Cache versioned/static assets aggressively for faster repeat page loads.
+                if path.startswith("/static/"):
+                    headers[:] = [h for h in headers if h[0].lower() != b"cache-control"]
+                    headers.append((b"cache-control", b"public, max-age=86400"))
+            
+            await send(message)
 
-        # Cache versioned/static assets aggressively for faster repeat page loads.
-        if path.startswith("/static/"):
-            response.headers.setdefault("Cache-Control", "public, max-age=86400")
-
-        # Lightweight profiling: surface slow dynamic routes in server logs.
-        if (not path.startswith("/static/")) and (not path.startswith("/api/health")) and elapsed_ms >= SLOW_REQUEST_MS:
-            print(f"[PERF] Slow request: {request.method} {request.url.path} took {elapsed_ms:.1f}ms")
-
-        return response
+        await self.app(scope, receive, send_wrapper)
 
 app.add_middleware(ForceJSMimeMiddleware)
 

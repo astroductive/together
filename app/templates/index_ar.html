@@ -2052,6 +2052,63 @@
 
 <script src="/static/js/app.js"></script>
 <script>
+  // ── Global JavaScript Error Boundary ──
+  window.onerror = function(message, source, lineno, colno, error) {
+    const errorMsg = `JS Error: ${message} at ${source}:${lineno}:${colno}`;
+    console.error(errorMsg, error);
+    showDebugError(errorMsg + (error && error.stack ? '\n' + error.stack : ''));
+    return false;
+  };
+  window.onunhandledrejection = function(event) {
+    const errorMsg = `Unhandled Promise Rejection: ${event.reason}`;
+    console.error(errorMsg, event.reason);
+    showDebugError(errorMsg + (event.reason && event.reason.stack ? '\n' + event.reason.stack : ''));
+  };
+  function showDebugError(msg) {
+    let errorBanner = document.getElementById('debug-error-banner');
+    if (!errorBanner) {
+      errorBanner = document.createElement('div');
+      errorBanner.id = 'debug-error-banner';
+      errorBanner.style.position = 'fixed';
+      errorBanner.style.top = '0';
+      errorBanner.style.left = '0';
+      errorBanner.style.width = '100%';
+      errorBanner.style.background = '#ff3b30';
+      errorBanner.style.color = '#fff';
+      errorBanner.style.padding = '12px 24px';
+      errorBanner.style.zIndex = '999999';
+      errorBanner.style.fontFamily = 'monospace';
+      errorBanner.style.fontSize = '12px';
+      errorBanner.style.whiteSpace = 'pre-wrap';
+      errorBanner.style.lineHeight = '1.4';
+      errorBanner.style.boxShadow = '0 4px 12px rgba(0,0,0,0.5)';
+      errorBanner.style.display = 'flex';
+      errorBanner.style.justifyContent = 'space-between';
+      errorBanner.style.alignItems = 'flex-start';
+      
+      const textNode = document.createElement('div');
+      textNode.id = 'debug-error-banner-text';
+      textNode.style.flex = '1';
+      errorBanner.appendChild(textNode);
+      
+      const closeBtn = document.createElement('button');
+      closeBtn.textContent = '✕';
+      closeBtn.style.background = 'none';
+      closeBtn.style.border = 'none';
+      closeBtn.style.color = '#fff';
+      closeBtn.style.fontSize = '16px';
+      closeBtn.style.cursor = 'pointer';
+      closeBtn.style.marginLeft = '16px';
+      closeBtn.style.padding = '0';
+      closeBtn.onclick = () => errorBanner.style.display = 'none';
+      errorBanner.appendChild(closeBtn);
+      
+      document.body.appendChild(errorBanner);
+    }
+    document.getElementById('debug-error-banner-text').textContent = msg;
+    errorBanner.style.display = 'flex';
+  }
+
   // ── Global Language Overrides ──
   const forcedLang = 'ar';
 
@@ -3930,8 +3987,7 @@
       codeDisplay.textContent = roomId;
       modal.style.display = 'flex';
     }
-
-    joinMeeting();
+    // Do NOT call joinMeeting() here — wait for "بدء الاجتماع" click
   }
 
   function triggerJoinMeeting() {
@@ -3963,6 +4019,8 @@
   function closeCreateModal() {
     const modal = document.getElementById('create-meeting-modal');
     if (modal) modal.style.display = 'none';
+    // Fire the actual meeting join now that user clicked Start Meeting
+    joinMeeting();
   }
 
   async function copyCreatedCode() {
@@ -4007,138 +4065,154 @@
 
 
   async function joinMeeting() {
-    if (socket) {
-      try {
-        socket.disconnect();
-      } catch (_) {}
-      socket = null;
-    }
+    try {
+      if (socket) {
+        try {
+          socket.off(); // Remove all listeners to prevent stale events
+          socket.disconnect();
+        } catch (_) {}
+        socket = null;
+      }
 
-    const input = document.getElementById('meeting-room-id');
-    const roomId = sanitizeMeetingCode(input.value) || 'general';
-    input.value = roomId;
-    let roomJoined = false;
+      const input = document.getElementById('meeting-room-id');
+      const roomId = sanitizeMeetingCode(input.value) || 'general';
+      input.value = roomId;
+      let roomJoined = false;
 
-    const roleSelect = document.getElementById('meeting-role-select');
-    if (roleSelect) {
-      const selectedRole = roleSelect.value;
-      isDeafHohUser = (selectedRole === 'signer');
-      isSpeakerUser = !isDeafHohUser;
-      userRole = isDeafHohUser ? 'Deaf/HoH' : 'Speaker';
-    }
+      const roleSelect = document.getElementById('meeting-role-select');
+      if (roleSelect) {
+        const selectedRole = roleSelect.value;
+        isDeafHohUser = (selectedRole === 'signer');
+        isSpeakerUser = !isDeafHohUser;
+        userRole = isDeafHohUser ? 'Deaf/HoH' : 'Speaker';
+      }
 
-    const syncMeetingConnection = () => {
-      if (!socket || !socket.connected || roomJoined) return;
-      roomJoined = true;
-      socket.emit('join_room', { room: roomId });
-      socket.emit('announce_presence', {
-        room: roomId,
-        name: displayName,
-        role: isDeafHohUser ? 'Signer' : 'Speaker'
-      });
-      setStatus(`Meeting: ${roomId}`, true);
-      setMeetingUiState(true);
-    };
-
-    if (socket && socket.connected && inMeeting && currentMeetingRoom && currentMeetingRoom !== roomId) {
-      socket.emit('leave_room', { room: currentMeetingRoom });
-    }
-
-    currentMeetingRoom = roomId;
-
-    if (!socket) {
-      socket = io();
-
-      socket.on('connect', syncMeetingConnection);
-
-      socket.on('disconnect', () => {
-        inMeeting = false;
-        setMeetingUiState(false);
-      });
-
-      socket.on('connect_error', () => {
-        inMeeting = false;
-        setMeetingUiState(false);
-        setStatus('Meeting connection failed', false);
-      });
-
-      socket.on('remote_sentence', (data) => {
-        const payload = typeof data === 'string' ? { text: data } : (data || {});
-        renderMeetingSentence(payload.text, payload.senderRole, false);
-      });
-
-      socket.on('new_peer', () => {
-        console.log('[Meeting] New peer joined');
+      const syncMeetingConnection = () => {
+        if (!socket || !socket.connected || roomJoined) return;
+        roomJoined = true;
+        socket.emit('join_room', { room: roomId });
         socket.emit('announce_presence', {
-          room: currentMeetingRoom,
+          room: roomId,
           name: displayName,
           role: isDeafHohUser ? 'Signer' : 'Speaker'
         });
-      });
+        setStatus(`Meeting: ${roomId}`, true);
+        setMeetingUiState(true);
+      };
 
-      socket.on('presence_announced', (data) => {
-        const peerDiv = document.getElementById('participant-peer');
-        if (peerDiv) {
-          peerDiv.innerHTML = `<strong>${data.name}</strong> <span style="font-size:10px; opacity:0.75;">(${data.role})</span>`;
-          peerDiv.style.fontStyle = 'normal';
-        }
-        socket.emit('announce_presence_reply', {
-          room: currentMeetingRoom,
-          name: displayName,
-          role: isDeafHohUser ? 'Signer' : 'Speaker'
+      if (socket && socket.connected && inMeeting && currentMeetingRoom && currentMeetingRoom !== roomId) {
+        socket.emit('leave_room', { room: currentMeetingRoom });
+      }
+
+      currentMeetingRoom = roomId;
+
+      if (!socket) {
+        socket = io();
+        const currentSocket = socket;
+
+        socket.on('connect', syncMeetingConnection);
+
+        socket.on('disconnect', () => {
+          if (socket !== currentSocket) return;
+          inMeeting = false;
+          setMeetingUiState(false);
         });
-      });
 
-      socket.on('presence_reply', (data) => {
-        const peerDiv = document.getElementById('participant-peer');
-        if (peerDiv) {
-          peerDiv.innerHTML = `<strong>${data.name}</strong> <span style="font-size:10px; opacity:0.75;">(${data.role})</span>`;
-          peerDiv.style.fontStyle = 'normal';
-        }
-      });
+        socket.on('connect_error', (err) => {
+          if (socket !== currentSocket) return;
+          inMeeting = false;
+          setMeetingUiState(false);
+          const errMsg = err ? (err.message || err.toString()) : 'Unknown error';
+          setStatus(`Meeting connection failed: ${errMsg}`, false);
+          console.error('[Socket.IO connect_error]', err);
+        });
 
-      socket.on('peer_left', () => {
-        const peerDiv = document.getElementById('participant-peer');
-        if (peerDiv) {
-          peerDiv.innerHTML = '<span style="color:var(--gray-400); font-style:italic;">Waiting for peer...</span>';
-        }
-      });
-    }
+        socket.on('remote_sentence', (data) => {
+          const payload = typeof data === 'string' ? { text: data } : (data || {});
+          renderMeetingSentence(payload.text, payload.senderRole, false);
+        });
 
-    syncMeetingConnection();
-    inMeeting = true;
-    setMeetingUiState(true);
-    setStatus(`Meeting: ${roomId}`, true);
-    renderMobileQuickActions();
+        socket.on('new_peer', () => {
+          console.log('[Meeting] New peer joined');
+          socket.emit('announce_presence', {
+            room: currentMeetingRoom,
+            name: displayName,
+            role: isDeafHohUser ? 'Signer' : 'Speaker'
+          });
+        });
 
-    if (isDeafHohUser) {
-      await startMeetingCamera();
-      if (!meetingSignInputOn) {
-        startCamera();
-        meetingSignInputOn = true;
-        const signBtn = document.getElementById('meeting-sign-btn');
-        if (signBtn) {
-          signBtn.textContent = '🤟 Sign Input On';
-          signBtn.classList.add('on');
+        socket.on('presence_announced', (data) => {
+          const peerDiv = document.getElementById('participant-peer');
+          if (peerDiv) {
+            peerDiv.innerHTML = `<strong>${data.name}</strong> <span style="font-size:10px; opacity:0.75;">(${data.role})</span>`;
+            peerDiv.style.fontStyle = 'normal';
+          }
+          socket.emit('announce_presence_reply', {
+            room: currentMeetingRoom,
+            name: displayName,
+            role: isDeafHohUser ? 'Signer' : 'Speaker'
+          });
+        });
+
+        socket.on('presence_reply', (data) => {
+          const peerDiv = document.getElementById('participant-peer');
+          if (peerDiv) {
+            peerDiv.innerHTML = `<strong>${data.name}</strong> <span style="font-size:10px; opacity:0.75;">(${data.role})</span>`;
+            peerDiv.style.fontStyle = 'normal';
+          }
+        });
+
+        socket.on('peer_left', () => {
+          const peerDiv = document.getElementById('participant-peer');
+          if (peerDiv) {
+            peerDiv.innerHTML = '<span style="color:var(--gray-400); font-style:italic;">Waiting for peer...</span>';
+          }
+        });
+      }
+
+      syncMeetingConnection();
+      inMeeting = true;
+      setMeetingUiState(true);
+      setStatus(`Connecting to ${roomId}...`, true);
+      renderMobileQuickActions();
+      initMeetingRoleUi();
+
+      // Start camera asynchronously — don't block the meeting join flow
+      if (isDeafHohUser) {
+        startMeetingCamera().catch(() => {}).then(() => {
+          if (!meetingSignInputOn) {
+            try { startCamera(); } catch (_) {}
+            meetingSignInputOn = true;
+            const signBtn = document.getElementById('meeting-sign-btn');
+            if (signBtn) {
+              signBtn.textContent = '🤟 Sign Input On';
+              signBtn.classList.add('on');
+            }
+          }
+        });
+      } else {
+        stopMeetingCamera();
+        if (meetingSignInputOn) {
+          try { stopCamera(); } catch (_) {}
+          meetingSignInputOn = false;
+          const signBtn = document.getElementById('meeting-sign-btn');
+          if (signBtn) {
+            signBtn.textContent = '🤟 Sign Input Off';
+            signBtn.classList.remove('on');
+          }
         }
       }
-    } else {
-      stopMeetingCamera();
-      if (meetingSignInputOn) {
-        stopCamera();
-        meetingSignInputOn = false;
-        const signBtn = document.getElementById('meeting-sign-btn');
-        if (signBtn) {
-          signBtn.textContent = '🤟 Sign Input Off';
-          signBtn.classList.remove('on');
-        }
-      }
-    }
-    initMeetingRoleUi();
 
-    const url = new URL(window.location.href);
-    url.searchParams.set('room', roomId);
-    history.replaceState(null, '', `${url.pathname}${url.search}`);
+      const url = new URL(window.location.href);
+      url.searchParams.set('room', roomId);
+      history.replaceState(null, '', `${url.pathname}${url.search}`);
+    } catch (err) {
+      console.error("[joinMeeting Error]", err);
+      inMeeting = false;
+      setMeetingUiState(false);
+      setStatus(`Meeting init failed: ${err.message || err}`, false);
+      showDebugError(`joinMeeting Error: ${err.message}\n${err.stack}`);
+    }
   }
 
   function leaveMeeting() {
