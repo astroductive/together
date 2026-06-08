@@ -3786,6 +3786,11 @@
         }
       }
     };
+
+    if (isCaller && isDeafHohUser && meetingCamStream) {
+      console.log("[WebRTC] Stream exists, manually dispatching negotiationneeded");
+      peerConnection.dispatchEvent(new Event('negotiationneeded'));
+    }
   }
 
   function generateMeetingRoomId() {
@@ -4353,7 +4358,16 @@
 
           // Initiate WebRTC connection
           if (data.sender_sid && socket && socket.id) {
-            const isCaller = socket.id < data.sender_sid;
+            const peerRole = (data.role || '').toString().toLowerCase();
+            const myRole = isDeafHohUser ? 'signer' : 'speaker';
+            let isCaller = false;
+            if (myRole === 'signer' && peerRole === 'speaker') {
+              isCaller = true;
+            } else if (myRole === 'speaker' && peerRole === 'signer') {
+              isCaller = false;
+            } else {
+              isCaller = socket.id < data.sender_sid;
+            }
             initWebRtc(data.sender_sid, isCaller);
           }
         });
@@ -4367,7 +4381,16 @@
 
           // Initiate WebRTC connection
           if (data.sender_sid && socket && socket.id) {
-            const isCaller = socket.id < data.sender_sid;
+            const peerRole = (data.role || '').toString().toLowerCase();
+            const myRole = isDeafHohUser ? 'signer' : 'speaker';
+            let isCaller = false;
+            if (myRole === 'signer' && peerRole === 'speaker') {
+              isCaller = true;
+            } else if (myRole === 'speaker' && peerRole === 'signer') {
+              isCaller = false;
+            } else {
+              isCaller = socket.id < data.sender_sid;
+            }
             initWebRtc(data.sender_sid, isCaller);
           }
         });
