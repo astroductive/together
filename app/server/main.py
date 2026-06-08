@@ -107,7 +107,14 @@ def call_gemini_tts(text: str, language: str = "arabic") -> bytes:
             }
         ],
         "generationConfig": {
-            "responseModalities": ["AUDIO"]
+            "responseModalities": ["AUDIO"],
+            "speechConfig": {
+                "voiceConfig": {
+                    "prebuiltVoiceConfig": {
+                        "voiceName": "Aoede"
+                    }
+                }
+            }
         }
     }
     try:
