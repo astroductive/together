@@ -758,6 +758,29 @@
     gap: 16px;
   }
 
+  .meet-videos-container {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 14px;
+    padding: 14px;
+  }
+
+  .meet-video-wrapper {
+    position: relative;
+    background: #111;
+    border-radius: 14px;
+    overflow: hidden;
+    aspect-ratio: 4/3;
+    min-height: 280px;
+  }
+
+  @media (max-width: 768px) {
+    .meet-video-wrapper {
+      min-height: unset;
+      aspect-ratio: 4/3;
+    }
+  }
+
   .meet-video-panel {
     border: 1px solid rgba(255, 255, 255, 0.16);
     border-radius: 16px;
@@ -2054,22 +2077,31 @@
               <div class="meet-video-title">Meeting stage</div>
               <div style="font-size:12px;color:#7a7a7a;" id="meeting-stage-label">Waiting to join</div>
             </div>
-            <div style="padding:14px; position:relative; min-height:380px;">
-              <video id="meeting-local-video" autoplay playsinline muted
-                style="position:absolute; right:24px; top:24px; width:160px; height:120px; border-radius:12px; border:2px solid rgba(255,255,255,0.3); object-fit:cover; z-index:20; background:#000; display:none; box-shadow:0 8px 24px rgba(0,0,0,0.5);"></video>
-              <div class="meeting-avatar-corner" id="meeting-avatar-corner">
-                <div class="label">Speaker Avatar</div>
-                <canvas id="meeting-avatar-canvas"></canvas>
+            <div style="position:relative;">
+              <div class="meet-videos-container">
+                <div class="meet-video-wrapper">
+                  <video id="meeting-local-video" autoplay playsinline muted
+                    style="width:100%; height:100%; object-fit:cover; display:none;"></video>
+                  <div id="local-video-placeholder" style="width:100%; height:100%; display:flex; align-items:center; justify-content:center; color:#7a7a7a; font-size:13px; text-transform:uppercase;">Camera Off</div>
+                  <div style="position: absolute; top: 12px; left: 12px; background: rgba(0,0,0,0.6); color: #fff; padding: 4px 8px; border-radius: 6px; font-size: 11px; z-index: 10;">You</div>
+                </div>
+                <div class="meet-video-wrapper">
+                  <div class="meeting-avatar-corner" id="meeting-avatar-corner" style="display:none; position:absolute; inset:0; z-index: 5;">
+                    <div class="label" style="position:absolute; top:12px; left:12px; z-index:10; background:rgba(0,0,0,0.6); color:#fff; padding:4px 8px; border-radius:6px; font-size:11px;">Speaker Avatar</div>
+                    <canvas id="meeting-avatar-canvas" style="width:100%; height:100%; object-fit:cover;"></canvas>
+                  </div>
+                  <video id="remote_video" autoplay playsinline
+                    style="width:100%; height:100%; object-fit:cover; display: none;"></video>
+                  <div id="meeting-video-placeholder"
+                    style="width: 100%; height: 100%; display:flex; align-items:center; justify-content:center; color:#7a7a7a; font-size:13px; text-transform:uppercase; letter-spacing:0.04em;">
+                    Waiting for peer...
+                  </div>
+                  <div style="position: absolute; top: 12px; left: 12px; background: rgba(0,0,0,0.6); color: #fff; padding: 4px 8px; border-radius: 6px; font-size: 11px; z-index: 10;" id="remote-video-label">Peer</div>
+                </div>
               </div>
-              <video id="remote_video" autoplay playsinline
-                style="width:100%;border-radius:14px;background:#111;display:none;height:380px;object-fit:cover;"></video>
               <div id="meeting-subtitle-overlay"
                 style="display:none; position:absolute; bottom:24px; left:50%; transform:translateX(-50%); background:rgba(0,0,0,0.75); color:#ffffff; font-size:20px; font-weight:600; text-align:center; padding:12px 24px; border-radius:10px; border: 1px solid rgba(255,255,255,0.15); z-index:15; max-width:85%; pointer-events:none;">
                 Waiting for peer...
-              </div>
-              <div id="meeting-video-placeholder"
-                style="border-radius:14px;background:#121212;color:#ffffff;height:380px;display:flex;align-items:center;justify-content:center;font-size:13px;letter-spacing:0.04em;text-transform:uppercase;">
-                Join a room to start receiving live captions
               </div>
             </div>
             <div class="meet-controls">
@@ -3730,10 +3762,14 @@
       console.log("[WebRTC] Received remote stream/track");
       const remoteVideo = document.getElementById('remote_video');
       if (remoteVideo) {
-        if (!remoteVideo.srcObject) {
-          remoteVideo.srcObject = new MediaStream();
+        if (event.streams && event.streams[0]) {
+          remoteVideo.srcObject = event.streams[0];
+        } else {
+          if (!remoteVideo.srcObject) {
+            remoteVideo.srcObject = new MediaStream();
+          }
+          remoteVideo.srcObject.addTrack(event.track);
         }
-        remoteVideo.srcObject.addTrack(event.track);
         remoteVideo.style.display = 'block';
         const placeholder = document.getElementById('meeting-video-placeholder');
         if (placeholder) placeholder.style.display = 'none';
@@ -4049,6 +4085,7 @@
 
     const videoEl = document.getElementById('meeting-local-video');
     const camBtn = document.getElementById('meeting-cam-btn');
+    const placeholder = document.getElementById('local-video-placeholder');
 
     const mediaCheck = ensureMediaApi('Camera');
     if (!mediaCheck.ok) {
@@ -4061,6 +4098,7 @@
       meetingCamStream = stream;
       videoEl.srcObject = stream;
       videoEl.style.display = 'block';
+      if (placeholder) placeholder.style.display = 'none';
 
       meetingCamOn = true;
       camBtn.textContent = '📷 Camera On';
@@ -4080,6 +4118,7 @@
       camBtn.textContent = '📷 Camera Off';
       camBtn.classList.remove('on');
       videoEl.style.display = 'none';
+      if (placeholder) placeholder.style.display = 'flex';
       setStatus('Camera unavailable', false);
       return false;
     }
@@ -4088,6 +4127,7 @@
   function stopMeetingCamera() {
     const videoEl = document.getElementById('meeting-local-video');
     const camBtn = document.getElementById('meeting-cam-btn');
+    const placeholder = document.getElementById('local-video-placeholder');
 
     if (meetingCamStream) {
       meetingCamStream.getTracks().forEach(t => t.stop());
@@ -4098,6 +4138,7 @@
       videoEl.srcObject = null;
       videoEl.style.display = 'none';
     }
+    if (placeholder) placeholder.style.display = 'flex';
     meetingCamOn = false;
     if (camBtn) {
       camBtn.textContent = '📷 Camera Off';
@@ -4427,15 +4468,19 @@
         });
       }
 
+      // Start camera before joining/syncing meeting connection
+      try {
+        await startMeetingCamera();
+      } catch (e) {
+        console.error("Failed to start camera on join:", e);
+      }
+
       syncMeetingConnection();
       inMeeting = true;
       setMeetingUiState(true);
       setStatus(`Connecting to ${roomId}...`, true);
       renderMobileQuickActions();
       initMeetingRoleUi();
-
-      // Start camera asynchronously — don't block the meeting join flow
-      startMeetingCamera().catch(() => {});
 
       if (isDeafHohUser) {
         if (!meetingSignInputOn) {
