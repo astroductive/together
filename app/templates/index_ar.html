@@ -3841,8 +3841,14 @@
       copyBtn.disabled = false;
       roomLabel.textContent = currentMeetingRoom;
       stageLabel.textContent = `Room ${currentMeetingRoom}`;
-      placeholder.style.display = meetingCamOn ? 'none' : 'flex';
-      placeholder.textContent = meetingCamOn ? '' : 'Camera is off';
+      
+      const remoteVideo = document.getElementById('remote_video');
+      if (remoteVideo && remoteVideo.style.display === 'block') {
+        placeholder.style.display = 'none';
+      } else {
+        placeholder.style.display = 'flex';
+        placeholder.textContent = 'بانتظار الطرف الآخر...';
+      }
     } else {
       pill.textContent = 'Not connected';
       pill.classList.remove('connected');
@@ -3852,6 +3858,21 @@
       stageLabel.textContent = 'Waiting to join';
       placeholder.style.display = 'flex';
       placeholder.textContent = 'Join a room to start receiving live captions';
+
+      const localVideo = document.getElementById('meeting-local-video');
+      if (localVideo) {
+        localVideo.srcObject = null;
+        localVideo.style.display = 'none';
+      }
+      const localPlaceholder = document.getElementById('local-video-placeholder');
+      if (localPlaceholder) {
+        localPlaceholder.style.display = 'flex';
+      }
+      const remoteVideo = document.getElementById('remote_video');
+      if (remoteVideo) {
+        remoteVideo.srcObject = null;
+        remoteVideo.style.display = 'none';
+      }
     }
   }
 
@@ -3888,7 +3909,15 @@
           subtitleOverlay.textContent = forcedLang === 'ar' ? 'بانتظار الإشارة...' : 'Waiting for signer...';
         }
       }
-      if (placeholder) placeholder.style.display = 'none';
+      if (placeholder) {
+        const remoteVideo = document.getElementById('remote_video');
+        if (remoteVideo && remoteVideo.style.display === 'block') {
+          placeholder.style.display = 'none';
+        } else {
+          placeholder.style.display = 'flex';
+          placeholder.textContent = forcedLang === 'ar' ? 'بانتظار الطرف الآخر...' : 'Waiting for peer...';
+        }
+      }
 
       if (isDeafHohUser) {
         if (camBtn) camBtn.style.display = 'inline-flex';
@@ -4379,6 +4408,11 @@
           if (remoteVideo) {
             remoteVideo.srcObject = null;
             remoteVideo.style.display = 'none';
+          }
+          const placeholder = document.getElementById('meeting-video-placeholder');
+          if (placeholder) {
+            placeholder.style.display = 'flex';
+            placeholder.textContent = 'بانتظار الطرف الآخر...';
           }
         });
 
