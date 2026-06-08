@@ -89,8 +89,13 @@ def call_gemini_llm(prompt: str, temperature: float = 0.0) -> str:
 def call_gemini_tts(text: str, language: str = "arabic") -> bytes:
     import wave
     import io
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-tts:generateContent?key={GEMINI_API_KEY}"
-    lang_name = "Egyptian Arabic dialect" if language in ["egyptian", "eg"] else "Modern Standard Arabic"
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-tts-preview:generateContent?key={GEMINI_API_KEY}"
+    if language in ["egyptian", "eg"]:
+        lang_name = "Egyptian Arabic dialect"
+    elif language in ["english", "en"]:
+        lang_name = "American English"
+    else:
+        lang_name = "Modern Standard Arabic"
     prompt = f"Please read the following text aloud. Pronounce it naturally as a native speaker of {lang_name}. Output ONLY the audio representation of this text, nothing else. Text: {text}"
     
     payload = {
@@ -867,14 +872,14 @@ import io
 @app.get("/api/tts")
 def text_to_speech_endpoint(text: str, language: str = "english"):
     lang = language.lower().strip()
-    if lang in ["arabic", "ar", "egyptian", "eg"]:
+    if lang in ["arabic", "ar", "egyptian", "eg", "english", "en"]:
         try:
             audio_bytes = call_gemini_tts(text, lang)
             return StreamingResponse(io.BytesIO(audio_bytes), media_type="audio/wav")
         except Exception as e:
             raise HTTPException(status_code=500, detail=f"Gemini TTS synthesis failed: {str(e)}")
     else:
-        raise HTTPException(status_code=400, detail="TTS is only implemented for Arabic and Egyptian.")
+        raise HTTPException(status_code=400, detail=f"TTS language {language} is not supported.")
 
 
 from fastapi import UploadFile as _UploadFile, File as _File, Form as _Form
