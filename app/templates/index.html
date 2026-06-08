@@ -4615,17 +4615,19 @@
         console.error("[Camera] MediaPipe Holistic library not loaded (S2SP).");
         return;
       }
-      s2spHolistic = new Holistic({
-        locateFile: file => `https://unpkg.com/@mediapipe/holistic@0.4/${file}`
-      });
+      if (!s2spHolistic) {
+        s2spHolistic = new Holistic({
+          locateFile: file => `https://unpkg.com/@mediapipe/holistic@0.4/${file}`
+        });
 
-      s2spHolistic.setOptions({
-        modelComplexity: 1,
-        smoothLandmarks: true,
-        minDetectionConfidence: 0.7,  // matches sign-to-text.py
-        minTrackingConfidence: 0.7,   // matches sign-to-text.py
-      });
-      s2spHolistic.onResults(onS2SpHolisticResults);
+        s2spHolistic.setOptions({
+          modelComplexity: 1,
+          smoothLandmarks: true,
+          minDetectionConfidence: 0.7,  // matches sign-to-text.py
+          minTrackingConfidence: 0.7,   // matches sign-to-text.py
+        });
+        s2spHolistic.onResults(onS2SpHolisticResults);
+      }
 
       console.log("[Camera] Initializing MediaPipe Camera helper (S2SP)...");
       if (!window.Camera) return;
