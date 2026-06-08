@@ -3127,8 +3127,7 @@
   }
 
   async function playLocalTts(text, language) {
-    // Force backend Gemini TTS by bypassing browser-native SpeechSynthesis
-    if (false && 'speechSynthesis' in window) {
+    if ('speechSynthesis' in window) {
       try {
         window.speechSynthesis.cancel();
         const utt = new SpeechSynthesisUtterance(text);
