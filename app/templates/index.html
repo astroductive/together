@@ -3800,10 +3800,10 @@
       });
     }
 
-    peerConnection.onnegotiationneeded = async () => {
+    const makeOffer = async () => {
       if (isCaller) {
         try {
-          console.log("[WebRTC] Creating offer...");
+          console.log("[WebRTC] Creating offer directly...");
           const offer = await peerConnection.createOffer();
           await peerConnection.setLocalDescription(offer);
           socket.emit('webrtc_offer', {
@@ -3816,9 +3816,10 @@
       }
     };
 
-    if (isCaller && meetingCamStream) {
-      console.log("[WebRTC] Stream exists, manually dispatching negotiationneeded");
-      peerConnection.dispatchEvent(new Event('negotiationneeded'));
+    peerConnection.onnegotiationneeded = makeOffer;
+
+    if (isCaller) {
+      setTimeout(makeOffer, 100);
     }
   }
 
@@ -3919,10 +3920,12 @@
       placeholder.style.display = 'flex';
       placeholder.textContent = 'Join a room to start receiving live captions';
 
-      const localVideo = document.getElementById('meeting-local-video');
-      if (localVideo) {
-        localVideo.srcObject = null;
-        localVideo.style.display = 'none';
+      if (!meetingCamOn) {
+        const localVideo = document.getElementById('meeting-local-video');
+        if (localVideo) {
+          localVideo.srcObject = null;
+          localVideo.style.display = 'none';
+        }
       }
       const localPlaceholder = document.getElementById('local-video-placeholder');
       if (localPlaceholder) {
