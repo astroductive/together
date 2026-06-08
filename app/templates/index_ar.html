@@ -2010,15 +2010,6 @@
         </div>
 
         <div class="meet-stage">
-          <!-- Participants List -->
-          <div class="meet-participants-panel" style="border: 1px solid rgba(255, 255, 255, 0.16); border-radius: 16px; background: rgba(255, 255, 255, 0.08); padding: 16px; display: flex; flex-direction: column; gap: 12px; min-height: 240px;">
-            <div class="label" style="border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 8px;">Participants (1-1)</div>
-            <div id="participants-list" style="display:flex; flex-direction:column; gap:10px; font-size:13px;">
-              <div id="participant-self" style="font-weight:600; color:#fff; display:flex; align-items:center; gap:6px;">You</div>
-              <div id="participant-peer" style="color:var(--gray-400); display:flex; align-items:center; gap:6px; font-style:italic;">Waiting for peer...</div>
-            </div>
-          </div>
-
           <div class="meet-video-panel">
             <div class="meet-video-header">
               <div class="meet-video-title">Meeting stage</div>
@@ -2064,6 +2055,14 @@
           </div>
 
           <div class="meet-aside">
+            <!-- Participants List -->
+            <div class="meet-participants-panel" style="border-bottom: 1px solid rgba(255, 255, 255, 0.16); padding-bottom: 12px; margin-bottom: 16px; display: flex; flex-direction: column; gap: 8px;">
+              <div class="label" style="font-size: 11px; text-transform: uppercase; color: rgba(255,255,255,0.6); letter-spacing: 0.05em; font-weight: 700;">Participants</div>
+              <div id="participants-list" style="display:flex; flex-direction:column; gap:6px; font-size:13px;">
+                <div id="participant-self" style="font-weight:600; color:#fff; display:flex; align-items:center; gap:6px;">You</div>
+                <div id="participant-peer" style="color:var(--gray-400); display:flex; align-items:center; gap:6px; font-style:italic;">Waiting for peer...</div>
+              </div>
+            </div>
             <div class="remote-label" id="meeting-caption-label">Live captions from participants</div>
             <div class="remote-sentence-box" id="remote-sentence-box" style="display:block; margin-top:8px; min-height:128px;">
               <div class="remote-text" id="remote-sentence" style="color:var(--gray-500);">No messages yet.</div>
