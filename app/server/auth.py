@@ -8,7 +8,7 @@ from fastapi.security import OAuth2PasswordBearer
 # ── Secrets & Config ────────────────────────────────────────
 SECRET_KEY = "TOGETHER_SUPER_SECRET_2026_ASL_PLATFORM"
 ALGORITHM  = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24  # 24 hours
+ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24 * 30  # 30 days
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login")
 
