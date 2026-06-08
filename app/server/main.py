@@ -87,6 +87,8 @@ def call_gemini_llm(prompt: str, temperature: float = 0.0) -> str:
         return ""
 
 def call_gemini_tts(text: str, language: str = "arabic") -> bytes:
+    import wave
+    import io
     url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-tts:generateContent?key={GEMINI_API_KEY}"
     lang_name = "Egyptian Arabic dialect" if language in ["egyptian", "eg"] else "Modern Standard Arabic"
     prompt = f"Please read the following text aloud. Pronounce it naturally as a native speaker of {lang_name}. Output ONLY the audio representation of this text, nothing else. Text: {text}"
@@ -111,7 +113,15 @@ def call_gemini_tts(text: str, language: str = "arabic") -> bytes:
         for part in parts:
             if "inlineData" in part:
                 audio_b64 = part["inlineData"]["data"]
-                return base64.b64decode(audio_b64)
+                raw_pcm = base64.b64decode(audio_b64)
+                # Wrap the raw PCM in a WAV container
+                wav_buf = io.BytesIO()
+                with wave.open(wav_buf, 'wb') as w:
+                    w.setnchannels(1)
+                    w.setsampwidth(2)      # 16-bit
+                    w.setframerate(24000)   # 24kHz
+                    w.writeframes(raw_pcm)
+                return wav_buf.getvalue()
         raise Exception("No inlineData found in Gemini response.")
     except Exception as e:
         print(f"[Gemini TTS Error] Failed to synthesize: {e}")
