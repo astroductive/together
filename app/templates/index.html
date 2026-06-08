@@ -3120,7 +3120,9 @@
     try {
       const langSelect = document.getElementById('cam-language-select');
       const language = langSelect ? langSelect.value : 'english';
-      const videoEl = document.getElementById('webcam');
+      const videoEl = (inMeeting && meetingCamStream)
+        ? document.getElementById('meeting-local-video')
+        : document.getElementById('webcam');
       const w = videoEl ? (videoEl.videoWidth || 640) : 640;
       const h = videoEl ? (videoEl.videoHeight || 480) : 480;
 
