@@ -30,6 +30,27 @@
     print: console.log,
     printErr: console.error
   };
+
+  // Patch window.speechSynthesis.speak to keep a global reference to active SpeechSynthesisUtterance
+  // instances. This prevents Chromium garbage collection from destroying them while speaking,
+  // which can lead to speech engine corruption and worker crashes.
+  if ('speechSynthesis' in window) {
+    window.activeUtterances = [];
+    const originalSpeak = window.speechSynthesis.speak;
+    window.speechSynthesis.speak = function(utt) {
+      if (utt) {
+        window.activeUtterances.push(utt);
+        const cleanUp = () => {
+          window.activeUtterances = window.activeUtterances.filter(u => u !== utt);
+        };
+        utt.addEventListener('end', cleanUp);
+        utt.addEventListener('error', cleanUp);
+        // Fallback cleanup after 60s
+        setTimeout(cleanUp, 60000);
+      }
+      originalSpeak.call(window.speechSynthesis, utt);
+    };
+  }
 </script>
 <script src="https://unpkg.com/@mediapipe/holistic@0.4/holistic.js"></script>
 <script src="https://unpkg.com/@mediapipe/camera_utils/camera_utils.js"></script>
