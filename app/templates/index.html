@@ -5,6 +5,22 @@
 
 {% block head %}
 <script>
+  // Prevents Emscripten's throwing getter on Module.arguments from aborting 
+  // when browser extensions, DevTools, or checkers inspect the global Module object.
+  const originalDefineProperty = Object.defineProperty;
+  Object.defineProperty = function(obj, prop, descriptor) {
+    if (prop === 'arguments' && descriptor && typeof descriptor.get === 'function') {
+      const getStr = descriptor.get.toString();
+      if (getStr.includes('replaced') || getStr.includes('arguments_')) {
+        descriptor.get = function() { return []; };
+        if (descriptor.set) {
+          descriptor.set = function() {};
+        }
+      }
+    }
+    return originalDefineProperty.apply(this, arguments);
+  };
+
   window.Module = {
     arguments: [],
     print: console.log,
