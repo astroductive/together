@@ -83,7 +83,7 @@
     };
   }
 </script>
-<script src="https://unpkg.com/@mediapipe/holistic@0.4/holistic.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/holistic@0.5.1675471629/holistic.js"></script>
 <script src="https://unpkg.com/@mediapipe/camera_utils/camera_utils.js"></script>
 <script src="https://unpkg.com/@mediapipe/drawing_utils/drawing_utils.js"></script>
 <script src="/static/js/socket.io.js"></script>
@@ -754,7 +754,7 @@
 
   .meet-stage {
     display: grid;
-    grid-template-columns: 2fr 1fr;
+    grid-template-columns: 1fr 280px;
     gap: 16px;
   }
 
@@ -770,14 +770,16 @@
     background: #111;
     border-radius: 14px;
     overflow: hidden;
-    aspect-ratio: 4/3;
-    min-height: 280px;
+    aspect-ratio: 16/9;
   }
 
   @media (max-width: 768px) {
+    .meet-videos-container {
+      grid-template-columns: 1fr;
+    }
     .meet-video-wrapper {
       min-height: unset;
-      aspect-ratio: 4/3;
+      aspect-ratio: 16/9;
     }
   }
 
@@ -2844,7 +2846,7 @@
       // 1. ADD THIS WRAPPER
       if (!holistic) {
         holistic = new Holistic({
-          locateFile: file => `https://unpkg.com/@mediapipe/holistic@0.4/${file}`
+          locateFile: file => `https://cdn.jsdelivr.net/npm/@mediapipe/holistic@0.5.1675471629/${file}`
         });
 
         holistic.setOptions({
@@ -4266,6 +4268,7 @@
 
 
   async function joinMeeting() {
+    await startMeetingCamera();
     try {
       if (socket) {
         try {
@@ -4719,7 +4722,7 @@
       }
       if (!s2spHolistic) {
         s2spHolistic = new Holistic({
-          locateFile: file => `https://unpkg.com/@mediapipe/holistic@0.4/${file}`
+          locateFile: file => `https://cdn.jsdelivr.net/npm/@mediapipe/holistic@0.5.1675471629/${file}`
         });
 
         s2spHolistic.setOptions({
