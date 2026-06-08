@@ -4,7 +4,14 @@
 {% block nav %}{% endblock %}
 
 {% block head %}
-<script src="https://unpkg.com/@mediapipe/holistic/holistic.js"></script>
+<script>
+  window.Module = {
+    arguments: [],
+    print: console.log,
+    printErr: console.error
+  };
+</script>
+<script src="https://unpkg.com/@mediapipe/holistic@0.4.1633559546/holistic.js"></script>
 <script src="https://unpkg.com/@mediapipe/camera_utils/camera_utils.js"></script>
 <script src="https://unpkg.com/@mediapipe/drawing_utils/drawing_utils.js"></script>
 <script src="/static/js/socket.io.js"></script>
@@ -2756,7 +2763,7 @@
       // 1. ADD THIS WRAPPER
       if (!holistic) {
         holistic = new Holistic({
-          locateFile: file => `https://unpkg.com/@mediapipe/holistic/${file}`
+          locateFile: file => `https://unpkg.com/@mediapipe/holistic@0.4.1633559546/${file}`
         });
 
         holistic.setOptions({
@@ -4422,7 +4429,7 @@
         return;
       }
       s2spHolistic = new Holistic({
-        locateFile: file => `https://unpkg.com/@mediapipe/holistic/${file}`
+        locateFile: file => `https://unpkg.com/@mediapipe/holistic@0.4.1633559546/${file}`
       });
 
       s2spHolistic.setOptions({
