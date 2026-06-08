@@ -2307,6 +2307,7 @@
   let meetingSpeechOutOn = true;
   let meetingAvatarPlaying = false;
   let peerConnection = null;
+  let iceCandidateBuffer = [];
   let peerSocketId = null;
   let currentModule = 'vision';
   // ═══════════════════════════════════════════════════════════
@@ -3746,6 +3747,7 @@
   // ═══════════════════════════════════════════════════════════
 
   function initWebRtc(targetSid, isCaller) {
+    iceCandidateBuffer = [];
     if (peerConnection) {
       console.log("[WebRTC] Closing existing PeerConnection before re-initializing");
       try { peerConnection.close(); } catch(_) {}
@@ -4138,7 +4140,13 @@
     }
 
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: {
+          width: { ideal: 640 },
+          height: { ideal: 480 },
+          frameRate: { ideal: 24, max: 30 }
+        }
+      });
       meetingCamStream = stream;
       videoEl.srcObject = stream;
       videoEl.style.display = 'block';
@@ -4483,6 +4491,15 @@
           }
           try {
             await peerConnection.setRemoteDescription(new RTCSessionDescription(data.sdp));
+            console.log("[WebRTC] Applying buffered ICE candidates...");
+            while (iceCandidateBuffer.length > 0) {
+              const candidate = iceCandidateBuffer.shift();
+              try {
+                await peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
+              } catch (err) {
+                console.error("[WebRTC] Error adding buffered ICE candidate:", err);
+              }
+            }
             console.log("[WebRTC] Creating answer...");
             const answer = await peerConnection.createAnswer();
             await peerConnection.setLocalDescription(answer);
@@ -4500,6 +4517,15 @@
           if (peerConnection) {
             try {
               await peerConnection.setRemoteDescription(new RTCSessionDescription(data.sdp));
+              console.log("[WebRTC] Applying buffered ICE candidates...");
+              while (iceCandidateBuffer.length > 0) {
+                const candidate = iceCandidateBuffer.shift();
+                try {
+                  await peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
+                } catch (err) {
+                  console.error("[WebRTC] Error adding buffered ICE candidate:", err);
+                }
+              }
             } catch (err) {
               console.error("[WebRTC] Error setting remote description:", err);
             }
@@ -4509,10 +4535,15 @@
         socket.on('webrtc_ice_candidate', async (data) => {
           console.log("[WebRTC] Received ICE candidate from", data.sender_sid);
           if (peerConnection && data.candidate) {
-            try {
-              await peerConnection.addIceCandidate(new RTCIceCandidate(data.candidate));
-            } catch (err) {
-              console.error("[WebRTC] Error adding ICE candidate:", err);
+            if (peerConnection.remoteDescription) {
+              try {
+                await peerConnection.addIceCandidate(new RTCIceCandidate(data.candidate));
+              } catch (err) {
+                console.error("[WebRTC] Error adding ICE candidate:", err);
+              }
+            } else {
+              console.log("[WebRTC] Buffering ICE candidate until remote description is set");
+              iceCandidateBuffer.push(data.candidate);
             }
           }
         });
