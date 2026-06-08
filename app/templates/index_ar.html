@@ -854,19 +854,6 @@
   .meet-stage.signer-mode .meet-aside {
     display: none !important;
   }
-  .meet-stage.signer-mode #remote_video {
-    position: absolute;
-    left: 14px;
-    top: 14px;
-    width: 200px !important;
-    height: 150px !important;
-    border-radius: 12px;
-    border: 1.5px solid rgba(255, 255, 255, 0.25);
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
-    object-fit: cover;
-    z-index: 10;
-    display: block !important;
-  }
   .meet-stage.signer-mode .meeting-avatar-corner {
     display: none !important;
   }
@@ -883,21 +870,8 @@
   .meet-stage.speaker-mode .meet-aside {
     display: none !important;
   }
-  .meet-stage.speaker-mode #remote_video {
-    display: none !important;
-  }
   .meet-stage.speaker-mode .meeting-avatar-corner {
-    position: absolute;
-    left: 14px;
-    top: 14px;
-    width: 200px !important;
-    height: 150px !important;
-    border-radius: 12px;
-    border: 1.5px solid rgba(255, 255, 255, 0.25);
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
-    background: rgba(0, 0, 0, 0.9);
-    z-index: 10;
-    display: block !important;
+    display: none !important;
   }
   .meet-stage.speaker-mode .meet-controls {
     display: flex;
@@ -2027,19 +2001,21 @@
               <div class="meet-video-title">Meeting stage</div>
               <div style="font-size:12px;color:#7a7a7a;" id="meeting-stage-label">Waiting to join</div>
             </div>
-            <div style="padding:14px; position:relative;">
+            <div style="padding:14px; position:relative; min-height:380px;">
+              <video id="meeting-local-video" autoplay playsinline muted
+                style="position:absolute; right:24px; top:24px; width:160px; height:120px; border-radius:12px; border:2px solid rgba(255,255,255,0.3); object-fit:cover; z-index:20; background:#000; display:none; box-shadow:0 8px 24px rgba(0,0,0,0.5);"></video>
               <div class="meeting-avatar-corner" id="meeting-avatar-corner">
                 <div class="label">Speaker Avatar</div>
                 <canvas id="meeting-avatar-canvas"></canvas>
               </div>
               <video id="remote_video" autoplay playsinline
-                style="width:100%;border-radius:14px;background:#111;display:none;max-height:380px;object-fit:cover;" muted></video>
+                style="width:100%;border-radius:14px;background:#111;display:none;height:380px;object-fit:cover;"></video>
               <div id="meeting-subtitle-overlay"
-                style="display:none; border-radius:14px; background:rgba(0,0,0,0.45); color:#ffffff; min-height:240px; align-items:center; justify-content:center; font-size:24px; font-weight:700; text-align:center; padding:30px; line-height:1.5; border: 1px solid rgba(255,255,255,0.1);">
+                style="display:none; position:absolute; bottom:24px; left:50%; transform:translateX(-50%); background:rgba(0,0,0,0.75); color:#ffffff; font-size:20px; font-weight:600; text-align:center; padding:12px 24px; border-radius:10px; border: 1px solid rgba(255,255,255,0.15); z-index:15; max-width:85%; pointer-events:none;">
                 بانتظار المتحدث...
               </div>
               <div id="meeting-video-placeholder"
-                style="border-radius:14px;background:#121212;color:#ffffff;min-height:240px;display:flex;align-items:center;justify-content:center;font-size:13px;letter-spacing:0.04em;text-transform:uppercase;">
+                style="border-radius:14px;background:#121212;color:#ffffff;height:380px;display:flex;align-items:center;justify-content:center;font-size:13px;letter-spacing:0.04em;text-transform:uppercase;">
                 Join a room to start receiving live captions
               </div>
             </div>
@@ -3721,7 +3697,7 @@
       }
     };
 
-    if (isDeafHohUser && meetingCamStream) {
+    if (meetingCamStream) {
       console.log("[WebRTC] Adding local camera tracks to PeerConnection");
       meetingCamStream.getTracks().forEach(track => {
         peerConnection.addTrack(track, meetingCamStream);
@@ -3744,7 +3720,7 @@
       }
     };
 
-    if (isCaller && isDeafHohUser && meetingCamStream) {
+    if (isCaller && meetingCamStream) {
       console.log("[WebRTC] Stream exists, manually dispatching negotiationneeded");
       peerConnection.dispatchEvent(new Event('negotiationneeded'));
     }
@@ -3885,7 +3861,7 @@
         if (composer) composer.style.display = 'none';
         if (speechBtn) speechBtn.style.display = 'none';
       } else {
-        if (camBtn) camBtn.style.display = 'none';
+        if (camBtn) camBtn.style.display = 'inline-flex';
         if (micBtn) micBtn.style.display = 'inline-flex';
         if (signBtn) signBtn.style.display = 'none';
         if (composer) composer.style.display = 'flex';
@@ -4028,14 +4004,12 @@
   async function startMeetingCamera() {
     if (meetingCamOn) return true;
 
-    const videoEl = document.getElementById('remote_video');
-    const placeholder = document.getElementById('meeting-video-placeholder');
+    const videoEl = document.getElementById('meeting-local-video');
     const camBtn = document.getElementById('meeting-cam-btn');
 
     const mediaCheck = ensureMediaApi('Camera');
     if (!mediaCheck.ok) {
       setStatus('Camera unavailable', false);
-      document.getElementById('meeting-video-placeholder').textContent = mediaCheck.message;
       return false;
     }
 
@@ -4044,7 +4018,6 @@
       meetingCamStream = stream;
       videoEl.srcObject = stream;
       videoEl.style.display = 'block';
-      placeholder.style.display = 'none';
 
       meetingCamOn = true;
       camBtn.textContent = '📷 Camera On';
@@ -4064,16 +4037,13 @@
       camBtn.textContent = '📷 Camera Off';
       camBtn.classList.remove('on');
       videoEl.style.display = 'none';
-      placeholder.style.display = 'flex';
-      placeholder.textContent = inMeeting ? 'Camera blocked or unavailable' : 'Join a room to start receiving live captions';
       setStatus('Camera unavailable', false);
       return false;
     }
   }
 
   function stopMeetingCamera() {
-    const videoEl = document.getElementById('remote_video');
-    const placeholder = document.getElementById('meeting-video-placeholder');
+    const videoEl = document.getElementById('meeting-local-video');
     const camBtn = document.getElementById('meeting-cam-btn');
 
     if (meetingCamStream) {
@@ -4081,13 +4051,15 @@
       meetingCamStream = null;
     }
 
-    videoEl.srcObject = null;
-    videoEl.style.display = 'none';
+    if (videoEl) {
+      videoEl.srcObject = null;
+      videoEl.style.display = 'none';
+    }
     meetingCamOn = false;
-    camBtn.textContent = '📷 Camera Off';
-    camBtn.classList.remove('on');
-    placeholder.style.display = 'flex';
-    placeholder.textContent = inMeeting ? 'Camera is off' : 'Join a room to start receiving live captions';
+    if (camBtn) {
+      camBtn.textContent = '📷 Camera Off';
+      camBtn.classList.remove('on');
+    }
   }
 
   async function toggleMeetingCamera() {
@@ -4420,20 +4392,19 @@
       initMeetingRoleUi();
 
       // Start camera asynchronously — don't block the meeting join flow
+      startMeetingCamera().catch(() => {});
+
       if (isDeafHohUser) {
-        startMeetingCamera().catch(() => {}).then(() => {
-          if (!meetingSignInputOn) {
-            try { startCamera(); } catch (_) {}
-            meetingSignInputOn = true;
-            const signBtn = document.getElementById('meeting-sign-btn');
-            if (signBtn) {
-              signBtn.textContent = '🤟 Sign Input On';
-              signBtn.classList.add('on');
-            }
+        if (!meetingSignInputOn) {
+          try { startCamera(); } catch (_) {}
+          meetingSignInputOn = true;
+          const signBtn = document.getElementById('meeting-sign-btn');
+          if (signBtn) {
+            signBtn.textContent = '🤟 Sign Input On';
+            signBtn.classList.add('on');
           }
-        });
+        }
       } else {
-        stopMeetingCamera();
         if (meetingSignInputOn) {
           try { stopCamera(); } catch (_) {}
           meetingSignInputOn = false;
