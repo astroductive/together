@@ -11,7 +11,7 @@
     printErr: console.error
   };
 </script>
-<script src="https://unpkg.com/@mediapipe/holistic@0.4.1633559546/holistic.js"></script>
+<script src="https://unpkg.com/@mediapipe/holistic@0.4/holistic.js"></script>
 <script src="https://unpkg.com/@mediapipe/camera_utils/camera_utils.js"></script>
 <script src="https://unpkg.com/@mediapipe/drawing_utils/drawing_utils.js"></script>
 <script src="/static/js/socket.io.js"></script>
@@ -2763,7 +2763,7 @@
       // 1. ADD THIS WRAPPER
       if (!holistic) {
         holistic = new Holistic({
-          locateFile: file => `https://unpkg.com/@mediapipe/holistic@0.4.1633559546/${file}`
+          locateFile: file => `https://unpkg.com/@mediapipe/holistic@0.4/${file}`
         });
 
         holistic.setOptions({
@@ -4429,7 +4429,7 @@
         return;
       }
       s2spHolistic = new Holistic({
-        locateFile: file => `https://unpkg.com/@mediapipe/holistic@0.4.1633559546/${file}`
+        locateFile: file => `https://unpkg.com/@mediapipe/holistic@0.4/${file}`
       });
 
       s2spHolistic.setOptions({
