@@ -1130,12 +1130,16 @@ async def leave_room(sid, data):
 @sio.on("announce_presence")
 async def announce_presence(sid, data):
     room = data.get("room", "general")
-    await sio.emit("presence_announced", data, room=room, skip_sid=sid)
+    payload = dict(data) if isinstance(data, dict) else {}
+    payload["sender_sid"] = sid
+    await sio.emit("presence_announced", payload, room=room, skip_sid=sid)
 
 @sio.on("announce_presence_reply")
 async def announce_presence_reply(sid, data):
     room = data.get("room", "general")
-    await sio.emit("presence_reply", data, room=room, skip_sid=sid)
+    payload = dict(data) if isinstance(data, dict) else {}
+    payload["sender_sid"] = sid
+    await sio.emit("presence_reply", payload, room=room, skip_sid=sid)
 
 @sio.on("webrtc_offer")
 async def webrtc_offer(sid, data):
