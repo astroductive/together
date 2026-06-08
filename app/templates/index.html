@@ -4515,6 +4515,11 @@
             }
           }
         });
+
+        socket.on('room_full', (data) => {
+          setStatus(`Room ${data.room || ''} is full (max 2 participants)`, false);
+          leaveMeeting();
+        });
       }
 
       // Start camera before joining/syncing meeting connection

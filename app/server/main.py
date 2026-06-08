@@ -1103,7 +1103,7 @@ async def get_batch_arabic_sign_landmarks(
 # SOCKET.IO — WebRTC signaling & meeting relay
 # ═══════════════════════════════════════════════════════════════
 
-rooms: dict = {}
+rooms: dict = {}  # Map sid -> room_id
 
 @sio.on("connect")
 async def on_connect(sid, environ):
@@ -1112,11 +1112,24 @@ async def on_connect(sid, environ):
 @sio.on("disconnect")
 async def on_disconnect(sid):
     print(f"[WS] Client disconnected: {sid}")
+    room_id = rooms.pop(sid, None)
+    if room_id:
+        await sio.emit("peer_left", {"sid": sid}, room=room_id)
+        print(f"[WS] {sid} disconnected and left room '{room_id}'")
 
 @sio.on("join_room")
 async def join_room(sid, data):
     room_id = data.get("room", "general")
+    
+    # Limit to 1-1 (max 2 participants)
+    participants = [s for s, r in rooms.items() if r == room_id]
+    if len(participants) >= 2:
+        await sio.emit("room_full", {"room": room_id}, to=sid)
+        print(f"[WS] Rejecting {sid} from room '{room_id}' (room full)")
+        return
+
     await sio.enter_room(sid, room_id)
+    rooms[sid] = room_id
     await sio.emit("new_peer", {"sid": sid}, room=room_id, skip_sid=sid)
     print(f"[WS] {sid} joined room '{room_id}'")
 
@@ -1124,6 +1137,7 @@ async def join_room(sid, data):
 async def leave_room(sid, data):
     room_id = data.get("room", "general")
     await sio.leave_room(sid, room_id)
+    rooms.pop(sid, None)
     await sio.emit("peer_left", {"sid": sid}, room=room_id, skip_sid=sid)
     print(f"[WS] {sid} left room '{room_id}'")
 
