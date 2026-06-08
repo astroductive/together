@@ -11,11 +11,13 @@
   Object.defineProperty = function(obj, prop, descriptor) {
     if (descriptor && typeof descriptor.get === 'function') {
       const getStr = descriptor.get.toString();
-      if (getStr.includes('replaced') || getStr.includes('has been replaced')) {
+      if (getStr.includes('replaced') || getStr.includes('has been replaced') || getStr.includes('was not exported')) {
         descriptor.get = function() {
           if (prop === 'arguments') return [];
           if (prop === 'thisProgram') return './thisProgram';
-          return '';
+          if (prop === 'printErr') return console.error;
+          if (prop === 'print') return console.log;
+          return function() {};
         };
         if (descriptor.set) {
           descriptor.set = function() {};
