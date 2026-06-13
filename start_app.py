@@ -108,6 +108,19 @@ def run():
         print("  ERROR: Failed to install requirements: {}".format(e))
         return
 
+    # 2.5 Database: apply schema migrations + load sign data (Postgres).
+    print("\n[DB] Applying migrations and ensuring sign data...")
+    if not os.environ.get("DATABASE_URL"):
+        print("  - DATABASE_URL not set; using default "
+              "postgresql+psycopg://together:together@localhost:5432/together")
+    try:
+        subprocess.check_call([sys.executable, "-m", "alembic", "upgrade", "head"])
+        subprocess.check_call([sys.executable, "scripts/migrate_to_postgres.py"])
+        print("  OK: Database ready.")
+    except Exception as e:
+        print("  WARNING: DB setup step failed ({}). Is Postgres running? "
+              "See README (docker-compose up brings it up automatically).".format(e))
+
     # 3. Free port 8000 if occupied
     print("\n[3/4] Checking Port {}...".format(PORT))
     if port_in_use(PORT):

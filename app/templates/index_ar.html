@@ -4351,7 +4351,7 @@
       currentMeetingRoom = roomId;
 
       if (!socket) {
-        socket = io();
+        socket = io({ auth: { token: getToken() || '' } });
         const currentSocket = socket;
 
         socket.on('connect', syncMeetingConnection);

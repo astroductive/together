@@ -64,6 +64,9 @@ data/signs.db.gz
 .DS_Store
 Thumbs.db
 
+# Virtualenvs (any .venv* variant)
+.venv*/
+
 # Local dependency stamp
 .deps_stamp
 

@@ -60,7 +60,7 @@ import re
 import base64
 import requests
 
-GEMINI_API_KEY = "AIzaSyBvdQnId4-i-vF-PGhGXHEQ7fMIjwnuYGs"
+GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
 
 def call_gemini_llm(prompt: str, temperature: float = 0.0) -> str:
     url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key={GEMINI_API_KEY}"
@@ -180,18 +180,40 @@ def call_gemini_stt(audio_bytes: bytes, mime_type: str = "audio/wav", language: 
 SLOW_REQUEST_MS = float(os.environ.get("SLOW_REQUEST_MS", "5000"))
 
 # ── Local modules ─────────────────────────────────────────────
-from database import engine, Base, User, get_db
+from database import engine, Base, User, get_db, init_db
 from auth import (
+    ACCESS_TOKEN_EXPIRE_MINUTES,
+    REFRESH_TOKEN_EXPIRE_DAYS,
     create_access_token,
-    verify_password,
-    get_password_hash,
+    create_refresh_token,
+    decode_token,
     get_current_user,
+    get_password_hash,
+    needs_rehash,
+    require_auth_rate_limit,
+    rotate_refresh_token,
+    verify_password,
 )
-from schemas import UserCreate, UserResponse, Token
+from schemas import UserCreate, UserResponse, Token, TokenRefresh
 from asl_service import ASLService, SignDB, ArabicSignDB
 
 # ── App setup ─────────────────────────────────────────────────
 app = FastAPI(title="Together — Sign Language AI Platform", version="2.0.0")
+
+
+@app.on_event("startup")
+def _ensure_database_ready():
+    """Idempotently ensure the pgvector extension + tables exist.
+
+    Production deployments run `alembic upgrade head` first (the start scripts /
+    docker-compose do this); this is a harmless no-op when the schema already
+    exists, and keeps a fresh dev database bootable. Failure here must not crash
+    boot — the lazy model loaders surface DB problems via /api/health.
+    """
+    try:
+        init_db()
+    except Exception as e:
+        print(f"[startup] init_db skipped: {e}")
 
 
 def normalize_and_validate_email(raw_email: str, *, check_deliverability: bool = False) -> str:
@@ -214,9 +236,15 @@ async def validation_exception_handler(request: _Request, exc: RequestValidation
     return JSONResponse(status_code=422, content={"detail": detail})
 
 # ── CORS ──────────────────────────────────────────────────────
+# allow_origins=["*"] is spec-invalid with allow_credentials=True.
+# Default to localhost origins; override via ALLOWED_ORIGINS env var
+# (comma-separated list, e.g. "https://example.com,https://www.example.com").
+_raw_origins = os.environ.get("ALLOWED_ORIGINS", "http://localhost:8000,http://127.0.0.1:8000")
+_cors_origins = [o.strip() for o in _raw_origins.split(",") if o.strip()]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=_cors_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -246,17 +274,23 @@ class ForceJSMimeMiddleware:
         async def send_wrapper(message):
             if message["type"] == "http.response.start":
                 headers = message.setdefault("headers", [])
-                
+
                 # Check for X-Process-Time-ms (calculate when response starts)
                 elapsed_ms = (time.perf_counter() - started) * 1000.0
                 headers.append((b"x-process-time-ms", f"{elapsed_ms:.1f}".encode("latin1")))
+
+                # Security headers
+                headers.append((b"x-frame-options", b"DENY"))
+                headers.append((b"x-content-type-options", b"nosniff"))
+                headers.append((b"referrer-policy", b"strict-origin-when-cross-origin"))
+                headers.append((b"permissions-policy", b"camera=(), microphone=(), geolocation=()"))
 
                 # Check if it is a .js file
                 if path.endswith(".js"):
                     # Remove any existing Content-Type header
                     headers[:] = [h for h in headers if h[0].lower() != b"content-type"]
                     headers.append((b"content-type", b"application/javascript"))
-                
+
                 # Cache versioned/static assets aggressively for faster repeat page loads.
                 if path.startswith("/static/"):
                     headers[:] = [h for h in headers if h[0].lower() != b"cache-control"]
@@ -274,7 +308,7 @@ app.mount("/static", StaticFiles(directory=os.path.join(BASE_DIR, "static")), na
 templates = Jinja2Templates(directory=os.path.join(BASE_DIR, "templates"))
 
 # ── Socket.IO ─────────────────────────────────────────────────
-sio = socketio.AsyncServer(async_mode="asgi", cors_allowed_origins="*")
+sio = socketio.AsyncServer(async_mode="asgi", cors_allowed_origins=_cors_origins)
 socket_app = socketio.ASGIApp(sio, app)
 
 # ── Deferred model loading ────────────────────────────────────
@@ -578,7 +612,11 @@ async def signup_page(request: Request):
 # ═══════════════════════════════════════════════════════════════
 
 @app.post("/api/auth/signup", response_model=UserResponse, status_code=201)
-async def signup(user_data: UserCreate, db: Session = Depends(get_db)):
+async def signup(
+    user_data: UserCreate,
+    db: Session = Depends(get_db),
+    _: None = Depends(require_auth_rate_limit),
+):
     raw_email = str(user_data.email).strip().lower()
     password = (user_data.password or "").strip()
     full_name = (user_data.full_name or "").strip() or None
@@ -622,9 +660,12 @@ async def signup(user_data: UserCreate, db: Session = Depends(get_db)):
 
 @app.post("/api/auth/login", response_model=Token)
 async def login(
+    request: Request,
     form_data: OAuth2PasswordRequestForm = Depends(),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    _: None = Depends(require_auth_rate_limit),
 ):
+    from fastapi.responses import JSONResponse as _JSONResponse
     raw_email = (form_data.username or "").strip().lower()
     password = (form_data.password or "")
 
@@ -643,13 +684,110 @@ async def login(
             detail="Incorrect email or password.",
             headers={"WWW-Authenticate": "Bearer"},
         )
-    token = create_access_token(data={
+
+    # Transparently upgrade legacy bcrypt hashes to Argon2id on successful login.
+    if needs_rehash(user.hashed_password):
+        user.hashed_password = get_password_hash(password)
+
+    access_token = create_access_token(data={
         "sub":       user.email,
         "full_name": user.full_name or "",
         "role":      user.role,
         "user_id":   user.id,
     })
-    return {"access_token": token, "token_type": "bearer"}
+
+    _, refresh_signed = create_refresh_token(user.id, db)
+    db.commit()
+
+    # Deliver the access token in the JSON body (browser stores in localStorage).
+    # The refresh token goes in a httpOnly, SameSite=Lax cookie so JS cannot read it,
+    # which prevents XSS from stealing the refresh credential.
+    is_secure = request.url.scheme == "https"
+    response = _JSONResponse(content={"access_token": access_token, "token_type": "bearer"})
+    response.set_cookie(
+        key="refresh_token",
+        value=refresh_signed,
+        httponly=True,
+        secure=is_secure,
+        samesite="lax",
+        max_age=REFRESH_TOKEN_EXPIRE_DAYS * 86400,
+        path="/api/auth/refresh",
+    )
+    return response
+
+
+@app.post("/api/auth/refresh", response_model=TokenRefresh)
+async def refresh_token_endpoint(
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    """Exchange a valid refresh-token cookie for a fresh access token.
+
+    The old refresh token is revoked on every use (rotation), limiting the
+    blast radius of a stolen token to a single request window.
+    """
+    from fastapi.responses import JSONResponse as _JSONResponse
+    raw_rt = request.cookies.get("refresh_token")
+    if not raw_rt:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="No refresh token cookie.")
+
+    user_id, new_refresh_signed = rotate_refresh_token(raw_rt, db)
+
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found.")
+
+    db.commit()
+
+    new_access = create_access_token(data={
+        "sub":       user.email,
+        "full_name": user.full_name or "",
+        "role":      user.role,
+        "user_id":   user.id,
+    })
+
+    is_secure = request.url.scheme == "https"
+    response = _JSONResponse(content={
+        "access_token": new_access,
+        "token_type": "bearer",
+        "expires_in": ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+    })
+    response.set_cookie(
+        key="refresh_token",
+        value=new_refresh_signed,
+        httponly=True,
+        secure=is_secure,
+        samesite="lax",
+        max_age=REFRESH_TOKEN_EXPIRE_DAYS * 86400,
+        path="/api/auth/refresh",
+    )
+    return response
+
+
+@app.post("/api/auth/logout")
+async def logout(
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    """Revoke the refresh token and clear the cookie."""
+    from fastapi.responses import JSONResponse as _JSONResponse
+    raw_rt = request.cookies.get("refresh_token")
+    if raw_rt:
+        try:
+            from jose import jwt as _jose_jwt
+            from auth import SECRET_KEY as _SK, ALGORITHM as _ALG
+            payload = _jose_jwt.decode(raw_rt, _SK, algorithms=[_ALG])
+            jti = payload.get("jti")
+            if jti:
+                from db.repository import RefreshTokenRepository
+                RefreshTokenRepository(db).revoke(jti)
+                db.commit()
+        except Exception:
+            pass  # Expired / malformed tokens are fine — cookie will be cleared anyway
+
+    response = _JSONResponse(content={"detail": "Logged out."})
+    response.delete_cookie(key="refresh_token", path="/api/auth/refresh")
+    return response
 
 
 @app.get("/api/auth/me", response_model=UserResponse)
@@ -909,16 +1047,17 @@ from fastapi.responses import FileResponse
 import sqlite3
 
 def get_video_filename(word: str) -> str:
-    """Helper to query the signs.db for the video_path of a given word."""
+    """Return the stored video filename for an English sign word (from Postgres)."""
     try:
-        db_path = os.path.join(BASE_DIR, "data", "signs.db")
-        conn = sqlite3.connect(db_path)
-        cur = conn.cursor()
-        cur.execute("SELECT video_path FROM signs WHERE word = ?", (word,))
-        row = cur.fetchone()
-        conn.close()
-        if row and row[0]:
-            return os.path.basename(row[0])
+        from db.base import SessionLocal
+        from db.repository import SignRepository
+        db = SessionLocal()
+        try:
+            sign = SignRepository(db).get_exact(word, "en")
+            if sign and sign.video_filename:
+                return os.path.basename(sign.video_filename)
+        finally:
+            db.close()
     except Exception as e:
         print(f"[ERROR] get_video_filename query failed: {e}")
     return ""
@@ -977,12 +1116,11 @@ async def get_sign_landmarks(
 
     if len(normalized_words) > 1:
         full_phrase = " ".join(normalized_words)
-        if full_phrase in db.landmarks_dict:
-            lm = db.landmarks_dict[full_phrase]
-            if lm is not None:
-                video_fn = get_video_filename(full_phrase)
-                video_url = f"/api/videos/{video_fn}" if video_fn else None
-                return {"word": full_phrase, "landmarks": lm.tolist(), "frame_count": len(lm), "video_url": video_url}
+        lm = db.phrase_landmarks(full_phrase)
+        if lm is not None:
+            video_fn = get_video_filename(full_phrase)
+            video_url = f"/api/videos/{video_fn}" if video_fn else None
+            return {"word": full_phrase, "landmarks": lm, "frame_count": len(lm), "video_url": video_url}
 
     lookup_word = normalized_words[0]
     lms = db.get_landmarks(lookup_word)
@@ -1016,16 +1154,14 @@ async def get_batch_sign_landmarks(
     # Try matching the complete phrase first
     if normalized_words and len(normalized_words) > 1:
         full_phrase = ' '.join(normalized_words)
-        # Check if the full phrase exists in landmarks
-        if full_phrase in db.landmarks_dict:
-            lm = db.landmarks_dict[full_phrase]
-            if lm is not None:
-                video_fn = get_video_filename(full_phrase)
-                video_url = f"/api/videos/{video_fn}" if video_fn else None
-                return {
-                    "found": [{"word": full_phrase, "landmarks": lm.tolist(), "frame_count": len(lm), "video_url": video_url}],
-                    "missing": []
-                }
+        lm = db.phrase_landmarks(full_phrase)
+        if lm is not None:
+            video_fn = get_video_filename(full_phrase)
+            video_url = f"/api/videos/{video_fn}" if video_fn else None
+            return {
+                "found": [{"word": full_phrase, "landmarks": lm, "frame_count": len(lm), "video_url": video_url}],
+                "missing": []
+            }
     
     # Fall back to individual word matching
     found = []
@@ -1106,7 +1242,14 @@ async def get_batch_arabic_sign_landmarks(
 rooms: dict = {}  # Map sid -> room_id
 
 @sio.on("connect")
-async def on_connect(sid, environ):
+async def on_connect(sid, environ, auth=None):
+    token = (auth or {}).get("token") if isinstance(auth, dict) else None
+    if token:
+        try:
+            decode_token(token)
+        except HTTPException:
+            print(f"[WS] Rejected {sid}: invalid auth token")
+            raise ConnectionRefusedError("Unauthorized")
     print(f"[WS] Client connected: {sid}")
 
 @sio.on("disconnect")
