@@ -180,7 +180,7 @@ def call_gemini_stt(audio_bytes: bytes, mime_type: str = "audio/wav", language: 
 SLOW_REQUEST_MS = float(os.environ.get("SLOW_REQUEST_MS", "5000"))
 
 # ── Local modules ─────────────────────────────────────────────
-from database import engine, Base, User, get_db
+from database import engine, Base, User, get_db, init_db
 from auth import (
     create_access_token,
     verify_password,
@@ -192,6 +192,21 @@ from asl_service import ASLService, SignDB, ArabicSignDB
 
 # ── App setup ─────────────────────────────────────────────────
 app = FastAPI(title="Together — Sign Language AI Platform", version="2.0.0")
+
+
+@app.on_event("startup")
+def _ensure_database_ready():
+    """Idempotently ensure the pgvector extension + tables exist.
+
+    Production deployments run `alembic upgrade head` first (the start scripts /
+    docker-compose do this); this is a harmless no-op when the schema already
+    exists, and keeps a fresh dev database bootable. Failure here must not crash
+    boot — the lazy model loaders surface DB problems via /api/health.
+    """
+    try:
+        init_db()
+    except Exception as e:
+        print(f"[startup] init_db skipped: {e}")
 
 
 def normalize_and_validate_email(raw_email: str, *, check_deliverability: bool = False) -> str:
@@ -909,16 +924,17 @@ from fastapi.responses import FileResponse
 import sqlite3
 
 def get_video_filename(word: str) -> str:
-    """Helper to query the signs.db for the video_path of a given word."""
+    """Return the stored video filename for an English sign word (from Postgres)."""
     try:
-        db_path = os.path.join(BASE_DIR, "data", "signs.db")
-        conn = sqlite3.connect(db_path)
-        cur = conn.cursor()
-        cur.execute("SELECT video_path FROM signs WHERE word = ?", (word,))
-        row = cur.fetchone()
-        conn.close()
-        if row and row[0]:
-            return os.path.basename(row[0])
+        from db.base import SessionLocal
+        from db.repository import SignRepository
+        db = SessionLocal()
+        try:
+            sign = SignRepository(db).get_exact(word, "en")
+            if sign and sign.video_filename:
+                return os.path.basename(sign.video_filename)
+        finally:
+            db.close()
     except Exception as e:
         print(f"[ERROR] get_video_filename query failed: {e}")
     return ""
@@ -977,12 +993,11 @@ async def get_sign_landmarks(
 
     if len(normalized_words) > 1:
         full_phrase = " ".join(normalized_words)
-        if full_phrase in db.landmarks_dict:
-            lm = db.landmarks_dict[full_phrase]
-            if lm is not None:
-                video_fn = get_video_filename(full_phrase)
-                video_url = f"/api/videos/{video_fn}" if video_fn else None
-                return {"word": full_phrase, "landmarks": lm.tolist(), "frame_count": len(lm), "video_url": video_url}
+        lm = db.phrase_landmarks(full_phrase)
+        if lm is not None:
+            video_fn = get_video_filename(full_phrase)
+            video_url = f"/api/videos/{video_fn}" if video_fn else None
+            return {"word": full_phrase, "landmarks": lm, "frame_count": len(lm), "video_url": video_url}
 
     lookup_word = normalized_words[0]
     lms = db.get_landmarks(lookup_word)
@@ -1016,16 +1031,14 @@ async def get_batch_sign_landmarks(
     # Try matching the complete phrase first
     if normalized_words and len(normalized_words) > 1:
         full_phrase = ' '.join(normalized_words)
-        # Check if the full phrase exists in landmarks
-        if full_phrase in db.landmarks_dict:
-            lm = db.landmarks_dict[full_phrase]
-            if lm is not None:
-                video_fn = get_video_filename(full_phrase)
-                video_url = f"/api/videos/{video_fn}" if video_fn else None
-                return {
-                    "found": [{"word": full_phrase, "landmarks": lm.tolist(), "frame_count": len(lm), "video_url": video_url}],
-                    "missing": []
-                }
+        lm = db.phrase_landmarks(full_phrase)
+        if lm is not None:
+            video_fn = get_video_filename(full_phrase)
+            video_url = f"/api/videos/{video_fn}" if video_fn else None
+            return {
+                "found": [{"word": full_phrase, "landmarks": lm, "frame_count": len(lm), "video_url": video_url}],
+                "missing": []
+            }
     
     # Fall back to individual word matching
     found = []

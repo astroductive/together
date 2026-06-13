@@ -1,23 +1,21 @@
 FROM python:3.12-slim
 
-# Install system dependencies for OpenCV and MediaPipe
+# System dependencies for OpenCV / MediaPipe.
 RUN apt-get update && apt-get install -y \
     libgl1 \
     libglib2.0-0 \
     && rm -rf /var/lib/apt/lists/*
 
-
 WORKDIR /app
 
-# Copy dependencies
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy the entire project
 COPY . .
 
-# Expose FastAPI port
+RUN chmod +x scripts/entrypoint.sh
+
 EXPOSE 8000
 
-# Start server
-CMD ["python", "app/server/main.py"]
+# Apply migrations + load data, then start the server (see scripts/entrypoint.sh).
+CMD ["./scripts/entrypoint.sh"]
