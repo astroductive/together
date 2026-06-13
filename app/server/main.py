@@ -691,6 +691,10 @@ class SentenceRequest(_BaseModel):
 class BatchSignRequest(_BaseModel):
     words: _List[str]
 
+class GlossRequest(_BaseModel):
+    sentence: str
+    language: _Optional[str] = "english"
+
 
 def normalize_sign_words(raw_words: _List[str]) -> _List[str]:
     """Normalize input tokens and expand common contractions for sign lookup."""
@@ -831,50 +835,41 @@ async def translate_sentence_api(
     body: SentenceRequest,
     current_user: dict = Depends(get_current_user)
 ):
-    """Convert a list of sign gloss words into a natural sentence via Gemini LLM."""
+    """Convert recognized ASL gloss (Topic-Comment) into a natural SVO sentence.
+
+    Uses few-shot gloss→sentence prompting (see gloss.py) through the configured
+    LLM provider, with a graceful fallback to the raw gloss when no LLM is
+    reachable.
+    """
+    import gloss as gloss_mod
     lang = (body.language or "english").lower().strip()
-    gloss = " ".join(body.gloss)
-    
-    if lang in ["egyptian", "eg"]:
-        prompt = (
-            f"حوّل كلمات لغة الإشارة المصرية التالية إلى جملة عامية مصرية طبيعية ومترابطة ومفهومة: [{gloss}]\n\n"
-            "شروط صارمة:\n"
-            "1. يجب أن تغطي الجملة الناتجة معنى كل كلمة في القائمة كاملة.\n"
-            "2. لا تحذف أي معنى من الكلمات الأصلية، ولا تترجم إلى الإنجليزية.\n"
-            "3. اكتب الجملة باللهجة المصرية العامية فقط، بدون شرح وبدون نص إنجليزي.\n\n"
-            f"الكلمات الأصلية: [{gloss}]\nالجملة المصرية الناتجة:"
-        )
-    elif lang in ["arabic", "ar"]:
-        prompt = (
-            f"حوّل جميع كلمات لغة الإشارة التالية إلى جملة عربية فصحى طبيعية ومترابطة: [{gloss}]\n\n"
-            "شروط صارمة:\n"
-            "1. يجب أن تغطي الجملة الناتجة معنى كل كلمة في القائمة كاملة.\n"
-            "2. لا تحذف أي معنى من الكلمات الأصلية، ولا تترجم إلى الإنجليزية.\n"
-            "3. أضف فقط الأدوات أو حروف الجر أو الروابط اللازمة لجعل الجملة عربية سليمة.\n"
-            "4. اكتب الجملة العربية فقط، بدون شرح، وبدون نص إنجليزي، وبدون ترجمة حرفية كلمة بكلمة.\n\n"
-            f"الكلمات الأصلية: [{gloss}]\nالجملة العربية الناتجة:"
-        )
-    else:
-        prompt = (
-            f"Convert these ASL signs into one short English sentence: [{gloss}]\n\n"
-            "STRICT RULES:\n"
-            "1. Every signed word MUST appear in your output.\n"
-            "2. Only insert: pronouns, articles, linking verbs (is/are/am), prepositions, conjunctions.\n"
-            "3. NEVER add action verbs or extra words not signed.\n"
-            "4. Output ONLY the sentence.\n\n"
-            f"Signed: [{gloss}]\nOutput:"
-        )
-    try:
-        sentence = call_gemini_llm(prompt)
-        # Clean up quotes
-        sentence = sentence.replace('"', '').replace("'", "").strip()
-        if sentence:
-            return {"sentence": sentence, "gloss": gloss, "source": "llm"}
-        raise Exception("Empty response from Gemini")
-    except Exception as e:
-        if lang in ["arabic", "ar", "egyptian", "eg"]:
-            return {"sentence": "", "gloss": gloss, "source": "fallback"}
-        return {"sentence": gloss, "gloss": gloss, "source": "fallback"}
+    raw_gloss = " ".join(body.gloss)
+
+    sentence = gloss_mod.gloss_to_sentence(body.gloss, language=lang)
+    if sentence and sentence != raw_gloss:
+        return {"sentence": sentence, "gloss": raw_gloss, "source": "llm"}
+    # LLM unavailable / empty: degrade gracefully.
+    if lang in ["arabic", "ar", "egyptian", "eg"]:
+        return {"sentence": sentence or "", "gloss": raw_gloss, "source": "fallback"}
+    return {"sentence": sentence or raw_gloss, "gloss": raw_gloss, "source": "fallback"}
+
+
+@app.post("/api/gloss")
+async def sentence_to_gloss_api(
+    body: GlossRequest,
+    current_user: dict = Depends(get_current_user)
+):
+    """Convert a natural SVO sentence into ASL/ArSL gloss (Topic-Comment) + NMM.
+
+    This is the front of the text-to-sign pipeline: the returned gloss tokens
+    feed /api/signs/batch for landmark lookup, and `nmm` carries the non-manual
+    marker annotations (facial grammar) the avatar layer can render.
+    """
+    import gloss as gloss_mod
+    lang = (body.language or "english").lower().strip()
+    tokens = gloss_mod.english_to_gloss(body.sentence, language=lang)
+    nmm = gloss_mod.annotate_nmm(tokens, body.sentence)
+    return {"gloss": tokens, "nmm": nmm, "sentence": body.sentence}
 
 
 from fastapi.responses import StreamingResponse
@@ -1039,17 +1034,33 @@ async def get_batch_sign_landmarks(
         if lms:
             # Get the actual matched word (not the input word)
             matched_sign = db.match_word(w)
-            
+
             # Skip if this is a duplicate of the previous sign
             if matched_sign == prev_matched_sign:
                 continue
-            
+
             video_fn = get_video_filename(matched_sign or w)
             video_url = f"/api/videos/{video_fn}" if video_fn else None
             found.append({"word": w, "landmarks": lms, "frame_count": len(lms), "video_url": video_url})
             prev_matched_sign = matched_sign
         else:
-            missing.append(w)
+            # Out-of-vocabulary: try Gloss & Stitch (fingerspell + smooth) before
+            # declaring the word unrenderable.
+            try:
+                import stitch as stitch_mod
+                stitched = stitch_mod.gloss_and_stitch(w, db)
+            except Exception as e:
+                print(f"[Gloss&Stitch] failed for '{w}': {e}")
+                stitched = None
+            if stitched:
+                found.append({
+                    "word": w, "landmarks": stitched,
+                    "frame_count": len(stitched), "video_url": None,
+                    "source": "stitch",
+                })
+                prev_matched_sign = None
+            else:
+                missing.append(w)
     return {"found": found, "missing": missing}
 
 
