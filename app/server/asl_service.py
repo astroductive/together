@@ -196,11 +196,23 @@ class ASLService(SignDB):
                 f"LiteRT is not available. Sign-to-Text features will be unavailable. Error: {ie}"
             )
 
+        # Use multiple CPU threads; LiteRT applies the XNNPACK delegate by default
+        # for float CPU models, which accelerates the conv/dense ops. Thread count
+        # is tunable via TFLITE_NUM_THREADS (default: min(4, cores)).
         try:
-            self.interpreter = Interpreter(model_path=MODEL_PATH)
+            num_threads = int(os.environ.get("TFLITE_NUM_THREADS", "0")) or min(4, (os.cpu_count() or 1))
+        except ValueError:
+            num_threads = min(4, (os.cpu_count() or 1))
+        try:
+            try:
+                self.interpreter = Interpreter(model_path=MODEL_PATH, num_threads=num_threads)
+            except TypeError:
+                # Older interpreter signature without num_threads.
+                self.interpreter = Interpreter(model_path=MODEL_PATH)
             self.interpreter.allocate_tensors()
             self.input_details = self.interpreter.get_input_details()
             self.output_details = self.interpreter.get_output_details()
+            print(f"[ASLService] TFLite ready (num_threads={num_threads}, XNNPACK default).")
         except Exception as tf_err:
             print(f"[ERROR] TFLite initialization failed: {tf_err}")
             raise RuntimeError(f"TFLite initialization failed: {tf_err}")

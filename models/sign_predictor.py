@@ -52,6 +52,19 @@ class SignLanguagePredictor:
         self.model = SignLanguageCNNGRU(input_dim=177, num_classes=self.num_classes).to(self.device)
         self.model.load_state_dict(torch.load(model_path, map_location=self.device))
         self.model.eval()
+
+        # INT8 dynamic quantization (CPU): quantizes Linear + GRU weights to int8,
+        # shrinking the model and speeding up inference on CPU with negligible
+        # accuracy impact for this small model. Opt out with TORCH_INT8=0.
+        if (self.device.type == "cpu"
+                and os.environ.get("TORCH_INT8", "1").strip() != "0"):
+            try:
+                self.model = torch.quantization.quantize_dynamic(
+                    self.model, {nn.Linear, nn.GRU}, dtype=torch.qint8
+                )
+                print("[ArabicPredictor] INT8 dynamic quantization enabled.")
+            except Exception as e:
+                print(f"[ArabicPredictor] INT8 quantization skipped: {e}")
         
         # Sliding history buffers
         self.feature_history = collections.deque(maxlen=60)
@@ -189,7 +202,7 @@ class SignLanguagePredictor:
                     batch_inputs.append(smoothed_seq)
 
             batch_tensor = torch.tensor(np.array(batch_inputs), dtype=torch.float32).to(self.device)
-            with torch.no_grad():
+            with torch.inference_mode():
                 outputs = self.model(batch_tensor)
                 probs = torch.softmax(outputs, dim=1)
             
@@ -301,7 +314,7 @@ class SignLanguagePredictor:
             batch_inputs.append(smoothed_seq)
 
         batch_tensor = torch.tensor(np.array(batch_inputs), dtype=torch.float32).to(self.device)
-        with torch.no_grad():
+        with torch.inference_mode():
             outputs = self.model(batch_tensor)
             probs = torch.softmax(outputs, dim=1)
             
