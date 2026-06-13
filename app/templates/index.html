@@ -3749,6 +3749,15 @@
   // ═══════════════════════════════════════════════════════════
 
   function initWebRtc(targetSid, isCaller) {
+    // Idempotent: duplicate presence events (presence_announced + presence_reply
+    // + the new_peer re-announce) must NOT tear down a live connection to the
+    // same peer — doing so was dropping the call mid-negotiation and leaving the
+    // remote video blank.
+    if (peerConnection && peerSocketId === targetSid &&
+        peerConnection.signalingState !== 'closed') {
+      console.log("[WebRTC] Connection to", targetSid, "already active — skipping re-init");
+      return;
+    }
     iceCandidateBuffer = [];
     if (peerConnection) {
       console.log("[WebRTC] Closing existing PeerConnection before re-initializing");
@@ -3802,19 +3811,24 @@
       });
     }
 
+    let offerCreated = false;
     const makeOffer = async () => {
-      if (isCaller) {
-        try {
-          console.log("[WebRTC] Creating offer directly...");
-          const offer = await peerConnection.createOffer();
-          await peerConnection.setLocalDescription(offer);
-          socket.emit('webrtc_offer', {
-            sdp: offer,
-            room: currentMeetingRoom
-          });
-        } catch (err) {
-          console.error("[WebRTC] Offer creation failed:", err);
-        }
+      // Only the designated caller offers, and only once — guard against glare
+      // from onnegotiationneeded and the startup timer firing together.
+      if (!isCaller || offerCreated) return;
+      if (peerConnection.signalingState !== 'stable') return;
+      offerCreated = true;
+      try {
+        console.log("[WebRTC] Creating offer...");
+        const offer = await peerConnection.createOffer();
+        await peerConnection.setLocalDescription(offer);
+        socket.emit('webrtc_offer', {
+          sdp: offer,
+          room: currentMeetingRoom
+        });
+      } catch (err) {
+        offerCreated = false;
+        console.error("[WebRTC] Offer creation failed:", err);
       }
     };
 
