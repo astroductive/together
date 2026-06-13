@@ -60,122 +60,41 @@ import re
 import base64
 import requests
 
-GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
+# ── Provider abstraction (LLM / TTS / STT) ────────────────────
+# Concrete vendor calls live behind the providers package. Gemini is the
+# default for all three; offline fallbacks (Ollama / pyttsx3 / Whisper) kick
+# in automatically when a cloud key is missing or a call fails. See
+# providers/__init__.py and .env.example.
+from providers import (
+    ProviderError,
+    get_llm_provider,
+    get_tts_provider,
+    get_stt_provider,
+)
+
 
 def call_gemini_llm(prompt: str, temperature: float = 0.0) -> str:
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key={GEMINI_API_KEY}"
-    payload = {
-        "contents": [
-            {
-                "parts": [
-                    {"text": prompt}
-                ]
-            }
-        ],
-        "generationConfig": {
-            "temperature": temperature,
-            "topP": 0.95
-        }
-    }
+    """Backwards-compatible name: now routes through the configured LLM provider chain."""
     try:
-        response = requests.post(url, json=payload, timeout=15)
-        response.raise_for_status()
-        res_data = response.json()
-        return res_data["candidates"][0]["content"]["parts"][0]["text"].strip()
-    except Exception as e:
-        print(f"[Gemini LLM Error] Failed to get response: {e}")
+        return get_llm_provider().generate(prompt, temperature)
+    except ProviderError as e:
+        print(f"[LLM Error] {e}")
         return ""
+
 
 def call_gemini_tts(text: str, language: str = "arabic") -> bytes:
-    import wave
-    import io
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-tts-preview:generateContent?key={GEMINI_API_KEY}"
-    if language in ["egyptian", "eg"]:
-        lang_name = "Egyptian Arabic dialect"
-    elif language in ["english", "en"]:
-        lang_name = "American English"
-    else:
-        lang_name = "Modern Standard Arabic"
-    prompt = f"Please read the following text aloud. Pronounce it naturally as a native speaker of {lang_name}. Output ONLY the audio representation of this text, nothing else. Text: {text}"
-    
-    payload = {
-        "contents": [
-            {
-                "parts": [
-                    {"text": prompt}
-                ]
-            }
-        ],
-        "generationConfig": {
-            "responseModalities": ["AUDIO"],
-            "speechConfig": {
-                "voiceConfig": {
-                    "prebuiltVoiceConfig": {
-                        "voiceName": "Aoede"
-                    }
-                }
-            }
-        }
-    }
-    try:
-        response = requests.post(url, json=payload, timeout=20)
-        response.raise_for_status()
-        res_data = response.json()
-        parts = res_data["candidates"][0]["content"]["parts"]
-        for part in parts:
-            if "inlineData" in part:
-                audio_b64 = part["inlineData"]["data"]
-                raw_pcm = base64.b64decode(audio_b64)
-                # Wrap the raw PCM in a WAV container
-                wav_buf = io.BytesIO()
-                with wave.open(wav_buf, 'wb') as w:
-                    w.setnchannels(1)
-                    w.setsampwidth(2)      # 16-bit
-                    w.setframerate(24000)   # 24kHz
-                    w.writeframes(raw_pcm)
-                return wav_buf.getvalue()
-        raise Exception("No inlineData found in Gemini response.")
-    except Exception as e:
-        print(f"[Gemini TTS Error] Failed to synthesize: {e}")
-        raise e
+    """Backwards-compatible name: routes through the configured TTS provider chain."""
+    return get_tts_provider().synthesize(text, language)
+
 
 def call_gemini_stt(audio_bytes: bytes, mime_type: str = "audio/wav", language: str = "arabic") -> str:
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={GEMINI_API_KEY}"
-    audio_b64 = base64.b64encode(audio_bytes).decode("utf-8")
-    
-    lang_name = "Egyptian Arabic dialect" if language in ["egyptian", "eg"] else "Modern Standard Arabic"
-    prompt = f"Transcribe this audio file. The audio is spoken in {lang_name}. Return ONLY the exact transcription in Arabic script, without any introductory text, explanation, or notes. If there is no speech or it's unintelligible, return an empty string."
-    
-    payload = {
-        "contents": [
-            {
-                "parts": [
-                    {
-                        "inlineData": {
-                            "mimeType": mime_type,
-                            "data": audio_b64
-                        }
-                    },
-                    {
-                        "text": prompt
-                    }
-                ]
-            }
-        ]
-    }
+    """Backwards-compatible name: routes through the configured STT provider chain."""
     try:
-        response = requests.post(url, json=payload, timeout=25)
-        response.raise_for_status()
-        res_data = response.json()
-        text = res_data["candidates"][0]["content"]["parts"][0]["text"].strip()
-        if text.startswith("```"):
-            lines = text.splitlines()
-            if len(lines) >= 3:
-                text = "\n".join(lines[1:-1]).strip()
-        return text
-    except Exception as e:
-        print(f"[Gemini STT Error] Failed to transcribe: {e}")
+        return get_stt_provider().transcribe(audio_bytes, mime_type, language)
+    except ProviderError as e:
+        print(f"[STT Error] {e}")
         return ""
+
 
 SLOW_REQUEST_MS = float(os.environ.get("SLOW_REQUEST_MS", "5000"))
 
@@ -487,67 +406,8 @@ def get_arabic_engine():
             print(f"[ERROR] ArabicPredictor init failed: {e}")
             return None
 
-# ── Offline pyttsx3 Arabic TTS Engine ──
-_pyttsx3_lock = Lock()
-
-def text_to_speech_arabic(text: str) -> bytes:
-    import tempfile
-    import os
-    try:
-        import pyttsx3
-    except ImportError:
-        raise Exception("pyttsx3 is not installed on this system.")
-    
-    with _pyttsx3_lock:
-        try:
-            engine = pyttsx3.init()
-        except Exception as e:
-            raise Exception(f"Failed to initialize pyttsx3: {e}")
-
-        
-        # Look for an Arabic voice
-        voices = engine.getProperty('voices')
-        arabic_voice = None
-        for v in voices:
-            name_lower = v.name.lower()
-            id_lower = v.id.lower()
-            if "arabic" in name_lower or "ar-" in id_lower or "ar_" in id_lower or "naayf" in name_lower or "hoda" in name_lower:
-                arabic_voice = v.id
-                break
-        
-        if arabic_voice:
-            engine.setProperty('voice', arabic_voice)
-        else:
-            print("[TTS WARNING] No native Arabic SAPI5 voice found. pyttsx3 will use system default voice.")
-            
-        temp_file = os.path.join(tempfile.gettempdir(), f"pyttsx3_temp_{os.getpid()}.wav")
-        if os.path.exists(temp_file):
-            try:
-                os.remove(temp_file)
-            except:
-                pass
-                
-        try:
-            engine.save_to_file(text, temp_file)
-            engine.runAndWait()
-            
-            if os.path.exists(temp_file):
-                with open(temp_file, "rb") as f:
-                    audio_bytes = f.read()
-                try:
-                    os.remove(temp_file)
-                except:
-                    pass
-                return audio_bytes
-            else:
-                raise Exception("pyttsx3 failed to generate WAV file.")
-        except Exception as e:
-            if os.path.exists(temp_file):
-                try:
-                    os.remove(temp_file)
-                except:
-                    pass
-            raise e
+# NOTE: Offline pyttsx3 Arabic TTS now lives in providers/local.py (Pyttsx3TTS)
+# and is reached automatically via the TTS provider fallback chain.
 
 
 @app.get("/api/health")
@@ -581,6 +441,12 @@ async def health(warm: bool = False):
         "model_signs_loaded": len(_asl_engine.words) if _asl_engine is not None else 0,
         "arabic_signs_loaded": len(_arabic_engine.labels) if _arabic_engine is not None else 0,
         "error": _asl_engine_error or _sign_db_error or _arabic_engine_error or None,
+        # Configured provider chains (no network probe here — just the resolved order).
+        "providers": {
+            "llm": get_llm_provider().chain_names,
+            "tts": get_tts_provider().chain_names,
+            "stt": get_stt_provider().chain_names,
+        },
     }
 
 
@@ -1022,7 +888,7 @@ def text_to_speech_endpoint(text: str, language: str = "english"):
             audio_bytes = call_gemini_tts(text, lang)
             return StreamingResponse(io.BytesIO(audio_bytes), media_type="audio/wav")
         except Exception as e:
-            raise HTTPException(status_code=500, detail=f"Gemini TTS synthesis failed: {str(e)}")
+            raise HTTPException(status_code=500, detail=f"TTS synthesis failed: {str(e)}")
     else:
         raise HTTPException(status_code=400, detail=f"TTS language {language} is not supported.")
 
@@ -1040,7 +906,7 @@ async def speech_to_text_endpoint(
         transcription = call_gemini_stt(audio_bytes, mime_type, language)
         return {"text": transcription}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Gemini STT transcription failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"STT transcription failed: {str(e)}")
 
 
 from fastapi.responses import FileResponse

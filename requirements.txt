@@ -20,3 +20,9 @@ python-multipart==0.0.20
 argon2-cffi==23.1.0
 pytest==8.3.4
 httpx==0.28.1
+
+# ── Offline provider fallbacks (optional) ──
+# Installed by default so the offline chain works out of the box. If you only
+# ever use cloud providers you can remove these to slim the image.
+pyttsx3==2.98
+faster-whisper==1.1.0
