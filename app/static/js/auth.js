@@ -50,7 +50,7 @@ function isAuthenticated() {
 }
 
 /**
- * Remove JWT token (sign out).
+ * Remove JWT token (sign out client-side).
  */
 function clearToken() {
   localStorage.removeItem(AUTH_KEY);
@@ -68,9 +68,36 @@ function requireAuth() {
 }
 
 /**
- * Sign out and redirect.
+ * Try to refresh the access token using the httpOnly refresh-token cookie.
+ * Updates localStorage with the new access token on success.
+ * @returns {Promise<boolean>} true if refresh succeeded
  */
-function signOut() {
+async function tryRefreshToken() {
+  try {
+    const res = await fetch('/api/auth/refresh', {
+      method: 'POST',
+      credentials: 'include',
+    });
+    if (res.ok) {
+      const data = await res.json();
+      if (data.access_token) {
+        setToken(data.access_token);
+        return true;
+      }
+    }
+    return false;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Sign out: revoke refresh token on server, clear local storage, redirect.
+ */
+async function signOut() {
+  try {
+    await fetch('/api/auth/logout', { method: 'POST', credentials: 'include' });
+  } catch { /* best-effort */ }
   clearToken();
   window.location.href = '/';
 }
@@ -99,27 +126,45 @@ function getInitials() {
 }
 
 /**
- * Make authenticated API request.
+ * Make an authenticated API request, transparently refreshing the access token
+ * once on a 401 before giving up and redirecting to login.
  * @param {string} url
  * @param {object} options
  * @returns {Promise<Response>}
  */
 async function authFetch(url, options = {}) {
   const token = getToken();
-  const res = await fetch(url, {
+  let res = await fetch(url, {
     ...options,
+    credentials: 'include',
     headers: {
       ...options.headers,
       ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
     }
   });
 
-  // If token expired/invalid, clear and redirect to login for protected pages.
-  if (res.status === 401 && token && !url.startsWith('/api/auth/')) {
-    clearToken();
-    if (!window.location.pathname.startsWith('/login')) {
-      const next = encodeURIComponent(window.location.pathname + window.location.search);
-      window.location.href = '/login?next=' + next;
+  // On 401, attempt one silent token refresh then retry.
+  if (res.status === 401 && !url.startsWith('/api/auth/')) {
+    const refreshed = await tryRefreshToken();
+    if (refreshed) {
+      const newToken = getToken();
+      res = await fetch(url, {
+        ...options,
+        credentials: 'include',
+        headers: {
+          ...options.headers,
+          ...(newToken ? { 'Authorization': `Bearer ${newToken}` } : {}),
+        }
+      });
+    }
+
+    // Still 401 after refresh attempt — session is dead.
+    if (res.status === 401) {
+      clearToken();
+      if (!window.location.pathname.startsWith('/login')) {
+        const next = encodeURIComponent(window.location.pathname + window.location.search);
+        window.location.href = '/login?next=' + next;
+      }
     }
   }
 
