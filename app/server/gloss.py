@@ -102,6 +102,18 @@ def _clean(text: str) -> str:
     return text.replace('"', "").replace("'", "").strip()
 
 
+# Bounded cache for gloss→sentence results. The same recognized gloss recurs
+# constantly during a conversation, so caching avoids repeat LLM round-trips
+# (the dominant latency in the sign→text path). Only used when the default
+# provider is in play (llm arg is None) to keep tests/injected providers pure.
+_SENTENCE_CACHE: dict = {}
+_SENTENCE_CACHE_MAX = 256
+
+
+def clear_sentence_cache() -> None:
+    _SENTENCE_CACHE.clear()
+
+
 def _is_arabic(language: str) -> bool:
     return (language or "").lower().strip() in ("arabic", "ar", "egyptian", "eg")
 
@@ -117,10 +129,15 @@ def gloss_to_sentence(
     Returns the original gloss joined by spaces if the LLM is unavailable, so the
     caller always gets *something* renderable.
     """
+    use_cache = llm is None
     llm = llm or get_llm_provider()
     gloss = " ".join(t for t in gloss_tokens if t)
     if not gloss:
         return ""
+
+    cache_key = (gloss, (language or "english").lower().strip())
+    if use_cache and cache_key in _SENTENCE_CACHE:
+        return _SENTENCE_CACHE[cache_key]
 
     preamble = _GLOSS_TO_SENTENCE_AR if _is_arabic(language) else _GLOSS_TO_SENTENCE_EN
     label_in, label_out = (("الإشارات", "الجملة") if _is_arabic(language)
@@ -129,10 +146,15 @@ def gloss_to_sentence(
 
     try:
         out = llm.generate(prompt, temperature=0.2)
-        out = _clean(out)
-        return out or gloss
+        out = _clean(out) or gloss
     except ProviderError:
-        return gloss
+        return gloss  # don't cache transient failures
+
+    if use_cache:
+        if len(_SENTENCE_CACHE) >= _SENTENCE_CACHE_MAX:
+            _SENTENCE_CACHE.pop(next(iter(_SENTENCE_CACHE)))
+        _SENTENCE_CACHE[cache_key] = out
+    return out
 
 
 def english_to_gloss(

@@ -116,6 +116,12 @@ from auth import (
 from schemas import UserCreate, UserResponse, Token, TokenRefresh
 from asl_service import ASLService, SignDB, ArabicSignDB
 
+# Offload blocking ML/LLM/network calls off the event loop so concurrent
+# requests aren't serialized behind one inference (see Phase 5 / LATENCY.md).
+from starlette.concurrency import run_in_threadpool
+import profiling
+from profiling import Timer
+
 # ── App setup ─────────────────────────────────────────────────
 app = FastAPI(title="Together — Sign Language AI Platform", version="2.0.0")
 
@@ -809,7 +815,11 @@ async def translate_sign(
             return {"text": "", "confidence": 0.0, "status": "engine_loading"}
         w = body.w if body.w is not None else 640
         h = body.h if body.h is not None else 480
-        prediction, confidence = engine.predict_sign_from_landmarks(body.frames, w, h)
+        # Run blocking PyTorch inference in a worker thread to keep the event loop free.
+        with Timer("infer.arabic"):
+            prediction, confidence = await run_in_threadpool(
+                engine.predict_sign_from_landmarks, body.frames, w, h
+            )
         if prediction:
             arabic_prediction = ARABIC_TRANSLATIONS.get(prediction.lower(), prediction)
             try:
@@ -823,7 +833,9 @@ async def translate_sign(
         if engine is None:
             # Try to warm it up; return pending if still loading
             return {"text": "", "confidence": 0.0, "status": "engine_loading"}
-        prediction, confidence = engine.predict_sign(body.frames)
+        # Run blocking TFLite inference in a worker thread.
+        with Timer("infer.asl"):
+            prediction, confidence = await run_in_threadpool(engine.predict_sign, body.frames)
         if prediction:
             print(f"[/api/translate] Detected ASL: {prediction} ({confidence:.2f})")
             return {"text": prediction, "confidence": float(confidence)}
@@ -845,7 +857,12 @@ async def translate_sentence_api(
     lang = (body.language or "english").lower().strip()
     raw_gloss = " ".join(body.gloss)
 
-    sentence = gloss_mod.gloss_to_sentence(body.gloss, language=lang)
+    # gloss_to_sentence may hit the network LLM — offload it (caching inside it
+    # short-circuits repeat gloss, the common case during a conversation).
+    with Timer("llm.gloss_to_sentence"):
+        sentence = await run_in_threadpool(
+            gloss_mod.gloss_to_sentence, body.gloss, lang
+        )
     if sentence and sentence != raw_gloss:
         return {"sentence": sentence, "gloss": raw_gloss, "source": "llm"}
     # LLM unavailable / empty: degrade gracefully.
@@ -867,7 +884,8 @@ async def sentence_to_gloss_api(
     """
     import gloss as gloss_mod
     lang = (body.language or "english").lower().strip()
-    tokens = gloss_mod.english_to_gloss(body.sentence, language=lang)
+    with Timer("llm.english_to_gloss"):
+        tokens = await run_in_threadpool(gloss_mod.english_to_gloss, body.sentence, lang)
     nmm = gloss_mod.annotate_nmm(tokens, body.sentence)
     return {"gloss": tokens, "nmm": nmm, "sentence": body.sentence}
 
@@ -898,10 +916,24 @@ async def speech_to_text_endpoint(
     try:
         audio_bytes = await file.read()
         mime_type = file.content_type or "audio/wav"
-        transcription = call_gemini_stt(audio_bytes, mime_type, language)
+        # Blocking network transcription -> worker thread.
+        with Timer("stt.transcribe"):
+            transcription = await run_in_threadpool(
+                call_gemini_stt, audio_bytes, mime_type, language
+            )
         return {"text": transcription}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"STT transcription failed: {str(e)}")
+
+
+@app.get("/api/metrics")
+async def metrics(current_user: dict = Depends(get_current_user)):
+    """Per-stage latency aggregates (count, avg, p50, p95, max, last) in ms.
+
+    Populated by the Timer instrumentation across the inference / LLM / STT
+    pipeline. Useful for the before/after profiling in docs/LATENCY.md.
+    """
+    return {"stages": profiling.snapshot()}
 
 
 from fastapi.responses import FileResponse
@@ -949,16 +981,21 @@ async def lookup_signs(
     db = get_sign_db()
     if db is None:
         raise HTTPException(status_code=503, detail="Sign database not ready.")
-    word_list = normalize_sign_words(words.split())
-    found = []
-    missing = []
-    for w in word_list:
-        lms = db.get_landmarks(w)
-        if lms:
-            found.append({"word": w, "landmarks": lms, "frame_count": len(lms)})
-        else:
-            missing.append(w)
-    return {"found": found, "missing": missing}
+
+    def _sync():
+        # SBERT encode + DB query per word — blocking; runs off the event loop.
+        word_list = normalize_sign_words(words.split())
+        found, missing = [], []
+        for w in word_list:
+            lms = db.get_landmarks(w)
+            if lms:
+                found.append({"word": w, "landmarks": lms, "frame_count": len(lms)})
+            else:
+                missing.append(w)
+        return {"found": found, "missing": missing}
+
+    with Timer("signs.lookup"):
+        return await run_in_threadpool(_sync)
 
 
 @app.get("/api/signs/{word}")
@@ -970,27 +1007,34 @@ async def get_sign_landmarks(
     db = get_sign_db()
     if db is None:
         raise HTTPException(status_code=503, detail="Sign database not ready.")
-    translated_word = translate_arabic_to_english(word)
-    normalized_words = normalize_sign_words([translated_word])
-    if not normalized_words:
+
+    def _sync():
+        # translate_arabic_to_english may hit the LLM; get_landmarks runs SBERT —
+        # both blocking, so the whole lookup runs in a worker thread.
+        translated_word = translate_arabic_to_english(word)
+        normalized_words = normalize_sign_words([translated_word])
+        if not normalized_words:
+            raise HTTPException(status_code=404, detail=f"Sign not found for '{word}'.")
+
+        if len(normalized_words) > 1:
+            full_phrase = " ".join(normalized_words)
+            lm = db.phrase_landmarks(full_phrase)
+            if lm is not None:
+                video_fn = get_video_filename(full_phrase)
+                video_url = f"/api/videos/{video_fn}" if video_fn else None
+                return {"word": full_phrase, "landmarks": lm, "frame_count": len(lm), "video_url": video_url}
+
+        lookup_word = normalized_words[0]
+        lms = db.get_landmarks(lookup_word)
+        if lms:
+            matched_sign = db.match_word(lookup_word)
+            video_fn = get_video_filename(matched_sign or lookup_word)
+            video_url = f"/api/videos/{video_fn}" if video_fn else None
+            return {"word": lookup_word, "landmarks": lms, "frame_count": len(lms), "video_url": video_url}
         raise HTTPException(status_code=404, detail=f"Sign not found for '{word}'.")
 
-    if len(normalized_words) > 1:
-        full_phrase = " ".join(normalized_words)
-        lm = db.phrase_landmarks(full_phrase)
-        if lm is not None:
-            video_fn = get_video_filename(full_phrase)
-            video_url = f"/api/videos/{video_fn}" if video_fn else None
-            return {"word": full_phrase, "landmarks": lm, "frame_count": len(lm), "video_url": video_url}
-
-    lookup_word = normalized_words[0]
-    lms = db.get_landmarks(lookup_word)
-    if lms:
-        matched_sign = db.match_word(lookup_word)
-        video_fn = get_video_filename(matched_sign or lookup_word)
-        video_url = f"/api/videos/{video_fn}" if video_fn else None
-        return {"word": lookup_word, "landmarks": lms, "frame_count": len(lms), "video_url": video_url}
-    raise HTTPException(status_code=404, detail=f"Sign not found for '{word}'.")
+    with Timer("signs.single"):
+        return await run_in_threadpool(_sync)
 
 
 @app.post("/api/signs/batch")
@@ -1008,60 +1052,64 @@ async def get_batch_sign_landmarks(
     db = get_sign_db()
     if db is None:
         raise HTTPException(status_code=503, detail="Sign database not ready.")
-    
-    translated_words = [translate_arabic_to_english(w) for w in body.words]
-    normalized_words = normalize_sign_words(translated_words)
 
-    # Try matching the complete phrase first
-    if normalized_words and len(normalized_words) > 1:
-        full_phrase = ' '.join(normalized_words)
-        lm = db.phrase_landmarks(full_phrase)
-        if lm is not None:
-            video_fn = get_video_filename(full_phrase)
-            video_url = f"/api/videos/{video_fn}" if video_fn else None
-            return {
-                "found": [{"word": full_phrase, "landmarks": lm, "frame_count": len(lm), "video_url": video_url}],
-                "missing": []
-            }
-    
-    # Fall back to individual word matching
-    found = []
-    missing = []
-    prev_matched_sign = None
-    
-    for w in normalized_words:
-        lms = db.get_landmarks(w)
-        if lms:
-            # Get the actual matched word (not the input word)
-            matched_sign = db.match_word(w)
+    def _sync():
+        translated_words = [translate_arabic_to_english(w) for w in body.words]
+        normalized_words = normalize_sign_words(translated_words)
 
-            # Skip if this is a duplicate of the previous sign
-            if matched_sign == prev_matched_sign:
-                continue
+        # Try matching the complete phrase first
+        if normalized_words and len(normalized_words) > 1:
+            full_phrase = ' '.join(normalized_words)
+            lm = db.phrase_landmarks(full_phrase)
+            if lm is not None:
+                video_fn = get_video_filename(full_phrase)
+                video_url = f"/api/videos/{video_fn}" if video_fn else None
+                return {
+                    "found": [{"word": full_phrase, "landmarks": lm, "frame_count": len(lm), "video_url": video_url}],
+                    "missing": []
+                }
 
-            video_fn = get_video_filename(matched_sign or w)
-            video_url = f"/api/videos/{video_fn}" if video_fn else None
-            found.append({"word": w, "landmarks": lms, "frame_count": len(lms), "video_url": video_url})
-            prev_matched_sign = matched_sign
-        else:
-            # Out-of-vocabulary: try Gloss & Stitch (fingerspell + smooth) before
-            # declaring the word unrenderable.
-            try:
-                import stitch as stitch_mod
-                stitched = stitch_mod.gloss_and_stitch(w, db)
-            except Exception as e:
-                print(f"[Gloss&Stitch] failed for '{w}': {e}")
-                stitched = None
-            if stitched:
-                found.append({
-                    "word": w, "landmarks": stitched,
-                    "frame_count": len(stitched), "video_url": None,
-                    "source": "stitch",
-                })
-                prev_matched_sign = None
+        # Fall back to individual word matching
+        found = []
+        missing = []
+        prev_matched_sign = None
+
+        for w in normalized_words:
+            lms = db.get_landmarks(w)
+            if lms:
+                # Get the actual matched word (not the input word)
+                matched_sign = db.match_word(w)
+
+                # Skip if this is a duplicate of the previous sign
+                if matched_sign == prev_matched_sign:
+                    continue
+
+                video_fn = get_video_filename(matched_sign or w)
+                video_url = f"/api/videos/{video_fn}" if video_fn else None
+                found.append({"word": w, "landmarks": lms, "frame_count": len(lms), "video_url": video_url})
+                prev_matched_sign = matched_sign
             else:
-                missing.append(w)
-    return {"found": found, "missing": missing}
+                # Out-of-vocabulary: try Gloss & Stitch (fingerspell + smooth) before
+                # declaring the word unrenderable.
+                try:
+                    import stitch as stitch_mod
+                    stitched = stitch_mod.gloss_and_stitch(w, db)
+                except Exception as e:
+                    print(f"[Gloss&Stitch] failed for '{w}': {e}")
+                    stitched = None
+                if stitched:
+                    found.append({
+                        "word": w, "landmarks": stitched,
+                        "frame_count": len(stitched), "video_url": None,
+                        "source": "stitch",
+                    })
+                    prev_matched_sign = None
+                else:
+                    missing.append(w)
+        return {"found": found, "missing": missing}
+
+    with Timer("signs.batch"):
+        return await run_in_threadpool(_sync)
 
 
 # ═══════════════════════════════════════════════════════════════

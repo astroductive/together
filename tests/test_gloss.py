@@ -42,6 +42,36 @@ def test_gloss_to_sentence_empty():
     assert gloss.gloss_to_sentence([], llm=_FakeLLM("x")) == ""
 
 
+# ── gloss→sentence cache ──────────────────────────────────────
+class _CountingLLM(LLMProvider):
+    name = "counting"
+    def __init__(self):
+        self.calls = 0
+    def generate(self, prompt, temperature=0.0):
+        self.calls += 1
+        return "I am going to the store."
+
+
+def test_explicit_llm_is_not_cached():
+    # Passing an llm explicitly must bypass the module cache (keeps tests pure).
+    gloss.clear_sentence_cache()
+    llm = _CountingLLM()
+    gloss.gloss_to_sentence(["STORE", "I", "GO"], llm=llm)
+    gloss.gloss_to_sentence(["STORE", "I", "GO"], llm=llm)
+    assert llm.calls == 2  # no caching when llm injected
+
+
+def test_default_provider_path_uses_cache(monkeypatch):
+    # When llm is None, results are cached keyed by (gloss, language).
+    gloss.clear_sentence_cache()
+    llm = _CountingLLM()
+    monkeypatch.setattr(gloss, "get_llm_provider", lambda: llm)
+    first = gloss.gloss_to_sentence(["STORE", "I", "GO"])
+    second = gloss.gloss_to_sentence(["STORE", "I", "GO"])
+    assert first == second
+    assert llm.calls == 1  # second call served from cache
+
+
 # ── sentence → gloss ──────────────────────────────────────────
 def test_english_to_gloss_uses_llm():
     toks = gloss.english_to_gloss("I am going to the store.", llm=_FakeLLM("STORE I GO"))
