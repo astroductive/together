@@ -164,6 +164,10 @@ html,body{background:var(--bg)!important;overflow:hidden}
 .d-meet-sub{font-size:13.5px;color:var(--muted);margin-top:6px;max-width:560px;line-height:1.5}
 .d-meet-pill{display:inline-flex;padding:7px 14px;border-radius:var(--radius-full);font-size:12px;font-weight:700;
   background:var(--surface-2);border:1px solid var(--border);color:var(--muted)}
+.d-meet-pill.connected{background:var(--ok-soft);border-color:transparent;color:var(--ok)}
+.d-meet-pill[data-state="connecting"]{background:rgba(245,158,11,.12);border-color:transparent;color:#f59e0b}
+.d-meet-pill[data-state="connecting"]::before{content:"";width:6px;height:6px;border-radius:50%;background:#f59e0b;margin-inline-end:7px;align-self:center;animation:t-pulse 1s infinite}
+.d-meet-pill[data-state="failed"]{background:var(--danger-soft);border-color:transparent;color:var(--danger)}
 .d-meet-entry{display:flex;flex-direction:column;gap:14px;align-items:center}
 .d-meet-role{display:flex;align-items:center;gap:10px;font-size:13.5px;color:var(--muted)}
 .d-meet-btns{display:flex;gap:14px;justify-content:center;flex-wrap:wrap}
@@ -227,6 +231,7 @@ html,body{background:var(--bg)!important;overflow:hidden}
   color:var(--faint);max-width:260px;pointer-events:none;display:none}
 </style>
 
+<a href="#main-content" class="t-skip-link">تخطّي إلى المحتوى</a>
 <div id="debug-overlay"></div>
 
 <div class="t-scope t-app" id="app" dir="rtl" lang="ar" style="height:100vh;overflow:hidden">
@@ -276,7 +281,7 @@ html,body{background:var(--bg)!important;overflow:hidden}
     <header class="t-topbar">
       <div><div class="t-title" id="topbar-title">الترجمة إلى نص</div><div class="t-sub">Together · لوحة التحكم العربية</div></div>
       <div class="t-tbar">
-        <span class="t-pill" id="status-pill" data-state="idle">
+        <span class="t-pill" id="status-pill" data-state="idle" aria-live="polite" aria-atomic="true">
           <i class="t-dot"></i>
           <span id="status-text">جاهز</span>
           <!-- hidden legacy dot kept so JS toggling status-dot.classList still works -->
@@ -338,6 +343,7 @@ html,body{background:var(--bg)!important;overflow:hidden}
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1"><path stroke-linecap="round" stroke-linejoin="round" d="M15 10l4.553-2.069A1 1 0 0121 8.869v6.262a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>
                 <p>ستظهر تغذية الكاميرا هنا</p>
               </div>
+              <div class="t-vp-loading" id="cam-loading" aria-hidden="true"><div class="t-spinner"></div><span>جارٍ تشغيل الكاميرا…</span></div>
               <div class="d-live" id="live-badge"><i></i> مباشر</div>
             </div>
             <div class="d-box">
@@ -391,6 +397,7 @@ html,body{background:var(--bg)!important;overflow:hidden}
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1"><path stroke-linecap="round" stroke-linejoin="round" d="M15 10l4.553-2.069A1 1 0 0121 8.869v6.262a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>
                 <p>ستظهر تغذية الكاميرا هنا</p>
               </div>
+              <div class="t-vp-loading" id="s2sp-loading" aria-hidden="true"><div class="t-spinner"></div><span>جارٍ تشغيل الكاميرا…</span></div>
               <div class="d-live" id="s2sp-badge"><i></i> مباشر</div>
             </div>
             <div class="d-box" style="margin-bottom:14px">
@@ -1210,6 +1217,14 @@ html,body{background:var(--bg)!important;overflow:hidden}
     }
     document.getElementById('status-text').textContent = displayText;
     document.getElementById('status-dot').classList.toggle('live', live);
+    // Phase 6 UI polish: reflect state on the redesigned pill + camera warmup overlay
+    const _sp = document.getElementById('status-pill');
+    if (_sp) _sp.setAttribute('data-state', live ? 'live' : 'idle');
+    const _warming = (text === 'Initializing...');
+    ['cam-loading', 's2sp-loading'].forEach(function (id) {
+      const _l = document.getElementById(id);
+      if (_l) _l.classList.toggle('is-on', _warming);
+    });
   }
 
   function isTrustedLocalhost() {
@@ -1835,6 +1850,26 @@ html,body{background:var(--bg)!important;overflow:hidden}
     return normalized;
   }
 
+  // Convert a natural sentence into sign-gloss tokens via /api/gloss (LLM,
+  // Topic-Comment ordering). Returns null on any failure so the caller can
+  // gracefully fall back to naive word tokenization — zero regression risk.
+  async function sentenceToGlossWords(sentence, language) {
+    try {
+      const res = await authFetch('/api/gloss', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sentence: sentence, language: language }),
+      });
+      if (!res.ok) return null;
+      const data = await res.json();
+      const gloss = Array.isArray(data.gloss) ? data.gloss : [];
+      return gloss.length ? gloss : null;
+    } catch (e) {
+      console.warn('[Text-to-Sign] gloss unavailable, using raw words:', e);
+      return null;
+    }
+  }
+
   async function sendText2Sign() {
     const input = document.getElementById('text2sign-input');
     const text = input.value.trim();
@@ -1845,8 +1880,9 @@ html,body{background:var(--bg)!important;overflow:hidden}
     renderT2SHistory();
     setStatus('Looking up signs…', true);
 
-    // Send the Arabic text directly — the server handles translation
-    const words = text.split(/\s+/).filter(Boolean);
+    // Prefer LLM gloss (ArSL Topic-Comment); fall back to raw tokenization.
+    let words = await sentenceToGlossWords(text, 'arabic');
+    if (!words || words.length === 0) words = text.split(/\s+/).filter(Boolean);
     if (words.length === 0) return;
 
     try {
@@ -2371,7 +2407,7 @@ html,body{background:var(--bg)!important;overflow:hidden}
 
     if (connected && currentMeetingRoom) {
       pill.textContent = forcedLang === 'ar' ? 'متصل' : 'Connected';
-      pill.classList.add('connected');
+      pill.classList.add('connected'); pill.removeAttribute('data-state');
       leaveBtn.style.display = 'inline-flex';
       copyBtn.disabled = false;
       roomLabel.textContent = currentMeetingRoom;
@@ -2386,7 +2422,7 @@ html,body{background:var(--bg)!important;overflow:hidden}
       }
     } else {
       pill.textContent = forcedLang === 'ar' ? 'غير متصل' : 'Not connected';
-      pill.classList.remove('connected');
+      pill.classList.remove('connected'); pill.removeAttribute('data-state');
       leaveBtn.style.display = 'none';
       copyBtn.disabled = true;
       roomLabel.textContent = '-';
@@ -2869,6 +2905,7 @@ html,body{background:var(--bg)!important;overflow:hidden}
           setMeetingUiState(false);
           const errMsg = err ? (err.message || err.toString()) : 'Unknown error';
           setStatus(`Meeting connection failed: ${errMsg}`, false);
+          { const _mp = document.getElementById('meeting-status-pill'); if (_mp) { _mp.setAttribute('data-state', 'failed'); _mp.classList.remove('connected'); _mp.textContent = 'فشل الاتصال'; } }
           console.error('[Socket.IO connect_error]', err);
         });
 
@@ -3041,6 +3078,7 @@ html,body{background:var(--bg)!important;overflow:hidden}
       inMeeting = true;
       setMeetingUiState(true);
       setStatus(`Connecting to ${roomId}...`, true);
+      { const _mp = document.getElementById('meeting-status-pill'); if (_mp) { _mp.setAttribute('data-state', 'connecting'); _mp.classList.remove('connected'); _mp.textContent = 'جارٍ الاتصال…'; } }
       renderMobileQuickActions();
       initMeetingRoleUi();
 

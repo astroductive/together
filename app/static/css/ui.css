@@ -54,6 +54,8 @@
 .t-pill{display:inline-flex;align-items:center;gap:8px;padding:7px 14px;border-radius:var(--radius-full);
   font-size:12px;font-weight:600;border:1px solid var(--border);background:var(--surface);color:var(--muted)}
 .t-pill .t-dot{width:7px;height:7px;border-radius:50%;background:var(--live);box-shadow:0 0 0 3px var(--live-glow)}
+.t-pill[data-state="idle"] .t-dot{background:var(--faint);box-shadow:none}
+.t-pill[data-state="live"] .t-dot{background:var(--live);box-shadow:0 0 0 3px var(--live-glow);animation:t-pulse 1.4s infinite}
 .t-pill[data-state="connecting"] .t-dot{background:#f59e0b;box-shadow:0 0 0 3px rgba(245,158,11,.22);animation:t-pulse 1s infinite}
 .t-pill[data-state="failed"] .t-dot{background:var(--danger);box-shadow:0 0 0 3px rgba(239,68,68,.25)}
 @keyframes t-pulse{50%{opacity:.4}}
@@ -165,6 +167,11 @@
 @keyframes t-shimmer{0%{background-position:100% 0}100%{background-position:-100% 0}}
 .t-spinner{width:18px;height:18px;border:2px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:t-spin .7s linear infinite}
 @keyframes t-spin{to{transform:rotate(360deg)}}
+/* Loading overlay for a viewport (camera warmup / model load) */
+.t-vp-loading{position:absolute;inset:0;z-index:8;display:none;flex-direction:column;align-items:center;justify-content:center;gap:13px;
+  background:var(--scrim);backdrop-filter:blur(2px);color:#fff;font-size:13px;font-weight:600;text-align:center;padding:20px}
+.t-vp-loading.is-on{display:flex}
+.t-vp-loading .t-spinner{width:34px;height:34px;border-width:3px;border-color:rgba(255,255,255,.25);border-top-color:#fff}
 
 /* ── Overlays: scrim, modal, sheet, toast ── */
 .t-scrim{position:fixed;inset:0;background:var(--scrim);backdrop-filter:blur(2px);z-index:90}
