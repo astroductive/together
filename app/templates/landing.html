@@ -2,279 +2,98 @@
 {% block title %}Together{% endblock %}
 {% block main_style %}padding-top: 0;{% endblock %}
 
+{% block head %}
+<link rel="stylesheet" href="/static/css/theme.css?v=phase6-1">
+<link rel="stylesheet" href="/static/css/ui.css?v=phase6-1">
+<script src="/static/js/theme.js?v=phase6-1"></script>
+<style>
+  /* Scoped to the landing page only (this block ships with landing.html). */
+  body{background:var(--bg)!important;color:var(--text)!important;font-family:var(--font-sans)!important;
+       transition:background var(--transition),color var(--transition)}
+  #main-content{max-width:100%!important;background:var(--bg)!important;padding-top:0!important}
+
+  .lp{min-height:100vh;display:flex;flex-direction:column}
+  .lp-top{display:flex;align-items:center;justify-content:space-between;padding:22px 28px}
+  .lp-brand{display:flex;align-items:center;gap:12px;font-family:var(--font-display);font-weight:800;font-size:21px;color:var(--text)}
+  .lp-logo{width:34px;height:34px;border-radius:10px;background:var(--accent);display:grid;place-items:center;color:#fff;font-weight:800;font-size:16px;font-family:var(--font-display)}
+
+  .lp-hero{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:32px 24px 64px}
+  .lp-kicker{display:inline-flex;align-items:center;gap:9px;padding:7px 15px;border-radius:var(--radius-full);
+    background:var(--accent-soft);color:var(--accent);font-size:12.5px;font-weight:700;letter-spacing:.03em;margin-bottom:26px}
+  .lp-kicker svg{width:16px;height:16px}
+  .lp-title{font-family:var(--font-display);font-size:clamp(44px,7vw,76px);font-weight:800;line-height:1.04;letter-spacing:-.03em;color:var(--text)}
+  .lp-title em{font-style:normal;color:var(--accent)}
+  .lp-sub{font-size:clamp(15px,2vw,19px);color:var(--muted);line-height:1.6;max-width:540px;margin:22px auto 0}
+
+  .lp-entries{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-top:42px;width:100%;max-width:680px}
+  .lp-card{display:flex;flex-direction:column;align-items:flex-start;gap:6px;padding:24px;border-radius:var(--radius-lg);
+    background:var(--surface);border:1px solid var(--border);box-shadow:var(--shadow);text-align:start;text-decoration:none;
+    transition:transform var(--transition),border-color var(--transition),box-shadow var(--transition)}
+  .lp-card:hover{transform:translateY(-3px);border-color:var(--accent);box-shadow:var(--shadow-lg)}
+  .lp-card .lp-flag{font-size:12px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--accent)}
+  .lp-card h2{font-family:var(--font-display);font-size:26px;font-weight:700;color:var(--text)}
+  .lp-card p{font-size:13.5px;color:var(--muted);line-height:1.5}
+  .lp-card .lp-go{display:inline-flex;align-items:center;gap:7px;margin-top:14px;font-size:13px;font-weight:650;color:var(--accent)}
+  .lp-card .lp-go svg{width:16px;height:16px}
+  .lp-card--ar{text-align:end;align-items:flex-end;direction:rtl;font-family:var(--font-sans)}
+
+  .lp-chips{display:flex;flex-wrap:wrap;justify-content:center;gap:18px;margin-top:36px;font-size:12.5px;color:var(--faint);font-weight:600}
+  .lp-chips span{display:inline-flex;align-items:center;gap:7px}
+  .lp-chips svg{width:16px;height:16px;color:var(--accent)}
+
+  @media (max-width:600px){ .lp-entries{grid-template-columns:1fr} }
+</style>
+{% endblock %}
+
 {% block nav %}
-<!-- Custom minimal navbar matching the screenshot logo placement -->
-<header class="landing-header">
-  <a href="/" class="logo-link" aria-label="Together Home">
-    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <path d="M4 12C4 9.79086 5.79086 8 8 8C10.2091 8 12 9.79086 12 12C12 14.2091 13.7909 16 16 16" stroke="white" stroke-width="2" stroke-linecap="round" fill="none"/>
-      <path d="M12 12C12 14.2091 10.2091 16 8 16C5.79086 16 4 14.2091 4 12C4 9.79086 2.20914 8 0 8" stroke="rgba(255,255,255,0.4)" stroke-width="2" stroke-linecap="round" fill="none"/>
-    </svg>
-  </a>
-</header>
+<div class="t-scope lp-top">
+  <a href="/" class="lp-brand" aria-label="Together — home"><span class="lp-logo">T</span> Together</a>
+  <div class="t-toggle" role="group" aria-label="Color theme">
+    <button type="button" data-theme-set="light" aria-pressed="false" aria-label="Light theme" title="Light">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4 12H2M22 12h-2M5 5l1.4 1.4M17.6 17.6 19 19M19 5l-1.4 1.4M6.4 17.6 5 19"/></svg>
+    </button>
+    <button type="button" data-theme-set="dark" aria-pressed="true" aria-label="Dark theme" title="Dark">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A8 8 0 1 1 11.2 3 6.2 6.2 0 0 0 21 12.8Z"/></svg>
+    </button>
+  </div>
+</div>
 {% endblock %}
 
 {% block content %}
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+<div class="t-scope lp">
+  <section class="lp-hero">
+    <div class="lp-kicker">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+      Real-time · English &amp; Arabic · offline-ready
+    </div>
+    <h1 class="lp-title">Sign language,<br><em>bridged in real time</em></h1>
+    <p class="lp-sub">Together translates ASL and Egyptian ArSL to text and speech — and back again — live, right in your browser. Choose your language to begin.</p>
 
-<style>
-  @font-face {
-    font-family: 'Thmanyah Serif Display';
-    src: url('/static/fonts/thmanyahserifdisplay-Regular.woff2') format('woff2');
-    font-weight: 400;
-    font-style: normal;
-  }
-  @font-face {
-    font-family: 'Thmanyah Serif Display';
-    src: url('/static/fonts/thmanyahserifdisplay-Bold.woff2') format('woff2');
-    font-weight: 700;
-    font-style: normal;
-  }
-  @font-face {
-    font-family: 'Thmanyah Serif Display';
-    src: url('/static/fonts/thmanyahserifdisplay-Black.woff2') format('woff2');
-    font-weight: 900;
-    font-style: normal;
-  }
+    <div class="lp-entries">
+      <a href="/dashboard?lang=en" class="lp-card">
+        <span class="lp-flag">English · ASL</span>
+        <h2>Together</h2>
+        <p>Real-time American Sign Language translation.</p>
+        <span class="lp-go">Open dashboard
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+        </span>
+      </a>
+      <a href="/dashboard?lang=ar" class="lp-card lp-card--ar">
+        <span class="lp-flag">العربية · لغة الإشارة</span>
+        <h2>معاً</h2>
+        <p>ترجمة فورية للغة الإشارة المصرية.</p>
+        <span class="lp-go">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M12 5l-7 7 7 7"/></svg>
+          لوحة التحكم
+        </span>
+      </a>
+    </div>
 
-  @font-face {
-    font-family: 'Thmanyah Sans';
-    src: url('/static/fonts/thmanyahsans-Regular.woff2') format('woff2');
-    font-weight: 400;
-    font-style: normal;
-  }
-  @font-face {
-    font-family: 'Thmanyah Sans';
-    src: url('/static/fonts/thmanyahsans-Medium.woff2') format('woff2');
-    font-weight: 500;
-    font-style: normal;
-  }
-  @font-face {
-    font-family: 'Thmanyah Sans';
-    src: url('/static/fonts/thmanyahsans-Bold.woff2') format('woff2');
-    font-weight: 700;
-    font-style: normal;
-  }
-  @font-face {
-    font-family: 'Thmanyah Sans';
-    src: url('/static/fonts/thmanyahsans-Black.woff2') format('woff2');
-    font-weight: 900;
-    font-style: normal;
-  }
-
-  /* Base page override to match the pure black background */
-  body, html {
-    background-color: #000000 !important;
-    background: #000000 !important;
-    color: #ffffff !important;
-    font-family: 'Outfit', 'Inter', -apple-system, sans-serif;
-    margin: 0;
-    padding: 0;
-    overflow-x: hidden;
-  }
-
-  #main-content {
-    width: 100%;
-    max-width: 100% !important;
-    background: #000000 !important;
-    padding-top: 0 !important;
-  }
-
-  /* Header / logo */
-  .landing-header {
-    position: absolute;
-    top: 24px;
-    left: 24px;
-    z-index: 10;
-  }
-
-  .logo-link {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    transition: opacity 0.2s ease;
-  }
-
-  .logo-link:hover {
-    opacity: 0.8;
-  }
-
-  /* Center alignment */
-  .landing-page {
-    height: 100vh;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    padding: 20px 24px;
-    box-sizing: border-box;
-    text-align: center;
-    overflow: hidden;
-  }
-
-  .landing-content {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    width: 100%;
-    max-width: 800px;
-  }
-
-  /* Language sections */
-  .lang-section {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    margin: 8px 0;
-    width: 100%;
-  }
-
-  /* Eyebrows */
-  .eyebrow {
-    font-size: 9px;
-    font-weight: 700;
-    letter-spacing: 0.22em;
-    color: #ffffff;
-    opacity: 0.95;
-    text-transform: uppercase;
-    margin-bottom: 4px;
-  }
-
-  /* Solid white title text */
-  .gradient-title {
-    font-size: clamp(24px, 4vw, 36px);
-    font-weight: 800;
-    letter-spacing: -0.04em;
-    margin: 4px 0 8px 0;
-    text-transform: uppercase;
-    color: #ffffff !important;
-    background: none !important;
-    -webkit-background-clip: initial !important;
-    -webkit-text-fill-color: initial !important;
-    background-clip: initial !important;
-    text-fill-color: initial !important;
-  }
-
-  .title-en {
-    font-family: 'Outfit', sans-serif;
-  }
-
-  .title-ar {
-    font-family: 'Thmanyah Serif Display', serif;
-  }
-
-  /* Subtitles */
-  .subtitle {
-    font-size: clamp(12px, 1.5vw, 14px);
-    color: #ffffff;
-    max-width: 580px;
-    margin: 0 auto 16px auto;
-    line-height: 1.4;
-    font-weight: 400;
-    letter-spacing: -0.01em;
-  }
-
-  .subtitle strong {
-    color: #ffffff;
-    font-weight: 600;
-  }
-
-  /* Pill Dashboard Buttons */
-  .pill-btn {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    gap: 8px;
-    padding: 10px 24px;
-    background: #ffffff;
-    color: #000000 !important;
-    border: none;
-    border-radius: 9999px;
-    font-size: 12.5px;
-    font-weight: 700;
-    text-decoration: none;
-    transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
-    cursor: pointer;
-    box-shadow: 0 4px 14px rgba(255, 255, 255, 0.08);
-  }
-
-  .pill-btn:hover {
-    transform: scale(1.025);
-    box-shadow: 0 6px 20px rgba(255, 255, 255, 0.22);
-  }
-
-  /* Divider */
-  .divider {
-    width: 100%;
-    max-width: 580px;
-    height: 1px;
-    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.08) 20%, rgba(255, 255, 255, 0.08) 80%, transparent);
-    margin: 16px 0;
-  }
-
-  /* Animations */
-  @keyframes fadeInUp {
-    from {
-      opacity: 0;
-      transform: translateY(16px);
-    }
-    to {
-      opacity: 1;
-      transform: translateY(0);
-    }
-  }
-
-  .animate-fade-up {
-    opacity: 0;
-    animation: fadeInUp 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards;
-  }
-
-  .delay-1 {
-    animation-delay: 0.1s;
-  }
-
-  .delay-2 {
-    animation-delay: 0.2s;
-  }
-
-  /* Responsive tweaks */
-  @media (max-width: 500px) {
-    .landing-header {
-      top: 20px;
-      left: 20px;
-    }
-    .lang-section {
-      margin: 8px 0;
-    }
-    .divider {
-      margin: 12px 0;
-    }
-  }
-</style>
-
-<div class="landing-page">
-  <div class="landing-content">
-    <!-- English Section -->
-    <section class="lang-section animate-fade-up">
-      <div class="eyebrow">ASL Platform</div>
-      <h1 class="gradient-title title-en">Together</h1>
-      <p class="subtitle">Real-time sign language translation for <strong>ASL</strong>.</p>
-      <a href="/dashboard?lang=en" class="pill-btn">Dashboard &rarr;</a>
-    </section>
-
-    <div class="divider animate-fade-up delay-1"></div>
-
-    <!-- Arabic Section -->
-    <section class="lang-section animate-fade-up delay-2" style="font-family: 'Thmanyah Sans', sans-serif;">
-      <div class="eyebrow" style="letter-spacing: 0.1em; font-size: 10px; color: #ffffff;">منصة لغة الإشارة المصرية</div>
-      <h1 class="gradient-title title-ar" style="font-size: clamp(30px, 5vw, 42px); margin: 4px 0 8px 0; letter-spacing: -0.02em; font-weight: 800; color: #ffffff; background: none; -webkit-text-fill-color: initial;">معاً</h1>
-      <p class="subtitle" style="font-size: clamp(12px, 1.8vw, 14px); color: #ffffff; margin: 0 auto 16px auto;">
-        ترجمة فورية للغة الإشارة <strong>المصرية</strong>.
-      </p>
-      <a href="/dashboard?lang=ar" class="pill-btn">&larr; لوحة التحكم</a>
-    </section>
-  </div>
+    <div class="lp-chips">
+      <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg> No install</span>
+      <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3C8 5 4 5.5 4 5.5v6c0 5 3.5 8 8 9 4.5-1 8-4 8-9v-6S16 5 12 3Z"/></svg> Private by default</span>
+      <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M3.6 9h16.8M3.6 15h16.8M11.5 3a17 17 0 0 0 0 18M12.5 3a17 17 0 0 1 0 18"/></svg> Bilingual UI</span>
+    </div>
+  </section>
 </div>
 {% endblock %}
