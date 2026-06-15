@@ -3,6 +3,92 @@
 {% block main_style %}padding-top: 0;{% endblock %}
 {% block nav %}{% endblock %}
 
+{% block head %}
+<script>
+  // Prevents Emscripten's throwing getters (arguments, thisProgram, etc.) from aborting 
+  // when browser extensions, DevTools, or checkers inspect the global Module object.
+  const originalDefineProperty = Object.defineProperty;
+  Object.defineProperty = function(obj, prop, descriptor) {
+    if (prop === 'printErr') {
+      return originalDefineProperty(obj, prop, {
+        get: function() { return console.error; },
+        set: function() {},
+        configurable: true,
+        enumerable: true
+      });
+    }
+    if (prop === 'print') {
+      return originalDefineProperty(obj, prop, {
+        get: function() { return console.log; },
+        set: function() {},
+        configurable: true,
+        enumerable: true
+      });
+    }
+    if (prop === 'arguments') {
+      return originalDefineProperty(obj, prop, {
+        get: function() { return []; },
+        set: function() {},
+        configurable: true,
+        enumerable: true
+      });
+    }
+    if (prop === 'thisProgram') {
+      return originalDefineProperty(obj, prop, {
+        get: function() { return './thisProgram'; },
+        set: function() {},
+        configurable: true,
+        enumerable: true
+      });
+    }
+
+    if (descriptor && typeof descriptor.get === 'function') {
+      const getStr = descriptor.get.toString();
+      if (getStr.includes('replaced') || getStr.includes('has been replaced') || getStr.includes('was not exported')) {
+        descriptor.get = function() {
+          return function() {};
+        };
+        if (descriptor.set) {
+          descriptor.set = function() {};
+        }
+      }
+    }
+    return originalDefineProperty.apply(this, arguments);
+  };
+
+  window.Module = {
+    arguments: [],
+    print: console.log,
+    printErr: console.error
+  };
+
+  // Patch window.speechSynthesis.speak to keep a global reference to active SpeechSynthesisUtterance
+  // instances. This prevents Chromium garbage collection from destroying them while speaking,
+  // which can lead to speech engine corruption and worker crashes.
+  if ('speechSynthesis' in window) {
+    window.activeUtterances = [];
+    const originalSpeak = window.speechSynthesis.speak;
+    window.speechSynthesis.speak = function(utt) {
+      if (utt) {
+        window.activeUtterances.push(utt);
+        const cleanUp = () => {
+          window.activeUtterances = window.activeUtterances.filter(u => u !== utt);
+        };
+        utt.addEventListener('end', cleanUp);
+        utt.addEventListener('error', cleanUp);
+        // Fallback cleanup after 60s
+        setTimeout(cleanUp, 60000);
+      }
+      originalSpeak.call(window.speechSynthesis, utt);
+    };
+  }
+</script>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/holistic@0.5.1675471629/holistic.js"></script>
+<script src="https://unpkg.com/@mediapipe/camera_utils/camera_utils.js"></script>
+<script src="https://unpkg.com/@mediapipe/drawing_utils/drawing_utils.js"></script>
+<script src="/static/js/socket.io.js"></script>
+{% endblock %}
+
 
 
 {% block content %}
