@@ -10,7 +10,10 @@
   /* Scoped to the landing page only (this block ships with landing.html). */
   body{background:var(--bg)!important;color:var(--text)!important;font-family:var(--font-sans)!important;
        transition:background var(--transition),color var(--transition)}
-  #main-content{max-width:100%!important;background:var(--bg)!important;padding-top:0!important}
+  #main-content{max-width:100%!important;background:transparent!important;padding-top:0!important}
+  /* wrappers transparent so the fixed aurora layer shows through (body is the base canvas) */
+  .t-scope.lp{background:transparent}
+  .lp-top{background:transparent}
 
   .lp{min-height:100vh;display:flex;flex-direction:column}
   .lp-top{display:flex;align-items:center;justify-content:space-between;padding:22px 28px}

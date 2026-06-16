@@ -10,7 +10,9 @@
 <style>
   body{background:var(--bg)!important;color:var(--text)!important;font-family:var(--font-sans)!important;
        transition:background var(--transition),color var(--transition)}
-  #main-content{max-width:100%!important;padding-top:0!important}
+  #main-content{max-width:100%!important;padding-top:0!important;background:transparent!important}
+  /* auth shell transparent so the fixed aurora shows behind the glassy form panel */
+  .t-scope.ap{background:transparent}
 
   /* ── Auth page two-column shell ── */
   .ap{min-height:100vh;display:grid;grid-template-columns:1fr 1fr}
