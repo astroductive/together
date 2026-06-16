@@ -229,6 +229,32 @@ html,body{background:var(--bg)!important;overflow:hidden}
 #debug-overlay{position:fixed;bottom:12px;inset-inline-start:12px;z-index:9998;font-size:10px;
   background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:8px 12px;
   color:var(--faint);max-width:260px;pointer-events:none;display:none}
+
+/* ── Ambient Signal Line background (z:-1; won't compete with camera) ──
+   Three flowing SVG curves with travelling dashed strokes and small spark
+   "signals" that animate along the paths — evoking hands → signs → words.
+   Intensity is very low (--sig-intensity:.22) so the effect is subliminal. */
+:root{--sig-intensity:.22}
+.d-sigbg{position:fixed;inset:0;z-index:-1;pointer-events:none;overflow:hidden}
+.d-sigbg::before{content:"";position:absolute;inset:0;
+  background:radial-gradient(60vw 50vw at 68% 38%,color-mix(in srgb,var(--accent) 14%,transparent),transparent 70%);
+  opacity:calc(.5*var(--sig-intensity)+.06)}
+.d-sigsvg{position:absolute;inset:0;inline-size:100%;block-size:100%;
+  opacity:calc(.48*var(--sig-intensity)+.18)}
+.d-sigwrap{transform-origin:center;animation:dSigBreathe calc(22s/var(--speed,1)) ease-in-out infinite}
+@keyframes dSigBreathe{0%,100%{transform:translateY(0)}50%{transform:translateY(14px)}}
+.d-ln{fill:none;stroke:url(#dSigGrad);stroke-linecap:round}
+.d-ghost{stroke-width:1;opacity:.22}
+.d-flow{stroke-width:2;animation:dSigDash calc(25s/var(--speed,1)) linear infinite}
+.d-f1{stroke-dasharray:9 27}
+.d-f2{stroke-dasharray:4 32;animation-duration:calc(31s/var(--speed,1))}
+.d-f3{stroke-dasharray:15 21;animation-duration:calc(19s/var(--speed,1))}
+@keyframes dSigDash{to{stroke-dashoffset:-360}}
+.d-spk{filter:drop-shadow(0 0 5px currentColor)}
+.d-sk1{fill:var(--accent);color:var(--accent)}
+.d-sk2{fill:#8b5cf6;color:#8b5cf6}
+.d-sk3{fill:#4f7bff;color:#4f7bff}
+@media(prefers-reduced-motion:reduce){.d-sigwrap,.d-flow{animation:none!important}}
 </style>
 
 <a href="#main-content" class="t-skip-link">Skip to content</a>
@@ -646,6 +672,44 @@ html,body{background:var(--bg)!important;overflow:hidden}
     </a>
   </nav>
 </div><!-- /.t-scope.t-app -->
+
+<!-- Ambient signal-line background layer -->
+<div class="d-sigbg" aria-hidden="true">
+  <svg class="d-sigsvg" viewBox="0 0 1440 900" preserveAspectRatio="xMidYMid slice">
+    <defs>
+      <linearGradient id="dSigGrad" x1="0" y1="0" x2="1" y2="0">
+        <stop offset="0" stop-color="var(--accent)"/>
+        <stop offset="0.5" stop-color="#8b5cf6"/>
+        <stop offset="1" stop-color="#4f7bff"/>
+      </linearGradient>
+      <path id="dsp1" d="M -40 260 C 280 180, 520 400, 720 280 S 1180 160, 1480 290"/>
+      <path id="dsp2" d="M -40 450 C 300 360, 560 560, 760 440 S 1220 320, 1480 470"/>
+      <path id="dsp3" d="M -40 650 C 260 560, 520 750, 740 630 S 1200 510, 1480 660"/>
+    </defs>
+    <g class="d-sigwrap">
+      <path class="d-ln d-ghost" d="M -40 260 C 280 180, 520 400, 720 280 S 1180 160, 1480 290"/>
+      <path class="d-ln d-ghost" d="M -40 450 C 300 360, 560 560, 760 440 S 1220 320, 1480 470"/>
+      <path class="d-ln d-ghost" d="M -40 650 C 260 560, 520 750, 740 630 S 1200 510, 1480 660"/>
+      <path class="d-ln d-flow d-f1" d="M -40 260 C 280 180, 520 400, 720 280 S 1180 160, 1480 290"/>
+      <path class="d-ln d-flow d-f2" d="M -40 450 C 300 360, 560 560, 760 440 S 1220 320, 1480 470"/>
+      <path class="d-ln d-flow d-f3" d="M -40 650 C 260 560, 520 750, 740 630 S 1200 510, 1480 660"/>
+      <circle r="3.2" class="d-spk d-sk2"><animateMotion dur="10s" repeatCount="indefinite"><mpath href="#dsp1"/></animateMotion></circle>
+      <circle r="2.8" class="d-spk d-sk3"><animateMotion dur="14s" repeatCount="indefinite"><mpath href="#dsp2"/></animateMotion></circle>
+      <circle r="3.8" class="d-spk d-sk1"><animateMotion dur="12s" repeatCount="indefinite"><mpath href="#dsp3"/></animateMotion></circle>
+    </g>
+  </svg>
+</div>
+<script>
+/* Pause SMIL spark animations when tab is hidden or reduced-motion is set */
+(function(){
+  var svg=document.querySelector('.d-sigsvg');
+  if(svg&&svg.pauseAnimations){
+    var rm=matchMedia('(prefers-reduced-motion: reduce)');
+    function smil(){(document.hidden||rm.matches)?svg.pauseAnimations():svg.unpauseAnimations()}
+    document.addEventListener('visibilitychange',smil);smil();
+  }
+})();
+</script>
 
 <script src="/static/js/app.js"></script>
 <script>
