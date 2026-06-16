@@ -478,6 +478,50 @@ async def login_page(request: Request):
 async def signup_page(request: Request):
     return templates.TemplateResponse(request, "signup.html")
 
+@app.get("/products/handscript", response_class=HTMLResponse)
+async def page_handscript(request: Request):
+    return templates.TemplateResponse(request, "products/handscript.html")
+
+@app.get("/products/voicebridge", response_class=HTMLResponse)
+async def page_voicebridge(request: Request):
+    return templates.TemplateResponse(request, "products/voicebridge.html")
+
+@app.get("/products/signtype", response_class=HTMLResponse)
+async def page_signtype(request: Request):
+    return templates.TemplateResponse(request, "products/signtype.html")
+
+@app.get("/products/talkside", response_class=HTMLResponse)
+async def page_talkside(request: Request):
+    return templates.TemplateResponse(request, "products/talkside.html")
+
+@app.get("/languages/asl", response_class=HTMLResponse)
+async def page_asl(request: Request):
+    return templates.TemplateResponse(request, "languages/asl.html")
+
+@app.get("/languages/arsl", response_class=HTMLResponse)
+async def page_arsl(request: Request):
+    return templates.TemplateResponse(request, "languages/arsl.html")
+
+@app.get("/resources", response_class=HTMLResponse)
+async def page_resources(request: Request):
+    return templates.TemplateResponse(request, "resources.html")
+
+@app.get("/about", response_class=HTMLResponse)
+async def page_about(request: Request):
+    return templates.TemplateResponse(request, "about.html")
+
+@app.get("/partnership", response_class=HTMLResponse)
+async def page_partnership(request: Request):
+    return templates.TemplateResponse(request, "partnership.html")
+
+@app.get("/contact", response_class=HTMLResponse)
+async def page_contact(request: Request):
+    return templates.TemplateResponse(request, "contact.html")
+
+@app.get("/demo", response_class=HTMLResponse)
+async def page_demo(request: Request):
+    return templates.TemplateResponse(request, "demo.html")
+
 
 # ═══════════════════════════════════════════════════════════════
 # AUTH API

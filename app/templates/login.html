@@ -93,38 +93,15 @@
   /* Role select inherits theme */
   .t-input option{background:var(--surface);color:var(--text)}
 
-  /* ── Animated background · Aurora Drift (auth pages) ─── */
-  :root{--speed:1;--intensity:.45;--m1:var(--accent);--m2:#8b5cf6;--m3:#4f7bff}
-  html[data-theme="light"]{--m2:#7c3aed;--m3:#3b82f6}
-
-  .ap-bg{position:fixed;inset:0;z-index:-2;overflow:hidden;pointer-events:none;background:var(--bg);transition:background .5s ease}
-  .ap-aurora{position:absolute;inset:-15%;will-change:transform;transition:transform .28s cubic-bezier(.2,.7,.3,1);transform:translate3d(calc(var(--mx,0)*-14px),calc(var(--my,0)*-14px),0)}
-  .ap-blob{position:absolute;border-radius:50%;filter:blur(80px);opacity:calc(.35*var(--intensity)+.06);will-change:transform}
-  html[data-theme="light"] .ap-blob{filter:blur(72px);opacity:calc(.4*var(--intensity)+.04)}
-  .ab1{width:52vw;height:52vw;inset-block-start:-10vw;inset-inline-start:-8vw;background:radial-gradient(circle at 50% 50%,var(--m1),transparent 68%);animation:apFlo1 calc(30s/var(--speed)) ease-in-out infinite}
-  .ab2{width:44vw;height:44vw;inset-block-end:-8vw;inset-inline-end:-6vw;background:radial-gradient(circle at 50% 50%,var(--m2),transparent 68%);animation:apFlo2 calc(38s/var(--speed)) ease-in-out infinite}
-  .ab3{width:36vw;height:36vw;inset-block-start:40vh;inset-inline-start:28vw;background:radial-gradient(circle at 50% 50%,var(--m3),transparent 70%);animation:apFlo3 calc(34s/var(--speed)) ease-in-out infinite}
-  @keyframes apFlo1{0%,100%{transform:translate(0,0) scale(1)}50%{transform:translate(10%,7%) scale(1.15)}}
-  @keyframes apFlo2{0%,100%{transform:translate(0,0) scale(1.04)}50%{transform:translate(-9%,8%) scale(.87)}}
-  @keyframes apFlo3{0%,100%{transform:translate(0,0) scale(.96)}50%{transform:translate(7%,-8%) scale(1.18)}}
-  .ap-grain{position:fixed;inset:0;z-index:-1;pointer-events:none;opacity:.36;mix-blend-mode:overlay;
-    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")}
-  html[data-theme="light"] .ap-grain{opacity:.22;mix-blend-mode:multiply}
-  /* Form panel: glassmorphic over the aurora */
+  /* ── Signal Field background ── */
+  #sf-canvas{position:fixed;inset:0;z-index:-2;pointer-events:none}
+  /* Form panel: glassmorphic over signal field */
   .ap-form{background:color-mix(in srgb,var(--bg) 80%,transparent)!important;backdrop-filter:blur(18px) saturate(130%)}
-  @media(prefers-reduced-motion:reduce){.ap-blob{animation:none!important}.ap-aurora{transition:none}}
 </style>
 {% endblock %}
 
 {% block content %}
-<div class="ap-bg" aria-hidden="true">
-  <div class="ap-aurora">
-    <span class="ap-blob ab1"></span>
-    <span class="ap-blob ab2"></span>
-    <span class="ap-blob ab3"></span>
-  </div>
-  <div class="ap-grain"></div>
-</div>
+<canvas id="sf-canvas" aria-hidden="true"></canvas>
 <a href="/" class="ap-back">
   <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
   Back
@@ -371,12 +348,28 @@
     finally { setLoading(false); }
   }
 
-  /* Cursor parallax for aurora layer */
+  /* Signal Field */
   (function(){
-    var root=document.documentElement,rm=matchMedia('(prefers-reduced-motion: reduce)'),tx=0,ty=0,cx=0,cy=0;
-    function pmove(e){tx=(e.clientX/innerWidth-.5)*2;ty=(e.clientY/innerHeight-.5)*2}
-    function ploop(){cx+=(tx-cx)*.06;cy+=(ty-cy)*.06;root.style.setProperty('--mx',cx.toFixed(3));root.style.setProperty('--my',cy.toFixed(3));requestAnimationFrame(ploop)}
-    if(!rm.matches){addEventListener('pointermove',pmove,{passive:true});ploop()}
+    var c=document.getElementById('sf-canvas');if(!c)return;
+    var ctx=c.getContext('2d'),rm=matchMedia('(prefers-reduced-motion:reduce)');
+    var W,H,dots=[],mx=-999,my=-999,raf=0;
+    var N=40,DIST=130,REPEL=80,SPEED=0.3;
+    function resize(){W=c.width=innerWidth;H=c.height=innerHeight}
+    function mkDot(){return{x:Math.random()*W,y:Math.random()*H,vx:(Math.random()-.5)*SPEED,vy:(Math.random()-.5)*SPEED,col:Math.random()<.65?'#1f8a82':'#e2b483',r:Math.random()*1.2+.8}}
+    function init(){resize();dots=[];for(var i=0;i<N;i++)dots.push(mkDot())}
+    function draw(){
+      ctx.clearRect(0,0,W,H);
+      for(var i=0;i<dots.length;i++){var d=dots[i];var dx=d.x-mx,dy=d.y-my,ds=dx*dx+dy*dy;if(ds<REPEL*REPEL&&ds>0){var f=(REPEL*REPEL-ds)/(REPEL*REPEL)*.8;d.vx+=dx/Math.sqrt(ds)*f*.03;d.vy+=dy/Math.sqrt(ds)*f*.03}d.vx*=.99;d.vy*=.99;d.x+=d.vx;d.y+=d.vy;if(d.x<0||d.x>W)d.vx*=-1;if(d.y<0||d.y>H)d.vy*=-1}
+      for(var i=0;i<dots.length;i++)for(var j=i+1;j<dots.length;j++){var dx=dots[i].x-dots[j].x,dy=dots[i].y-dots[j].y,d2=Math.sqrt(dx*dx+dy*dy);if(d2<DIST){ctx.strokeStyle='rgba(31,138,130,'+(1-d2/DIST)*.2+')';ctx.lineWidth=.7;ctx.beginPath();ctx.moveTo(dots[i].x,dots[i].y);ctx.lineTo(dots[j].x,dots[j].y);ctx.stroke()}}
+      for(var i=0;i<dots.length;i++){var d=dots[i];ctx.fillStyle=d.col+'99';ctx.beginPath();ctx.arc(d.x,d.y,d.r,0,Math.PI*2);ctx.fill()}
+      if(!document.hidden&&!rm.matches)raf=requestAnimationFrame(draw);
+    }
+    function start(){if(!raf&&!document.hidden&&!rm.matches)raf=requestAnimationFrame(draw)}
+    function stop(){if(raf){cancelAnimationFrame(raf);raf=0}}
+    addEventListener('resize',function(){resize()});
+    addEventListener('pointermove',function(e){mx=e.clientX;my=e.clientY},{passive:true});
+    document.addEventListener('visibilitychange',function(){document.hidden?stop():start()});
+    init();start();
   })();
 </script>
 {% endblock %}
