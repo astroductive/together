@@ -97,8 +97,15 @@
 <script src="/static/js/theme.js?v=phase6-1"></script>
 <style>
 /* ── Dashboard-page scoped overrides ── */
-html,body{background:var(--bg)!important;overflow:hidden}
-#main-content{padding:0!important;height:100vh;overflow:hidden}
+/* bg lives on <html> (the page canvas) and <body> stays transparent, so the
+   negative-z signal-line layer paints over the canvas instead of being hidden
+   by an opaque body background. */
+html{background:var(--bg)!important;overflow:hidden}
+body{background:transparent!important;overflow:hidden}
+#main-content{padding:0!important;height:100vh;overflow:hidden;background:transparent!important}
+/* app shell transparent so the ambient signal-line layer shows through .t-main
+   gaps (sidebar + cards keep their own solid surfaces, so it never competes) */
+.t-scope.t-app{background:transparent}
 
 /* ── Panel visibility ── */
 .d-panel{display:none}.d-panel.active{display:flex;flex-direction:column;flex:1;overflow:auto}
@@ -229,6 +236,23 @@ html,body{background:var(--bg)!important;overflow:hidden}
 #debug-overlay{position:fixed;bottom:12px;inset-inline-start:12px;z-index:9998;font-size:10px;
   background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:8px 12px;
   color:var(--faint);max-width:260px;pointer-events:none;display:none}
+
+/* ── Aurora Drift background ── */
+:root{--speed:1;--intensity:.82;--m1:#1f8a82;--m2:#e2b483;--m3:#2d9d94}
+.d-aurora-bg{position:fixed;inset:0;z-index:-1;overflow:hidden;pointer-events:none}
+.d-aurora-inner{position:absolute;inset:-15%;will-change:transform;transition:transform .3s cubic-bezier(.2,.7,.3,1);transform:translate3d(calc(var(--mx,0)*-22px),calc(var(--my,0)*-22px),0)}
+.d-blob{position:absolute;border-radius:50%;filter:blur(100px);opacity:calc(.55*var(--intensity)+.05);will-change:transform}
+.db1{width:58vw;height:58vw;inset-block-start:-10vw;inset-inline-start:-8vw;background:radial-gradient(circle at 50%,var(--m1),transparent 68%);animation:dbFlo1 calc(28s/var(--speed)) ease-in-out infinite}
+.db2{width:50vw;height:50vw;inset-block-start:20vh;inset-inline-end:-12vw;background:radial-gradient(circle at 50%,var(--m2),transparent 68%);animation:dbFlo2 calc(36s/var(--speed)) ease-in-out infinite}
+.db3{width:44vw;height:44vw;inset-block-end:-14vw;inset-inline-start:28vw;background:radial-gradient(circle at 50%,var(--m3),transparent 70%);animation:dbFlo3 calc(32s/var(--speed)) ease-in-out infinite}
+@keyframes dbFlo1{0%,100%{transform:translate(0,0) scale(1)}50%{transform:translate(14%,9%) scale(1.22)}}
+@keyframes dbFlo2{0%,100%{transform:translate(0,0) scale(1.08)}50%{transform:translate(-12%,11%) scale(.82)}}
+@keyframes dbFlo3{0%,100%{transform:translate(0,0) scale(.92)}50%{transform:translate(10%,-10%) scale(1.25)}}
+/* Liquid glass panels */
+.t-card{background:color-mix(in srgb,var(--surface) 72%,transparent)!important;backdrop-filter:blur(14px) saturate(140%)!important}
+.t-sidebar{background:color-mix(in srgb,var(--sidebar) 80%,transparent)!important;backdrop-filter:blur(20px) saturate(130%)!important}
+.t-topbar,.d-topbar{background:color-mix(in srgb,var(--sidebar) 75%,transparent)!important;backdrop-filter:blur(16px) saturate(130%)!important}
+@media(prefers-reduced-motion:reduce){.d-blob{animation:none!important}.d-aurora-inner{transition:none}}
 </style>
 
 <a href="#main-content" class="t-skip-link">Skip to content</a>
@@ -646,6 +670,22 @@ html,body{background:var(--bg)!important;overflow:hidden}
     </a>
   </nav>
 </div><!-- /.t-scope.t-app -->
+
+<div class="d-aurora-bg" aria-hidden="true">
+  <div class="d-aurora-inner">
+    <span class="d-blob db1"></span>
+    <span class="d-blob db2"></span>
+    <span class="d-blob db3"></span>
+  </div>
+</div>
+<script>
+(function(){
+  var root=document.documentElement,rm=matchMedia('(prefers-reduced-motion:reduce)'),tx=0,ty=0,cx=0,cy=0;
+  function pmove(e){tx=(e.clientX/innerWidth-.5)*2;ty=(e.clientY/innerHeight-.5)*2}
+  function ploop(){cx+=(tx-cx)*.04;cy+=(ty-cy)*.04;root.style.setProperty('--mx',cx.toFixed(3));root.style.setProperty('--my',cy.toFixed(3));requestAnimationFrame(ploop)}
+  if(!rm.matches){addEventListener('pointermove',pmove,{passive:true});ploop()}
+})();
+</script>
 
 <script src="/static/js/app.js"></script>
 <script>

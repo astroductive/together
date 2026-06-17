@@ -79,3 +79,4 @@ data/landmarks/
 # Local Postgres data volume (when running outside Docker)
 pgdata/
 __preview_*.html
+.claude/
