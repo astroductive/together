@@ -109,6 +109,7 @@ from auth import (
     get_current_user,
     get_password_hash,
     needs_rehash,
+    require_api_rate_limit,
     require_auth_rate_limit,
     rotate_refresh_token,
     verify_password,
@@ -848,7 +849,8 @@ def translate_arabic_to_english(word: str) -> str:
 @app.post("/api/translate")
 async def translate_sign(
     body: TranslateRequest,
-    current_user: dict = Depends(get_current_user)
+    current_user: dict = Depends(get_current_user),
+    _rl: None = Depends(require_api_rate_limit),
 ):
     """Accepts a rolling window of landmark frames, runs TFLite (ASL) or PyTorch (Arabic) inference."""
     lang = (body.language or "english").lower().strip()
@@ -889,7 +891,8 @@ async def translate_sign(
 @app.post("/api/translate/sentence")
 async def translate_sentence_api(
     body: SentenceRequest,
-    current_user: dict = Depends(get_current_user)
+    current_user: dict = Depends(get_current_user),
+    _rl: None = Depends(require_api_rate_limit),
 ):
     """Convert recognized ASL gloss (Topic-Comment) into a natural SVO sentence.
 
@@ -918,7 +921,8 @@ async def translate_sentence_api(
 @app.post("/api/gloss")
 async def sentence_to_gloss_api(
     body: GlossRequest,
-    current_user: dict = Depends(get_current_user)
+    current_user: dict = Depends(get_current_user),
+    _rl: None = Depends(require_api_rate_limit),
 ):
     """Convert a natural SVO sentence into ASL/ArSL gloss (Topic-Comment) + NMM.
 
@@ -938,7 +942,12 @@ from fastapi.responses import StreamingResponse
 import io
 
 @app.get("/api/tts")
-def text_to_speech_endpoint(text: str, language: str = "english"):
+def text_to_speech_endpoint(
+    text: str,
+    language: str = "english",
+    request: Request = None,
+    _rl: None = Depends(require_api_rate_limit),
+):
     lang = language.lower().strip()
     if lang in ["arabic", "ar", "egyptian", "eg", "english", "en"]:
         try:
@@ -954,8 +963,10 @@ from fastapi import UploadFile as _UploadFile, File as _File, Form as _Form
 
 @app.post("/api/stt")
 async def speech_to_text_endpoint(
+    request: Request,
     file: _UploadFile = _File(...),
-    language: str = _Form("english")
+    language: str = _Form("english"),
+    _rl: None = Depends(require_api_rate_limit),
 ):
     try:
         audio_bytes = await file.read()
