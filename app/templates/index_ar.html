@@ -439,7 +439,10 @@ html[data-theme="light"] .d-blob{opacity:calc(.38*var(--intensity)+.04)}
               </div>
             </div>
             <div class="d-sentence-out" style="margin:0 20px 20px">
-              <div class="t-eyebrow" style="margin-bottom:9px">الجملة المنطوقة</div>
+              <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:9px">
+                <div class="t-eyebrow">الجملة المنطوقة</div>
+                <button id="s2sp-tts-btn" onclick="s2spReplayTts()" class="t-btn t-btn--ghost" style="padding:4px 10px;font-size:13px" title="قراءة بصوت عالٍ">🔊</button>
+              </div>
               <div class="d-box-text" id="s2sp-sentence-output"><span class="d-sentence-ph">بانتظار الإشارات…</span></div>
             </div>
           </div>
@@ -1749,6 +1752,7 @@ html[data-theme="light"] .d-blob{opacity:calc(.38*var(--intensity)+.04)}
   }
 
   async function playLocalTts(text, language) {
+    console.log(`[TTS] Speaking: "${text}" (${language})`);
     if ('speechSynthesis' in window) {
       try {
         window.speechSynthesis.cancel();
@@ -1758,29 +1762,42 @@ html[data-theme="light"] .d-blob{opacity:calc(.38*var(--intensity)+.04)}
           const arVoice = voices.find(v => v.lang.startsWith('ar-EG') || v.lang.startsWith('ar'));
           if (arVoice) {
             utt.voice = arVoice;
+            console.log(`[TTS] Using voice: ${arVoice.name}`);
           } else {
             utt.lang = 'ar-EG';
+            console.log('[TTS] No Arabic voice found, using ar-EG lang tag');
           }
         } else {
           utt.lang = 'en-US';
         }
         utt.rate = 1.0;
         utt.volume = 1.0;
+        let spoken = false;
+        utt.onstart = () => { spoken = true; console.log('[TTS] Browser speech started'); };
+        utt.onend = () => console.log('[TTS] Browser speech ended');
+        utt.onerror = (e) => console.warn('[TTS] Browser speech error:', e.error);
         window.speechSynthesis.speak(utt);
-        return;
+        // Give browser TTS 1.5s to start; if it doesn't, fall through to backend
+        await new Promise(r => setTimeout(r, 1500));
+        if (spoken) return;
+        console.log('[TTS] Browser TTS did not start, falling back to backend');
+        window.speechSynthesis.cancel();
       } catch (e) {
-        console.warn("[SpeechSynthesis Error, falling back to backend]", e);
+        console.warn("[TTS] speechSynthesis error, falling back to backend:", e);
       }
     }
 
     try {
       const url = `/api/tts?text=${encodeURIComponent(text)}&language=${encodeURIComponent(language)}`;
+      console.log('[TTS] Calling backend TTS...');
       const res = await authFetch(url);
-      if (!res.ok) return;
+      if (!res.ok) { console.error('[TTS] Backend returned', res.status); return; }
       const blob = await res.blob();
       const audioUrl = URL.createObjectURL(blob);
       const audio = new Audio(audioUrl);
-      audio.play();
+      audio.onplay = () => console.log('[TTS] Backend audio playing');
+      audio.onerror = (e) => console.error('[TTS] Backend audio error:', e);
+      await audio.play().catch(e => console.error('[TTS] audio.play() blocked:', e));
     } catch (err) {
       console.error("[TTS Error]", err);
     }
@@ -3336,6 +3353,13 @@ html[data-theme="light"] .d-blob{opacity:calc(.38*var(--intensity)+.04)}
   let s2spSameCount = 0;
   let s2spGlossTimer = null;
   let s2spSentences = [];
+  let s2spLastSentence = '';
+  let s2spLastLang = 'arabic';
+
+  function s2spReplayTts() {
+    if (!s2spLastSentence) return;
+    playLocalTts(s2spLastSentence, s2spLastLang);
+  }
 
   function toggleS2SpCamera() { s2spCameraOn ? stopS2SpCamera() : startS2SpCamera(); }
 
@@ -3607,15 +3631,10 @@ html[data-theme="light"] .d-blob{opacity:calc(.38*var(--intensity)+.04)}
       document.getElementById('s2sp-sentence-output').innerHTML =
         `<span>${sentence}</span>`;
 
-      // Speak it
-      if (isArabicMode) {
-        playLocalTts(sentence, 'arabic');
-      } else if ('speechSynthesis' in window) {
-        const utt = new SpeechSynthesisUtterance(sentence);
-        utt.rate = 1;
-        utt.volume = 1;
-        window.speechSynthesis.speak(utt);
-      }
+      // Store for replay button and speak
+      s2spLastSentence = sentence;
+      s2spLastLang = isArabicMode ? 'arabic' : 'english';
+      playLocalTts(sentence, s2spLastLang);
 
       // Log it
       s2spSentences.unshift({ text: sentence, time: new Date().toLocaleTimeString() });
