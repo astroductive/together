@@ -19,7 +19,10 @@ from db.base import Base, DATABASE_URL  # noqa: E402
 from db import models  # noqa: F401,E402  (register models on Base.metadata)
 
 config = context.config
-config.set_main_option("sqlalchemy.url", os.environ.get("DATABASE_URL", DATABASE_URL))
+_url = os.environ.get("DATABASE_URL", DATABASE_URL)
+if _url.startswith("postgresql://"):
+    _url = _url.replace("postgresql://", "postgresql+psycopg://", 1)
+config.set_main_option("sqlalchemy.url", _url)
 
 target_metadata = Base.metadata
 
