@@ -784,12 +784,17 @@ body{background:transparent!important;overflow:hidden}
   // Rolling 60-frame buffer for Sign-to-Text (Feature 1)
   const SEQ_LENGTH = 60;
   let frameBuffer = [];
-  const VOTE_BUFFER_SIZE = 6;
-  const STABILITY_FRAMES = 3;
-  const GLOBAL_COOLDOWN_FRM = 30;
+  // Latency tuning: commit a sign after fewer votes/round-trips. Each vote is
+  // one sequential POST to the remote server, so smaller buffers = faster
+  // recognition. Lower MIN_SEQ_FRAMES so the first inference fires ~1.2s in
+  // instead of 2s. STABILITY_FRAMES=2 of VOTE_BUFFER_SIZE=4 keeps false
+  // positives low while feeling responsive.
+  const VOTE_BUFFER_SIZE = 4;
+  const STABILITY_FRAMES = 2;
+  const GLOBAL_COOLDOWN_FRM = 18;
   const MIN_HAND_FRAMES = 3;
   const MAX_HAND_GAP_FRAMES = 5;  // tolerance for flickering hand detection
-  const MIN_SEQ_FRAMES = 30;
+  const MIN_SEQ_FRAMES = 18;
   const moduleMap = {
     vision: { panel: 'panel-vision', nav: 'nav-vision', title: 'Sign to Text' },
     speech: { panel: 'panel-speech', nav: 'nav-speech', title: 'Sign to Speech' },
@@ -1597,10 +1602,15 @@ body{background:transparent!important;overflow:hidden}
     // Order MUST match training extract_landmarks():
     //   face(468) + leftHand(21) + pose(33) + rightHand(21) = 543
     const out = [];
+    // Round to 4 decimals: landmarks are normalized [0,1], so 4 dp is ~0.1px
+    // precision at 1000px — imperceptible to the model but cuts the JSON
+    // payload ~3x (full-precision floats are 15+ chars each), which is the
+    // dominant cost of each /api/translate round-trip to the remote server.
+    const r = (v) => Math.round(v * 1e4) / 1e4;
     function addPts(pts, n) {
       for (let i = 0; i < n; i++) {
         if (pts && pts[i]) {
-          out.push([pts[i].x, pts[i].y, pts[i].z || 0]);
+          out.push([r(pts[i].x), r(pts[i].y), r(pts[i].z || 0)]);
         } else {
           // Send null so it becomes NaN in Python, instead of 0.0
           // (0.0 forces the model to think the hand is at the top-left corner!)
