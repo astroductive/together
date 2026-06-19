@@ -119,8 +119,8 @@ body{background:transparent!important;overflow:hidden}
 
 /* ── Viewport (camera / avatar) ── */
 .d-vp{position:relative;border-radius:14px;overflow:hidden;background:var(--viewport);border:1px solid var(--border);
-  min-height:280px;display:flex;align-items:center;justify-content:center;margin:0 20px}
-.d-vp video,.d-vp canvas{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+  aspect-ratio:4/3;width:100%;display:flex;align-items:center;justify-content:center;margin:0 20px}
+.d-vp video,.d-vp canvas{position:absolute;inset:0;width:100%;height:100%;object-fit:contain}
 .d-vp-ph{display:flex;flex-direction:column;align-items:center;gap:12px;color:var(--faint);font-size:13.5px;text-align:center;padding:24px}
 .d-vp-ph svg{width:42px;height:42px;opacity:.4}
 .d-live{position:absolute;top:13px;inset-inline-start:13px;display:inline-flex;align-items:center;gap:7px;padding:5px 11px;
@@ -1416,10 +1416,11 @@ html[data-theme="light"] .d-blob{opacity:calc(.38*var(--intensity)+.04)}
         });
 
         holistic.setOptions({
-          modelComplexity: 1,
-          smoothLandmarks: true,
-          minDetectionConfidence: 0.7,  // matches sign-to-text.py
-          minTrackingConfidence: 0.7,   // matches sign-to-text.py
+          modelComplexity: 0,
+          selfieMode: true,
+          smoothLandmarks: false,
+          minDetectionConfidence: 0.6,
+          minTrackingConfidence: 0.5,
         });
 
         holistic.onResults(onHolisticResults);
@@ -1447,11 +1448,16 @@ html[data-theme="light"] .d-blob{opacity:calc(.38*var(--intensity)+.04)}
           return;
         }
 
+        let _lastFrameMs = 0;
+        const _FRAME_INTERVAL = 1000 / 15;
         mpCamera = new window.Camera(video, {
           onFrame: async () => {
+            const now = performance.now();
+            if (now - _lastFrameMs < _FRAME_INTERVAL) return;
+            _lastFrameMs = now;
             if (holistic) await holistic.send({ image: video });
           },
-          width: 640, height: 480,
+          width: 480, height: 360,
         });
         mpCamera.start().then(() => console.log("[Camera] MediaPipe Camera started."));
       }
@@ -1461,7 +1467,9 @@ html[data-theme="light"] .d-blob{opacity:calc(.38*var(--intensity)+.04)}
     if (inMeeting && meetingCamStream) {
       handleStream(meetingCamStream);
     } else {
-      navigator.mediaDevices.getUserMedia({ video: true })
+      navigator.mediaDevices.getUserMedia({
+        video: { width: { ideal: 480 }, height: { ideal: 360 }, frameRate: { ideal: 15, max: 20 } }
+      })
         .then(handleStream)
         .catch(err => {
           console.error("[Camera] Error:", err);
@@ -1531,19 +1539,15 @@ html[data-theme="light"] .d-blob{opacity:calc(.38*var(--intensity)+.04)}
   // rolling window of landmark frames
 
   function onHolisticResults(results) {
-    // Mirror video onto overlay canvas
+    // selfieMode:true makes MediaPipe flip image+landmarks together, so draw straight.
     const canvas = document.getElementById('output_canvas');
     canvas.width = results.image.width;
     canvas.height = results.image.height;
     const ctx = canvas.getContext('2d');
-    ctx.save();
     ctx.clearRect(0, 0, canvas.width, canvas.height);
-    ctx.translate(canvas.width, 0);
-    ctx.scale(-1, 1);
     ctx.drawImage(results.image, 0, 0, canvas.width, canvas.height);
-    ctx.restore();
 
-    // Draw MediaPipe skeleton overlay
+    // Draw skeleton overlay (landmarks already in flipped coordinates)
     if (window.drawConnectors && window.HAND_CONNECTIONS) {
       if (results.leftHandLandmarks)
         drawConnectors(ctx, results.leftHandLandmarks, HAND_CONNECTIONS, { color: '#00ffff', lineWidth: 2 });
@@ -3375,21 +3379,26 @@ html[data-theme="light"] .d-blob{opacity:calc(.38*var(--intensity)+.04)}
         });
 
         s2spHolistic.setOptions({
-          modelComplexity: 1,
-          smoothLandmarks: true,
-          minDetectionConfidence: 0.7,  // matches sign-to-text.py
-          minTrackingConfidence: 0.7,   // matches sign-to-text.py
+          modelComplexity: 0,
+          selfieMode: true,
+          smoothLandmarks: false,
+          minDetectionConfidence: 0.6,
+          minTrackingConfidence: 0.5,
         });
         s2spHolistic.onResults(onS2SpHolisticResults);
       }
 
       console.log("[Camera] Initializing MediaPipe Camera helper (S2SP)...");
       if (!window.Camera) return;
+      let _s2spLastMs = 0;
       s2spMpCamera = new window.Camera(video, {
         onFrame: async () => {
+          const now = performance.now();
+          if (now - _s2spLastMs < 1000/15) return;
+          _s2spLastMs = now;
           if (s2spHolistic) await s2spHolistic.send({ image: video });
         },
-        width: 640, height: 480,
+        width: 480, height: 360,
       });
       s2spMpCamera.start().then(() => console.log("[Camera] S2SP MediaPipe Camera started."));
     }).catch(err => {
@@ -3441,11 +3450,8 @@ html[data-theme="light"] .d-blob{opacity:calc(.38*var(--intensity)+.04)}
     canvas.width = results.image.width;
     canvas.height = results.image.height;
     const ctx = canvas.getContext('2d');
-    ctx.save();
-    ctx.translate(canvas.width, 0);
-    ctx.scale(-1, 1);
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
     ctx.drawImage(results.image, 0, 0, canvas.width, canvas.height);
-    ctx.restore();
 
     if (window.drawConnectors && window.HAND_CONNECTIONS) {
       if (results.leftHandLandmarks)
