@@ -12,7 +12,7 @@ pydantic[email]==2.10.4
 email-validator==2.2.0
 mediapipe==0.10.18
 opencv-python==4.10.0.84
-ai-edge-litert==1.0.1
+ai-edge-litert==1.1.0
 sentence-transformers==3.3.1
 requests==2.32.3
 scipy==1.14.1
