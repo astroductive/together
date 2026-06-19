@@ -204,15 +204,25 @@ class ASLService(SignDB):
         except ValueError:
             num_threads = min(4, (os.cpu_count() or 1))
         try:
-            try:
-                self.interpreter = Interpreter(model_path=MODEL_PATH, num_threads=num_threads)
-            except TypeError:
-                # Older interpreter signature without num_threads.
-                self.interpreter = Interpreter(model_path=MODEL_PATH)
-            self.interpreter.allocate_tensors()
+            def _build_interpreter():
+                """Try num_threads first; on ANY failure (some LiteRT builds
+                reject the kwarg or half-construct), fall back to the plain
+                single-thread constructor and verify it actually allocated."""
+                try:
+                    interp = Interpreter(model_path=MODEL_PATH, num_threads=num_threads)
+                    interp.allocate_tensors()
+                    return interp
+                except Exception as multi_err:  # noqa: BLE001
+                    print(f"[ASLService] num_threads constructor failed ({multi_err}); "
+                          f"retrying single-threaded.")
+                    interp = Interpreter(model_path=MODEL_PATH)
+                    interp.allocate_tensors()
+                    return interp
+
+            self.interpreter = _build_interpreter()
             self.input_details = self.interpreter.get_input_details()
             self.output_details = self.interpreter.get_output_details()
-            print(f"[ASLService] TFLite ready (num_threads={num_threads}, XNNPACK default).")
+            print(f"[ASLService] TFLite ready (XNNPACK default).")
         except Exception as tf_err:
             print(f"[ERROR] TFLite initialization failed: {tf_err}")
             raise RuntimeError(f"TFLite initialization failed: {tf_err}")
