@@ -119,8 +119,10 @@ body{background:transparent!important;overflow:hidden}
 
 /* ── Viewport (camera / avatar) ── */
 .d-vp{position:relative;border-radius:14px;overflow:hidden;background:var(--viewport);border:1px solid var(--border);
-  aspect-ratio:4/3;width:100%;display:flex;align-items:center;justify-content:center;margin:0 20px}
+  aspect-ratio:4/3;display:flex;align-items:center;justify-content:center;margin:0 20px}
 .d-vp video,.d-vp canvas{position:absolute;inset:0;width:100%;height:100%;object-fit:contain}
+/* Mirror the user's own camera feed for a natural selfie view (skeleton canvas stays unflipped) */
+#webcam,#s2sp-webcam,#meeting-local-video{transform:scaleX(-1)}
 .d-vp-ph{display:flex;flex-direction:column;align-items:center;gap:12px;color:var(--faint);font-size:13.5px;text-align:center;padding:24px}
 .d-vp-ph svg{width:42px;height:42px;opacity:.4}
 .d-live{position:absolute;top:13px;inset-inline-start:13px;display:inline-flex;align-items:center;gap:7px;padding:5px 11px;
@@ -1164,9 +1166,9 @@ html[data-theme="light"] .d-blob{opacity:calc(.38*var(--intensity)+.04)}
     const prev = moduleMap[currentModule];
     const next = moduleMap[key];
     document.getElementById(prev.panel).classList.remove('active');
-    document.getElementById(prev.nav).classList.remove('active');
+    document.getElementById(prev.nav).classList.remove('is-active');
     document.getElementById(next.panel).classList.add('active');
-    document.getElementById(next.nav).classList.add('active');
+    document.getElementById(next.nav).classList.add('is-active');
     document.getElementById('topbar-title').textContent = next.title;
 
     const mobileSel = document.getElementById('mobile-module-select');
@@ -1539,13 +1541,13 @@ html[data-theme="light"] .d-blob{opacity:calc(.38*var(--intensity)+.04)}
   // rolling window of landmark frames
 
   function onHolisticResults(results) {
-    // selfieMode:true makes MediaPipe flip image+landmarks together, so draw straight.
+    // Native <video> shows the smooth feed underneath (CSS-mirrored); the
+    // canvas only paints the skeleton so display is independent of inference.
     const canvas = document.getElementById('output_canvas');
     canvas.width = results.image.width;
     canvas.height = results.image.height;
     const ctx = canvas.getContext('2d');
     ctx.clearRect(0, 0, canvas.width, canvas.height);
-    ctx.drawImage(results.image, 0, 0, canvas.width, canvas.height);
 
     // Draw skeleton overlay (landmarks already in flipped coordinates)
     if (window.drawConnectors && window.HAND_CONNECTIONS) {
@@ -3353,7 +3355,9 @@ html[data-theme="light"] .d-blob{opacity:calc(.38*var(--intensity)+.04)}
       return;
     }
 
-    navigator.mediaDevices.getUserMedia({ video: true }).then(stream => {
+    navigator.mediaDevices.getUserMedia({
+      video: { width: { ideal: 480 }, height: { ideal: 360 }, frameRate: { ideal: 15, max: 20 } }
+    }).then(stream => {
       console.log("[Camera] Stream acquired.");
       if (!s2spCameraOn) {
         stream.getTracks().forEach(t => t.stop());
@@ -3451,7 +3455,6 @@ html[data-theme="light"] .d-blob{opacity:calc(.38*var(--intensity)+.04)}
     canvas.height = results.image.height;
     const ctx = canvas.getContext('2d');
     ctx.clearRect(0, 0, canvas.width, canvas.height);
-    ctx.drawImage(results.image, 0, 0, canvas.width, canvas.height);
 
     if (window.drawConnectors && window.HAND_CONNECTIONS) {
       if (results.leftHandLandmarks)
