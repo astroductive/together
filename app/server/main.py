@@ -209,7 +209,7 @@ class ForceJSMimeMiddleware:
                 headers.append((b"x-frame-options", b"DENY"))
                 headers.append((b"x-content-type-options", b"nosniff"))
                 headers.append((b"referrer-policy", b"strict-origin-when-cross-origin"))
-                headers.append((b"permissions-policy", b"camera=(), microphone=(), geolocation=()"))
+                headers.append((b"permissions-policy", b"camera=(self), microphone=(self), geolocation=()"))
 
                 # Check if it is a .js file
                 if path.endswith(".js"):
