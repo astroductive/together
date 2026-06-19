@@ -102,13 +102,12 @@
    by an opaque body background. */
 html{background:var(--bg)!important;overflow:hidden}
 body{background:transparent!important;overflow:hidden}
-#main-content{padding:0!important;height:100vh;overflow:hidden;background:transparent!important}
-/* app shell transparent so the ambient signal-line layer shows through .t-main
-   gaps (sidebar + cards keep their own solid surfaces, so it never competes) */
+#main-content{padding:0!important;flex:1;min-height:0;overflow:hidden;background:transparent!important}
 .t-scope.t-app{background:transparent}
+.t-main{height:100vh;overflow:hidden}
 
 /* ── Panel visibility ── */
-.d-panel{display:none}.d-panel.active{display:flex;flex-direction:column;flex:1;overflow:auto}
+.d-panel{display:none}.d-panel.active{display:flex;flex-direction:column;flex:1;min-height:0;overflow-y:auto}
 
 /* ── Two-column content layout ── */
 .d-col{display:grid;grid-template-columns:1fr 330px;gap:22px;padding:26px 32px;align-items:start;flex:1;overflow:auto}
@@ -119,7 +118,7 @@ body{background:transparent!important;overflow:hidden}
 
 /* ── Viewport (camera / avatar) ── */
 .d-vp{position:relative;border-radius:14px;overflow:hidden;background:var(--viewport);border:1px solid var(--border);
-  aspect-ratio:4/3;display:flex;align-items:center;justify-content:center;margin:0 20px}
+  aspect-ratio:4/3;max-height:min(52vh,460px);display:flex;align-items:center;justify-content:center;margin:0 20px}
 .d-vp video,.d-vp canvas{position:absolute;inset:0;width:100%;height:100%;object-fit:contain}
 /* Mirror the user's own camera feed for a natural selfie view (skeleton canvas stays unflipped) */
 #webcam,#s2sp-webcam,#meeting-local-video{transform:scaleX(-1)}
