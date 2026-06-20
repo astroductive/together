@@ -462,7 +462,9 @@ async def health(warm: bool = False):
 # ═══════════════════════════════════════════════════════════════
 
 @app.get("/", response_class=HTMLResponse)
-async def home(request: Request):
+async def home(request: Request, lang: str = "en"):
+    if lang == "ar":
+        return templates.TemplateResponse(request, "landing_ar.html")
     return templates.TemplateResponse(request, "landing.html")
 
 @app.get("/dashboard", response_class=HTMLResponse)

@@ -1,0 +1,382 @@
+{% extends "base.html" %}
+{% block title %}معاً — ترجمة لغة الإشارة{% endblock %}
+{% block main_style %}padding-top: 0;{% endblock %}
+
+{% block head %}
+<link rel="stylesheet" href="/static/css/theme.css?v=ds1">
+<link rel="stylesheet" href="/static/css/ui.css?v=ds1">
+<script src="/static/js/theme.js?v=ds1"></script>
+<style>
+  body{background:var(--bg)!important;color:var(--text)!important;font-family:var(--font-arabic)!important;
+    transition:background .5s,color .5s;direction:rtl}
+  #main-content{max-width:100%!important;background:transparent!important;padding-top:0!important}
+  #sf-canvas{position:fixed;inset:0;z-index:-2;pointer-events:none}
+
+  /* ── Ribbon Nav ── */
+  .lp-nav{position:fixed;top:0;inset-inline:0;z-index:100;display:flex;align-items:center;gap:8px;padding:0 32px;height:60px;
+    background:color-mix(in srgb,var(--bg) 72%,transparent);backdrop-filter:blur(18px) saturate(130%);
+    border-bottom:1px solid var(--border);transition:background .4s}
+  .lp-nav-brand{display:flex;align-items:center;text-decoration:none;flex-shrink:0}
+  .lp-nav-brand img{height:42px;width:auto}
+  .lp-nav-brand-fb{display:none;align-items:center;gap:10px;font-family:var(--font-display);font-weight:800;font-size:20px;color:var(--text)}
+  .lp-nav-brand-fb .lp-logo{width:32px;height:32px;border-radius:9px;background:var(--accent);display:grid;place-items:center;color:#fff;font-size:15px;font-weight:800}
+  .lp-nav-end{display:flex;align-items:center;gap:10px;margin-inline-start:auto}
+  .lp-nav-link{padding:7px 13px;border-radius:var(--radius-full);font-size:13.5px;font-weight:600;color:var(--muted);text-decoration:none;transition:color .18s,background .18s}
+  .lp-nav-link:hover{color:var(--text);background:var(--surface)}
+  .lp-btn-en{padding:8px 18px;border-radius:var(--radius-full);font-size:13.5px;font-weight:700;
+    background:var(--accent-soft);color:var(--accent);border:1px solid color-mix(in srgb,var(--accent) 25%,transparent);
+    text-decoration:none;transition:background .18s}
+  .lp-btn-en:hover{background:color-mix(in srgb,var(--accent) 18%,transparent)}
+  .lp-btn-login{padding:8px 18px;border-radius:var(--radius-full);font-size:13.5px;font-weight:700;
+    background:var(--accent);color:#fff;text-decoration:none;transition:opacity .18s}
+  .lp-btn-login:hover{opacity:.88}
+  .t-toggle{display:flex;border-radius:var(--radius-full);overflow:hidden;border:1px solid var(--border);background:var(--surface)}
+  .t-toggle button{padding:5px 9px;border:none;background:transparent;color:var(--muted);cursor:pointer;line-height:0;transition:background .15s,color .15s}
+  .t-toggle button svg{width:15px;height:15px}
+  .t-toggle button[aria-pressed="true"]{background:var(--surface-2);color:var(--accent)}
+
+  /* ── Layout ── */
+  .lp{overflow-x:hidden}
+  .lp-section{padding:96px 24px;max-width:1120px;margin-inline:auto}
+
+  /* ── Hero ── */
+  .lp-hero{min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;
+    text-align:center;padding:100px 24px 64px}
+  .lp-kicker{display:inline-flex;align-items:center;gap:9px;padding:7px 16px;border-radius:var(--radius-full);
+    background:var(--accent-soft);color:var(--accent);font-size:12.5px;font-weight:700;letter-spacing:.04em;margin-bottom:28px;
+    font-family:var(--font-arabic)}
+  .lp-title{font-family:var(--font-display);font-size:clamp(44px,7vw,82px);font-weight:800;line-height:1.04;letter-spacing:-.02em;color:var(--text)}
+  .lp-title em{font-style:normal;color:var(--accent)}
+  .lp-sub{font-size:clamp(15px,2vw,19px);color:var(--muted);line-height:1.75;max-width:560px;margin:22px auto 0;
+    font-family:var(--font-arabic)}
+  .lp-entries{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-top:46px;width:100%;max-width:700px}
+  .lp-card{display:flex;flex-direction:column;align-items:flex-end;gap:6px;padding:26px;border-radius:var(--radius-lg);
+    background:color-mix(in srgb,var(--surface) 78%,transparent);border:1px solid var(--border);
+    box-shadow:var(--shadow);text-align:end;text-decoration:none;backdrop-filter:blur(16px) saturate(120%);
+    transition:transform var(--transition),border-color var(--transition),box-shadow var(--transition);
+    font-family:var(--font-arabic)}
+  .lp-card:hover{transform:translateY(-4px);border-color:var(--accent);box-shadow:var(--shadow-lg)}
+  .lp-card .lp-flag{font-size:12px;font-weight:700;letter-spacing:.04em;color:var(--accent)}
+  .lp-card h2{font-family:var(--font-display);font-size:28px;font-weight:800;color:var(--text)}
+  .lp-card p{font-size:13.5px;color:var(--muted);line-height:1.6}
+  .lp-card .lp-go{display:inline-flex;align-items:center;gap:7px;margin-top:16px;font-size:13px;font-weight:700;color:var(--accent)}
+  .lp-card .lp-go svg{width:16px;height:16px}
+  .lp-chips{display:flex;flex-wrap:wrap;justify-content:center;gap:20px;margin-top:38px;font-size:12.5px;color:var(--faint);font-weight:600;font-family:var(--font-arabic)}
+  .lp-chips span{display:inline-flex;align-items:center;gap:7px}
+  .lp-chips svg{width:16px;height:16px;color:var(--accent)}
+
+  /* ── Marquee ── */
+  @keyframes t-marq{to{transform:translateX(-33.33%)}}
+  .t-marquee{overflow:hidden;border-top:1px solid var(--border);border-bottom:1px solid var(--border);
+    background:color-mix(in srgb,var(--surface) 70%,transparent);backdrop-filter:blur(12px);padding:14px 0;user-select:none}
+  .t-marquee-track{display:flex;width:max-content;animation:t-marq 26s linear infinite}
+  .t-marquee-track:hover{animation-play-state:paused}
+  .t-marquee-item{display:inline-flex;align-items:center;gap:10px;padding:0 28px;
+    font-family:var(--font-mono);font-size:11.5px;font-weight:600;letter-spacing:.18em;
+    text-transform:uppercase;color:var(--muted);white-space:nowrap}
+  .t-marquee-item .t-marq-dot{width:5px;height:5px;border-radius:50%;background:var(--accent);flex-shrink:0}
+
+  /* ── Eyebrow ── */
+  .sec-eyebrow{font-family:var(--font-mono);font-size:12px;font-weight:500;letter-spacing:.22em;
+    text-transform:uppercase;color:var(--muted);margin-bottom:16px;display:flex;align-items:center;gap:8px;
+    direction:ltr;text-align:start}
+  .sec-eyebrow::before{content:"";display:block;width:28px;height:1px;background:var(--muted);flex-shrink:0}
+  .sec-title{font-family:var(--font-display);font-size:clamp(32px,5vw,52px);font-weight:800;line-height:1.1;letter-spacing:-.02em;color:var(--text)}
+  .sec-sub{font-size:clamp(15px,1.8vw,18px);color:var(--muted);line-height:1.7;max-width:560px;margin-top:14px;font-family:var(--font-arabic)}
+
+  /* ── Features ── */
+  .feat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:22px;margin-top:54px}
+  .feat-card{padding:28px;border-radius:var(--radius-lg);background:color-mix(in srgb,var(--surface) 80%,transparent);
+    border:1px solid var(--border);backdrop-filter:blur(12px);transition:border-color .2s,transform .2s}
+  .feat-card:hover{border-color:var(--accent);transform:translateY(-3px)}
+  .feat-icon{width:44px;height:44px;border-radius:var(--radius);background:var(--accent-soft);display:grid;place-items:center;color:var(--accent);margin-bottom:18px}
+  .feat-icon svg{width:22px;height:22px}
+  .feat-name{font-size:16px;font-weight:700;color:var(--text);margin-bottom:8px}
+  .feat-name-ar{font-family:var(--font-arabic);font-size:14px;color:var(--muted);margin-bottom:6px}
+  .feat-desc{font-size:13.5px;color:var(--muted);line-height:1.7;font-family:var(--font-arabic)}
+  .feat-badge{display:inline-block;margin-top:14px;padding:3px 10px;border-radius:var(--radius-full);font-size:11px;font-weight:700;letter-spacing:.04em;background:var(--accent-soft);color:var(--accent);direction:ltr}
+
+  /* ── Stats ink panel ── */
+  .stats-panel{background:#080808;border-radius:var(--radius-2xl);padding:64px 52px;position:relative;overflow:hidden}
+  .stats-panel::before{content:"";position:absolute;inset:-40%;background:radial-gradient(ellipse at 60% 50%,rgba(31,138,130,.12),transparent 65%);pointer-events:none}
+  .stats-panel-head{margin-bottom:52px;position:relative}
+  .stats-panel-eyebrow{font-family:var(--font-mono);font-size:11.5px;letter-spacing:.2em;text-transform:uppercase;color:rgba(255,255,255,.4);margin-bottom:14px;display:flex;align-items:center;gap:8px;direction:ltr}
+  .stats-panel-eyebrow::before{content:"";display:block;width:24px;height:1px;background:rgba(255,255,255,.25)}
+  .stats-panel-title{font-family:var(--font-display);font-size:clamp(28px,4vw,44px);font-weight:800;line-height:1.05;letter-spacing:-.04em;color:#f4f4f1}
+  .stats-band{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:2px;position:relative}
+  .stat-cell{padding:32px 28px}
+  .stat-num{font-family:var(--font-display);font-size:clamp(36px,5vw,56px);font-weight:800;color:#1f8a82;line-height:.9;letter-spacing:-.04em}
+  .stat-label{font-size:13px;color:rgba(255,255,255,.5);margin-top:10px;font-weight:500;line-height:1.4;font-family:var(--font-arabic)}
+
+  /* ── How it works ── */
+  .hiw-wrap{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:0;margin-top:54px;position:relative}
+  .hiw-wrap::before{content:"";position:absolute;top:28px;inset-inline:60px;height:1px;background:linear-gradient(90deg,transparent,var(--border) 20%,var(--border) 80%,transparent);pointer-events:none}
+  .hiw-step{display:flex;flex-direction:column;align-items:center;text-align:center;padding:0 18px;position:relative}
+  .hiw-num{width:56px;height:56px;border-radius:50%;background:var(--accent);color:#fff;display:grid;place-items:center;
+    font-family:var(--font-display);font-size:22px;font-weight:800;margin-bottom:20px;position:relative;z-index:1;
+    box-shadow:0 0 0 6px var(--accent-soft)}
+  .hiw-label{font-size:15px;font-weight:700;color:var(--text);margin-bottom:8px;font-family:var(--font-arabic)}
+  .hiw-text{font-size:13px;color:var(--muted);line-height:1.7;font-family:var(--font-arabic)}
+
+  /* ── CTA ── */
+  .cta-band{background:linear-gradient(135deg,var(--accent),color-mix(in srgb,var(--accent) 60%,#1a5c58));
+    border-radius:var(--radius-xl);padding:56px 40px;text-align:center;position:relative;overflow:hidden}
+  .cta-band::before{content:"";position:absolute;inset:-30%;background:radial-gradient(circle at 60% 40%,rgba(255,255,255,.07),transparent 60%);pointer-events:none}
+  .cta-title{font-family:var(--font-display);font-size:clamp(26px,4vw,42px);font-weight:800;color:#fff;line-height:1.1}
+  .cta-sub{font-size:16px;color:rgba(255,255,255,.8);margin:14px auto 0;max-width:480px;line-height:1.7;font-family:var(--font-arabic)}
+  .cta-actions{display:flex;align-items:center;justify-content:center;gap:14px;margin-top:30px;flex-wrap:wrap}
+  .cta-btn-pri{padding:13px 28px;border-radius:var(--radius-full);font-size:15px;font-weight:700;background:#fff;color:var(--accent);text-decoration:none;transition:opacity .18s;font-family:var(--font-arabic)}
+  .cta-btn-pri:hover{opacity:.9}
+  .cta-btn-sec{padding:13px 28px;border-radius:var(--radius-full);font-size:15px;font-weight:700;background:rgba(255,255,255,.12);color:#fff;text-decoration:none;border:1px solid rgba(255,255,255,.25);transition:background .18s;font-family:var(--font-arabic)}
+  .cta-btn-sec:hover{background:rgba(255,255,255,.2)}
+
+  /* ── Footer ── */
+  .lp-footer{background:color-mix(in srgb,var(--surface) 88%,transparent);backdrop-filter:blur(16px);border-top:1px solid var(--border);padding:56px 32px 32px}
+  .lp-footer-inner{max-width:1120px;margin-inline:auto;display:grid;grid-template-columns:2fr 1fr 1fr;gap:40px}
+  .lp-footer-brand img{height:44px;width:auto;margin-bottom:14px;display:block}
+  .lp-footer-tagline{font-size:13.5px;color:var(--muted);line-height:1.7;max-width:240px;font-family:var(--font-arabic)}
+  .lp-footer-address{font-size:12.5px;color:var(--faint);margin-top:16px;line-height:1.7;font-family:var(--font-arabic)}
+  .lp-footer-col h4{font-size:12px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--accent);margin-bottom:14px;font-family:var(--font-arabic)}
+  .lp-footer-col a{display:block;font-size:13.5px;color:var(--muted);text-decoration:none;margin-bottom:9px;transition:color .15s;font-family:var(--font-arabic)}
+  .lp-footer-col a:hover{color:var(--text)}
+  .lp-footer-bottom{max-width:1120px;margin:40px auto 0;padding-top:20px;border-top:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px}
+  .lp-footer-copy{font-size:12.5px;color:var(--faint);font-family:var(--font-arabic)}
+
+  @media(max-width:600px){
+    .lp-entries{grid-template-columns:1fr}
+    .lp-footer-inner{grid-template-columns:1fr}
+    .hiw-wrap::before{display:none}
+  }
+</style>
+{% endblock %}
+
+{% block nav %}
+<nav class="lp-nav" role="navigation" aria-label="التنقل الرئيسي" dir="rtl">
+  <a href="/" class="lp-nav-brand" aria-label="معاً — الرئيسية">
+    <img src="/static/img/logo-together.svg" alt="معاً" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">
+    <span class="lp-nav-brand-fb"><span class="lp-logo">م</span>معاً</span>
+  </a>
+
+  <div class="lp-nav-end">
+    <a href="/?lang=en" class="lp-btn-en">English</a>
+    <a href="/login" class="lp-btn-login">تسجيل الدخول</a>
+    <div class="t-toggle" role="group" aria-label="لون السمة">
+      <button type="button" data-theme-set="light" aria-pressed="false" aria-label="السمة الفاتحة">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4 12H2M22 12h-2M5 5l1.4 1.4M17.6 17.6 19 19M19 5l-1.4 1.4M6.4 17.6 5 19"/></svg>
+      </button>
+      <button type="button" data-theme-set="dark" aria-pressed="true" aria-label="السمة الداكنة">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A8 8 0 1 1 11.2 3 6.2 6.2 0 0 0 21 12.8Z"/></svg>
+      </button>
+    </div>
+  </div>
+</nav>
+{% endblock %}
+
+{% block content %}
+<canvas id="sf-canvas" aria-hidden="true"></canvas>
+<div class="lp" dir="rtl" lang="ar">
+
+  <!-- Hero -->
+  <section class="lp-hero">
+    <div class="lp-kicker">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M3.6 9h16.8M3.6 15h16.8M11.5 3a17 17 0 0 0 0 18M12.5 3a17 17 0 0 1 0 18"/></svg>
+      · مبني للمحادثات العربية
+    </div>
+    <h1 class="lp-title">أشِر، تكلّم، اقرأ —<br><em>معاً.</em></h1>
+    <p class="lp-sub">يترجم Together لغة الإشارة الأمريكية والمصرية إلى نص وكلام — والعكس — مباشرةً في متصفحك. بلا تثبيت.</p>
+
+    <div class="lp-entries">
+      <a href="/dashboard?lang=ar" class="lp-card">
+        <span class="lp-flag">العربية · لغة الإشارة</span>
+        <h2>معاً</h2>
+        <p>ترجمة فورية للغة الإشارة المصرية.</p>
+        <span class="lp-go">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M12 5l-7 7 7 7"/></svg>
+          لوحة التحكم
+        </span>
+      </a>
+      <a href="/dashboard?lang=en" class="lp-card">
+        <span class="lp-flag">English · ASL</span>
+        <h2>Together</h2>
+        <p>Real-time American Sign Language translation.</p>
+        <span class="lp-go">Open dashboard
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+        </span>
+      </a>
+    </div>
+
+    <div class="lp-chips">
+      <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>بلا تثبيت</span>
+      <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3C8 5 4 5.5 4 5.5v6c0 5 3.5 8 8 9 4.5-1 8-4 8-9v-6S16 5 12 3Z"/></svg>خصوصية كاملة</span>
+      <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M3.6 9h16.8M3.6 15h16.8M11.5 3a17 17 0 0 0 0 18M12.5 3a17 17 0 0 1 0 18"/></svg>واجهة ثنائية اللغة</span>
+      <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>ذكاء اصطناعي في المتصفح</span>
+    </div>
+  </section>
+
+  <!-- Marquee -->
+  <div class="t-marquee" aria-hidden="true">
+    <div class="t-marquee-track">
+      {% for _ in range(3) %}
+        <span class="t-marquee-item"><span class="t-marq-dot"></span>إشارة → نص</span>
+        <span class="t-marquee-item"><span class="t-marq-dot"></span>إشارة → كلام</span>
+        <span class="t-marquee-item"><span class="t-marq-dot"></span>كلام → إشارة</span>
+        <span class="t-marquee-item"><span class="t-marq-dot"></span>نص → إشارة</span>
+        <span class="t-marquee-item"><span class="t-marq-dot"></span>SIGN → TEXT</span>
+        <span class="t-marquee-item"><span class="t-marq-dot"></span>LIVE MEETINGS</span>
+        <span class="t-marquee-item"><span class="t-marq-dot"></span>ASL · ArSL</span>
+        <span class="t-marquee-item"><span class="t-marq-dot"></span>اجتماعات مباشرة</span>
+      {% endfor %}
+    </div>
+  </div>
+
+  <!-- Features -->
+  <section class="lp-section" id="features">
+    <p class="sec-eyebrow">( 01 ) — منتجاتنا</p>
+    <h2 class="sec-title">أربعة جسور.<br>منصة واحدة.</h2>
+    <p class="sec-sub">كل اتجاهات التواصل بلغة الإشارة — مغطاة، في الوقت الفعلي، بذكاء اصطناعي على الجهاز لا يغادر متصفحك.</p>
+    <div class="feat-grid">
+      <div class="feat-card">
+        <div class="feat-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg></div>
+        <div class="feat-name">HandScript</div>
+        <div class="feat-name-ar">يدك تصبح كلمات</div>
+        <p class="feat-desc">تعرّف فوري على لغة الإشارة بأكثر من 250 إشارة، يظهر النص أمامك أثناء توقيعك.</p>
+        <span class="feat-badge">إشارة → نص</span>
+      </div>
+      <div class="feat-card">
+        <div class="feat-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2M12 19v4M8 23h8"/></svg></div>
+        <div class="feat-name">VoiceBridge</div>
+        <div class="feat-name-ar">جسر الصوت</div>
+        <p class="feat-desc">تحويل الإشارات إلى كلام طبيعي في الوقت الفعلي. مثالي للتواصل المباشر مع السامعين.</p>
+        <span class="feat-badge">إشارة → كلام</span>
+      </div>
+      <div class="feat-card">
+        <div class="feat-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></div>
+        <div class="feat-name">SignType</div>
+        <div class="feat-name-ar">اكتب فأُشير</div>
+        <p class="feat-desc">اكتب أي نص وشاهد أفاتار متحركاً يؤديه بلغة الإشارة الأمريكية أو المصرية بسلاسة.</p>
+        <span class="feat-badge">نص → إشارة</span>
+      </div>
+      <div class="feat-card">
+        <div class="feat-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M4.93 4.93a10 10 0 0 0 0 14.14"/></svg></div>
+        <div class="feat-name">TalkSide</div>
+        <div class="feat-name-ar">تحدّث فأُشير</div>
+        <p class="feat-desc">تحدّث في أي ميكروفون وسيُنشئ النظام ردّاً مرئياً بالإشارة. مثالي لنقاط الوصول.</p>
+        <span class="feat-badge">كلام → إشارة</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- Stats -->
+  <div class="lp-section" style="padding-top:0">
+    <div class="stats-panel">
+      <div class="stats-panel-head">
+        <div class="stats-panel-eyebrow">( 02 ) — By the numbers</div>
+        <h2 class="stats-panel-title">دقيق في<br>كلتا اللغتين.</h2>
+      </div>
+      <div class="stats-band">
+        <div class="stat-cell"><div class="stat-num">250</div><div class="stat-label">فئة إشارة أمريكية</div></div>
+        <div class="stat-cell"><div class="stat-num">20</div><div class="stat-label">فئة إشارة عربية</div></div>
+        <div class="stat-cell"><div class="stat-num">&lt;50ms</div><div class="stat-label">متوسط وقت الاستجابة</div></div>
+        <div class="stat-cell"><div class="stat-num">100%</div><div class="stat-label">خصوصية كاملة على الجهاز</div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- How it works -->
+  <section class="lp-section" id="how-it-works">
+    <p class="sec-eyebrow">( 03 ) — كيف يعمل</p>
+    <h2 class="sec-title">من يديك إلى المعنى<br>في أربع خطوات.</h2>
+    <div class="hiw-wrap">
+      <div class="hiw-step">
+        <div class="hiw-num">١</div>
+        <div class="hiw-label">افتح المتصفح</div>
+        <p class="hiw-text">بلا تنزيل. بلا حساب للعرض التجريبي. فقط افتح Together في أي متصفح حديث.</p>
+      </div>
+      <div class="hiw-step">
+        <div class="hiw-num">٢</div>
+        <div class="hiw-label">اسمح بالكاميرا</div>
+        <p class="hiw-text">امنح الإذن بالكاميرا. MediaPipe يرسم خريطة يديك ووجهك محلياً، دون رفع أي بيانات.</p>
+      </div>
+      <div class="hiw-step">
+        <div class="hiw-num">٣</div>
+        <div class="hiw-label">ابدأ الإشارة</div>
+        <p class="hiw-text">يصنّف الذكاء الاصطناعي كل إشارة في أقل من 50 مللي ثانية. التنبؤات تظهر نصاً وكلاماً.</p>
+      </div>
+      <div class="hiw-step">
+        <div class="hiw-num">٤</div>
+        <div class="hiw-label">تواصل وشارك</div>
+        <p class="hiw-text">انضم إلى جلسة مباشرة. تظهر الترجمة الفورية لجميع المشاركين.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- CTA -->
+  <div class="lp-section" style="padding-top:0;padding-bottom:96px">
+    <div class="cta-band">
+      <h2 class="cta-title">هل أنت مستعد لعبور الفجوة؟</h2>
+      <p class="cta-sub">ابدأ الترجمة في ثوانٍ — بلا تثبيت، بلا تسجيل للتجربة. الميزات الكاملة مع حساب مجاني.</p>
+      <div class="cta-actions">
+        <a href="/dashboard?lang=ar" class="cta-btn-pri">جرّب معاً مجاناً</a>
+        <a href="/demo" class="cta-btn-sec">احجز عرضاً</a>
+      </div>
+    </div>
+  </div>
+
+  <!-- Footer -->
+  <footer class="lp-footer">
+    <div class="lp-footer-inner">
+      <div class="lp-footer-brand">
+        <img src="/static/img/logo-together.svg" alt="معاً" onerror="this.style.display='none'">
+        <p class="lp-footer-tagline">ترجمة لغة الإشارة بالذكاء الاصطناعي لمجتمع الصم وضعاف السمع. عالم واحد، كل لغة.</p>
+        <p class="lp-footer-address">Together Technologies<br>القاهرة، مصر · الإسكندرية<br>hello@together.app</p>
+      </div>
+      <div class="lp-footer-col">
+        <h4>المنتجات</h4>
+        <a href="/products/handscript">HandScript</a>
+        <a href="/products/voicebridge">VoiceBridge</a>
+        <a href="/products/signtype">SignType</a>
+        <a href="/products/talkside">TalkSide</a>
+      </div>
+      <div class="lp-footer-col">
+        <h4>القائمة</h4>
+        <a href="/resources">الموارد</a>
+        <a href="/about">عن المنصة</a>
+        <a href="/demo">احجز عرضاً</a>
+        <a href="/login">تسجيل الدخول</a>
+        <a href="/">English</a>
+      </div>
+    </div>
+    <div class="lp-footer-bottom">
+      <span class="lp-footer-copy">© 2026 Together Technologies. جميع الحقوق محفوظة.</span>
+      <span class="lp-footer-copy">مبني لمجتمع الصم وضعاف السمع حول العالم.</span>
+    </div>
+  </footer>
+</div>
+
+<script>
+(function(){
+  var c=document.getElementById('sf-canvas');
+  if(!c)return;
+  var ctx=c.getContext('2d'),rm=matchMedia('(prefers-reduced-motion:reduce)');
+  var W,H,dots=[],mx=0,my=0,raf=0;
+  var N=60,DIST=140,REPEL=90,SPEED=0.35;
+  function resize(){W=c.width=innerWidth;H=c.height=innerHeight}
+  function mkDot(){return{x:Math.random()*W,y:Math.random()*H,vx:(Math.random()-.5)*SPEED,vy:(Math.random()-.5)*SPEED,col:Math.random()<.65?'#1f8a82':'#e2b483',r:Math.random()*1.4+1}}
+  function init(){resize();dots=[];for(var i=0;i<N;i++)dots.push(mkDot())}
+  function draw(){
+    ctx.clearRect(0,0,W,H);
+    for(var i=0;i<dots.length;i++){var d=dots[i];var dx=d.x-mx,dy=d.y-my,ds=dx*dx+dy*dy;if(ds<REPEL*REPEL&&ds>0){var f=(REPEL*REPEL-ds)/(REPEL*REPEL)*.9;d.vx+=dx/Math.sqrt(ds)*f*.04;d.vy+=dy/Math.sqrt(ds)*f*.04}d.vx*=.99;d.vy*=.99;d.x+=d.vx;d.y+=d.vy;if(d.x<0||d.x>W)d.vx*=-1;if(d.y<0||d.y>H)d.vy*=-1}
+    for(var i=0;i<dots.length;i++)for(var j=i+1;j<dots.length;j++){var dx=dots[i].x-dots[j].x,dy=dots[i].y-dots[j].y,d2=Math.sqrt(dx*dx+dy*dy);if(d2<DIST){ctx.strokeStyle='rgba(31,138,130,'+(1-d2/DIST)*.28+')';ctx.lineWidth=.8;ctx.beginPath();ctx.moveTo(dots[i].x,dots[i].y);ctx.lineTo(dots[j].x,dots[j].y);ctx.stroke()}}
+    for(var i=0;i<dots.length;i++){var d=dots[i];ctx.fillStyle=d.col+(document.documentElement.getAttribute('data-theme')==='light'?'99':'cc');ctx.beginPath();ctx.arc(d.x,d.y,d.r,0,Math.PI*2);ctx.fill()}
+    if(!document.hidden&&!rm.matches)raf=requestAnimationFrame(draw);
+  }
+  function start(){if(!raf&&!document.hidden&&!rm.matches)raf=requestAnimationFrame(draw)}
+  function stop(){if(raf){cancelAnimationFrame(raf);raf=0}}
+  addEventListener('resize',function(){resize()});
+  addEventListener('pointermove',function(e){mx=e.clientX;my=e.clientY},{passive:true});
+  document.addEventListener('visibilitychange',function(){document.hidden?stop():start()});
+  rm.addEventListener('change',function(){rm.matches?stop():start()});
+  init();start();
+})();
+</script>
+{% endblock %}

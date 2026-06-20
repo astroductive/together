@@ -80,7 +80,24 @@
   .lp-chips span{display:inline-flex;align-items:center;gap:7px}
   .lp-chips svg{width:16px;height:16px;color:var(--accent)}
 
-  /* ── Section headings ── */
+  /* ── Marquee ── */
+  @keyframes t-marq{to{transform:translateX(-33.33%)}}
+  .t-marquee{overflow:hidden;border-top:1px solid var(--border);border-bottom:1px solid var(--border);
+    background:color-mix(in srgb,var(--surface) 70%,transparent);backdrop-filter:blur(12px);
+    padding:14px 0;user-select:none}
+  .t-marquee-track{display:flex;width:max-content;animation:t-marq 26s linear infinite}
+  .t-marquee-track:hover{animation-play-state:paused}
+  .t-marquee--rev .t-marquee-track{animation-direction:reverse}
+  .t-marquee-item{display:inline-flex;align-items:center;gap:10px;padding:0 28px;
+    font-family:var(--font-mono);font-size:11.5px;font-weight:600;letter-spacing:.18em;
+    text-transform:uppercase;color:var(--muted);white-space:nowrap}
+  .t-marquee-item .t-marq-dot{width:5px;height:5px;border-radius:50%;background:var(--accent);flex-shrink:0}
+
+  /* ── Section headings (DS eyebrow motif) ── */
+  .sec-eyebrow{font-family:var(--font-mono);font-size:12px;font-weight:500;letter-spacing:.22em;
+    text-transform:uppercase;color:var(--muted);margin-bottom:16px;display:flex;align-items:center;gap:8px}
+  .sec-eyebrow::before{content:"";display:block;width:28px;height:1px;background:var(--muted);flex-shrink:0}
+  /* keep legacy .sec-label for compat */
   .sec-label{font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--accent);margin-bottom:10px}
   .sec-title{font-family:var(--font-display);font-size:clamp(32px,5vw,52px);font-weight:800;line-height:1.08;letter-spacing:-.025em;color:var(--text)}
   .sec-sub{font-size:clamp(15px,1.8vw,18px);color:var(--muted);line-height:1.65;max-width:560px;margin-top:14px}
@@ -96,11 +113,18 @@
   .feat-desc{font-size:13.5px;color:var(--muted);line-height:1.6}
   .feat-badge{display:inline-block;margin-top:14px;padding:3px 10px;border-radius:var(--radius-full);font-size:11px;font-weight:700;letter-spacing:.04em;background:var(--accent-soft);color:var(--accent)}
 
-  /* ── Stats ── */
-  .stats-band{background:linear-gradient(135deg,color-mix(in srgb,var(--accent) 10%,var(--surface)),color-mix(in srgb,#e2b483 6%,var(--surface)));
-    border:1px solid var(--border);border-radius:var(--radius-xl);padding:48px 40px;display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:32px;text-align:center}
-  .stat-num{font-family:var(--font-display);font-size:42px;font-weight:800;color:var(--accent)}
-  .stat-label{font-size:13.5px;color:var(--muted);margin-top:6px;font-weight:600}
+  /* ── Stats (ink panel) ── */
+  .stats-panel{background:#080808;border-radius:var(--radius-2xl);padding:64px 52px;position:relative;overflow:hidden}
+  .stats-panel::before{content:"";position:absolute;inset:-40%;background:radial-gradient(ellipse at 60% 50%,rgba(31,138,130,.12),transparent 65%);pointer-events:none}
+  .stats-panel-head{margin-bottom:52px;position:relative}
+  .stats-panel-eyebrow{font-family:var(--font-mono);font-size:11.5px;letter-spacing:.2em;text-transform:uppercase;color:rgba(255,255,255,.4);margin-bottom:14px;display:flex;align-items:center;gap:8px}
+  .stats-panel-eyebrow::before{content:"";display:block;width:24px;height:1px;background:rgba(255,255,255,.25)}
+  .stats-panel-title{font-family:var(--font-display);font-size:clamp(28px,4vw,44px);font-weight:800;line-height:1.05;letter-spacing:-.04em;color:#f4f4f1}
+  .stats-band{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:2px;position:relative}
+  .stats-band::before{content:"";position:absolute;inset:0;background:rgba(255,255,255,.04);border-radius:var(--radius-lg);pointer-events:none}
+  .stat-cell{padding:32px 28px;border-radius:var(--radius-lg);position:relative}
+  .stat-num{font-family:var(--font-display);font-size:clamp(36px,5vw,56px);font-weight:800;color:#1f8a82;line-height:.9;letter-spacing:-.04em}
+  .stat-label{font-size:13px;color:rgba(255,255,255,.5);margin-top:10px;font-weight:500;line-height:1.4}
 
   /* ── How it works ── */
   .hiw-wrap{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:0;margin-top:54px;position:relative}
@@ -239,6 +263,7 @@
   </div>
 
   <div class="lp-nav-end">
+    <a href="/?lang=ar" class="lp-nav-link" lang="ar" dir="rtl">العربية</a>
     <a href="/demo" class="lp-btn-demo">Book a Demo</a>
     <a href="/login" class="lp-btn-login">Together Login</a>
     <span class="lp-nav-sep" aria-hidden="true"></span>
@@ -261,10 +286,10 @@
   <!-- Hero -->
   <section class="lp-hero">
     <div class="lp-kicker">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
-      Real-time · ASL &amp; ArSL · Offline-ready
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M3.6 9h16.8M3.6 15h16.8M11.5 3a17 17 0 0 0 0 18M12.5 3a17 17 0 0 1 0 18"/></svg>
+      · Built for Arabic conversations
     </div>
-    <h1 class="lp-title">Sign language,<br><em>bridged in real time</em></h1>
+    <h1 class="lp-title">Sign, speak, read —<br><em>together.</em></h1>
     <p class="lp-sub">Together translates ASL and Egyptian ArSL to text and speech — and back again — live, right in your browser. No install needed.</p>
 
     <div class="lp-entries">
@@ -295,9 +320,25 @@
     </div>
   </section>
 
+  <!-- Marquee -->
+  <div class="t-marquee" aria-hidden="true">
+    <div class="t-marquee-track">
+      {% for _ in range(3) %}
+        <span class="t-marquee-item"><span class="t-marq-dot"></span>SIGN → TEXT</span>
+        <span class="t-marquee-item"><span class="t-marq-dot"></span>SIGN → SPEECH</span>
+        <span class="t-marquee-item"><span class="t-marq-dot"></span>SPEECH → SIGN</span>
+        <span class="t-marquee-item"><span class="t-marq-dot"></span>TEXT → SIGN</span>
+        <span class="t-marquee-item"><span class="t-marq-dot"></span>LIVE MEETINGS</span>
+        <span class="t-marquee-item"><span class="t-marq-dot"></span>العربية</span>
+        <span class="t-marquee-item"><span class="t-marq-dot"></span>لغة الإشارة</span>
+        <span class="t-marquee-item"><span class="t-marq-dot"></span>ASL · ArSL</span>
+      {% endfor %}
+    </div>
+  </div>
+
   <!-- Features -->
   <section class="lp-section" id="features">
-    <p class="sec-label">Our Products</p>
+    <p class="sec-eyebrow">( 01 ) — Our Products</p>
     <h2 class="sec-title">Four bridges.<br>One platform.</h2>
     <p class="sec-sub">Every direction of sign language communication — covered, in real time, with on-device AI that never leaves your browser.</p>
     <div class="feat-grid">
@@ -330,17 +371,23 @@
 
   <!-- Stats -->
   <div class="lp-section" style="padding-top:0">
-    <div class="stats-band">
-      <div><div class="stat-num">250</div><div class="stat-label">ASL sign classes</div></div>
-      <div><div class="stat-num">20</div><div class="stat-label">ArSL sign classes</div></div>
-      <div><div class="stat-num">&lt;50ms</div><div class="stat-label">Avg. inference latency</div></div>
-      <div><div class="stat-num">100%</div><div class="stat-label">On-device privacy</div></div>
+    <div class="stats-panel">
+      <div class="stats-panel-head">
+        <div class="stats-panel-eyebrow">( 02 ) — By the numbers</div>
+        <h2 class="stats-panel-title">Accurate in<br>both languages.</h2>
+      </div>
+      <div class="stats-band">
+        <div class="stat-cell"><div class="stat-num">250</div><div class="stat-label">ASL sign classes recognized</div></div>
+        <div class="stat-cell"><div class="stat-num">20</div><div class="stat-label">ArSL sign classes</div></div>
+        <div class="stat-cell"><div class="stat-num">&lt;50ms</div><div class="stat-label">Avg. inference latency</div></div>
+        <div class="stat-cell"><div class="stat-num">100%</div><div class="stat-label">On-device privacy</div></div>
+      </div>
     </div>
   </div>
 
   <!-- How it works -->
   <section class="lp-section" id="how-it-works">
-    <p class="sec-label">How It Works</p>
+    <p class="sec-eyebrow">( 03 ) — How It Works</p>
     <h2 class="sec-title">From hands to meaning<br>in four steps.</h2>
     <div class="hiw-wrap">
       <div class="hiw-step">
@@ -368,7 +415,7 @@
 
   <!-- Testimonials -->
   <section class="lp-section" id="testimonials">
-    <p class="sec-label">Customer Experiences</p>
+    <p class="sec-eyebrow">( 04 ) — Community</p>
     <h2 class="sec-title">Voices from<br>our community.</h2>
     <div class="test-grid">
       <div class="test-card">
@@ -400,7 +447,7 @@
 
   <!-- FAQ -->
   <section class="lp-section" id="faq">
-    <p class="sec-label">FAQ</p>
+    <p class="sec-eyebrow">( 05 ) — FAQ</p>
     <h2 class="sec-title">Common questions.</h2>
     <div class="faq-list">
       <details class="faq-item">
@@ -448,7 +495,7 @@
       <div class="lp-footer-brand">
         <img src="/static/img/logo-together.svg" alt="Together" onerror="this.style.display='none'">
         <p class="lp-footer-tagline">AI-powered sign language translation for the Deaf and Hard-of-Hearing community. One world, every language.</p>
-        <p class="lp-footer-address">Together Technologies<br>123 Innovation Drive, Suite 400<br>San Francisco, CA 94107<br>hello@together.app</p>
+        <p class="lp-footer-address">Together Technologies<br>Cairo, Egypt · Alexandria<br>hello@together.app</p>
       </div>
       <div class="lp-footer-col">
         <h4>Products</h4>
