@@ -508,6 +508,13 @@ html[data-theme="light"] .d-blob{opacity:calc(.38*var(--intensity)+.04)}
               </div>
               <button class="t-btn t-btn--accent" id="mic-btn" onclick="toggleMic()">بدء الاستماع</button>
             </div>
+            <div style="display:flex;align-items:center;gap:8px;margin:0 0 10px">
+              <select id="mic-device-select" class="d-lang-sel" style="flex:1;min-width:0" title="اختر الميكروفون"></select>
+              <button class="t-btn t-btn--ghost" onclick="populateMicDevices()" title="تحديث قائمة الميكروفونات" style="padding:6px 11px">↻</button>
+            </div>
+            <div title="مستوى إدخال الميكروفون — يتحرك الشريط عند التحدث" style="height:9px;background:var(--gray-200);border-radius:5px;overflow:hidden;margin:0 0 14px">
+              <div id="mic-level-bar" style="height:100%;width:0%;background:#22c55e;border-radius:5px;transition:width .05s linear"></div>
+            </div>
             <div class="d-mic-state" id="mic-state">
               <div class="d-mic-icon" id="mic-icon">🎙️</div>
               <div class="d-mic-status" id="mic-status">انقر على «بدء الاستماع» للبدء</div>
@@ -1165,7 +1172,11 @@ html[data-theme="light"] .d-blob{opacity:calc(.38*var(--intensity)+.04)}
     if (cameraOn) stopCamera();
     if (s2spCameraOn) stopS2SpCamera();
     if (meetingCamOn) stopMeetingCamera();
+    if (micOn) stopMic();
     resetInferenceState();
+
+    // Pre-load the microphone picker when entering Speech-to-Sign.
+    if (key === 'speech2sign') { try { populateMicDevices(); } catch (_) {} }
 
     const prev = moduleMap[currentModule];
     const next = moduleMap[key];
@@ -2088,6 +2099,75 @@ html[data-theme="light"] .d-blob{opacity:calc(.38*var(--intensity)+.04)}
   let mediaRecorder = null;
   let audioChunks = [];
 
+  // ── Microphone input level meter (Web Audio) ──────────────────
+  let micAudioCtx = null, micAnalyser = null, micLevelRAF = null;
+
+  function startMicLevelMeter(stream) {
+    try {
+      micAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      const src = micAudioCtx.createMediaStreamSource(stream);
+      micAnalyser = micAudioCtx.createAnalyser();
+      micAnalyser.fftSize = 512;
+      src.connect(micAnalyser);
+      const data = new Uint8Array(micAnalyser.frequencyBinCount);
+      const bar = document.getElementById('mic-level-bar');
+      const tick = () => {
+        if (!micAnalyser) return;
+        micAnalyser.getByteTimeDomainData(data);
+        let peak = 0;
+        for (let i = 0; i < data.length; i++) {
+          const v = Math.abs(data[i] - 128);
+          if (v > peak) peak = v;
+        }
+        const pct = Math.min(100, Math.round((peak / 128) * 100 * 2.2));
+        if (bar) bar.style.width = pct + '%';
+        micLevelRAF = requestAnimationFrame(tick);
+      };
+      tick();
+    } catch (e) {
+      console.warn('[STT] level meter unavailable:', e);
+    }
+  }
+
+  function stopMicLevelMeter() {
+    if (micLevelRAF) cancelAnimationFrame(micLevelRAF);
+    micLevelRAF = null;
+    micAnalyser = null;
+    if (micAudioCtx) { try { micAudioCtx.close(); } catch (_) {} micAudioCtx = null; }
+    const bar = document.getElementById('mic-level-bar');
+    if (bar) bar.style.width = '0%';
+  }
+
+  // ── Microphone device picker ──────────────────────────────────
+  async function populateMicDevices() {
+    const sel = document.getElementById('mic-device-select');
+    if (!sel || !navigator.mediaDevices || !navigator.mediaDevices.enumerateDevices) return;
+    try {
+      let devices = await navigator.mediaDevices.enumerateDevices();
+      let mics = devices.filter(d => d.kind === 'audioinput');
+      if (mics.length && !mics[0].label) {
+        try {
+          const s = await navigator.mediaDevices.getUserMedia({ audio: true });
+          s.getTracks().forEach(t => t.stop());
+          devices = await navigator.mediaDevices.enumerateDevices();
+          mics = devices.filter(d => d.kind === 'audioinput');
+        } catch (_) { /* permission not granted yet */ }
+      }
+      const prev = sel.value;
+      sel.innerHTML = '';
+      mics.forEach((m, i) => {
+        const opt = document.createElement('option');
+        opt.value = m.deviceId;
+        opt.textContent = m.label || ('Microphone ' + (i + 1));
+        sel.appendChild(opt);
+      });
+      if (prev && mics.some(m => m.deviceId === prev)) sel.value = prev;
+      console.log('[STT] ' + mics.length + ' microphone(s) available');
+    } catch (e) {
+      console.warn('[STT] enumerateDevices failed:', e);
+    }
+  }
+
   function toggleMic() { micOn ? stopMic() : startMic(); }
 
   async function startMic() {
@@ -2098,32 +2178,33 @@ html[data-theme="light"] .d-blob{opacity:calc(.38*var(--intensity)+.04)}
       alert(mediaCheck.message);
       return;
     }
-
     const langSelect = document.getElementById('s2sp-cam-language-select');
     const selectedLang = langSelect ? langSelect.value : 'english';
-    const useBackendStt = (selectedLang === 'arabic' || selectedLang === 'egyptian');
-
-    if (useBackendStt) {
-      await startBackendSttRecording(selectedLang);
-    } else {
-      // English → live Web Speech API, with automatic backend fallback.
-      startWebSpeechRecognition(selectedLang);
-    }
+    // All languages now use the reliable, device-selectable backend recogniser.
+    await startBackendSttRecording(selectedLang);
   }
 
-  // Reliable record-then-transcribe path (Gemini /api/stt). Used for Arabic by
-  // default, and as the automatic fallback for English when the browser's live
-  // Web Speech API can't reach Google's cloud recogniser.
+  // Record-then-transcribe via Gemini /api/stt. Targets the user-selected
+  // microphone and shows a live input-level meter.
   async function startBackendSttRecording(selectedLang) {
     const isAr = (selectedLang === 'arabic' || selectedLang === 'egyptian');
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const sel = document.getElementById('mic-device-select');
+      const deviceId = sel && sel.value ? sel.value : null;
+      const constraints = { audio: deviceId ? { deviceId: { exact: deviceId } } : true };
+      console.log('[STT] Opening mic' + (deviceId ? ' (deviceId=' + deviceId.slice(0, 8) + '…)' : ' (system default)'));
+      const stream = await navigator.mediaDevices.getUserMedia(constraints);
+
+      populateMicDevices();
+      startMicLevelMeter(stream);
+
       audioChunks = [];
       mediaRecorder = new MediaRecorder(stream);
       mediaRecorder.ondataavailable = (e) => {
         if (e.data.size > 0) audioChunks.push(e.data);
       };
       mediaRecorder.onstop = async () => {
+        stopMicLevelMeter();
         stream.getTracks().forEach(t => t.stop());
         if (audioChunks.length === 0) {
           console.warn('[STT] No audio captured.');
@@ -2151,7 +2232,7 @@ html[data-theme="light"] .d-blob{opacity:calc(.38*var(--intensity)+.04)}
             await s2sAnimateText(text.trim());
             setStatus('Ready', false);
           } else {
-            el.innerHTML = `<span style="color:var(--gray-400)">${isAr ? 'لم يتم العثور على كلام. حاول ثانية.' : 'No speech detected. Try again.'}</span>`;
+            el.innerHTML = `<span style="color:var(--gray-400)">${isAr ? 'لم يتم العثور على كلام. تحقق من مقياس الصوت والميكروفون المحدد ثم حاول ثانية.' : 'No speech detected — check the mic level meter and selected microphone, then try again.'}</span>`;
           }
         } catch (err) {
           console.error('[STT] Backend error:', err);
@@ -2162,147 +2243,29 @@ html[data-theme="light"] .d-blob{opacity:calc(.38*var(--intensity)+.04)}
 
       micOn = true;
       document.getElementById('mic-icon').textContent = '🔴';
-      document.getElementById('mic-status').textContent = isAr ? 'جاري تسجيل الصوت...' : 'Recording… press Stop to transcribe';
+      document.getElementById('mic-status').textContent = isAr ? 'جاري التسجيل... تحدث ثم اضغط إيقاف وإرسال' : 'Recording… speak, then click Stop & Transcribe';
       document.getElementById('mic-btn').textContent = isAr ? 'إيقاف وإرسال' : 'Stop & Transcribe';
       document.getElementById('mic-btn').classList.add('on');
+      const el = document.getElementById('speech-output');
+      el.innerHTML = `<span style="color:var(--gray-400)">${isAr ? 'تحدث الآن…' : 'Listening — speak now, then click “Stop & Transcribe”.'}</span>`;
       setStatus('Mic Active', true);
       renderMobileQuickActions();
     } catch (err) {
       console.error('[STT] getUserMedia failed:', err);
+      stopMicLevelMeter();
       setStatus('Mic permission denied', false);
-      document.getElementById('mic-status').textContent = 'Microphone permission denied.';
+      const name = err && err.name ? err.name : '';
+      document.getElementById('mic-status').textContent =
+        (name === 'OverconstrainedError' || name === 'NotFoundError')
+          ? 'Selected microphone unavailable — pick another from the list.'
+          : 'Microphone permission denied.';
     }
-  }
-
-  // Stop an active Web Speech session without resetting the whole UI — used when
-  // we hand off to the backend recording fallback.
-  function teardownWebSpeech() {
-    clearTimeout(micRestartTimer);
-    if (recognition) {
-      try { recognition.onend = null; recognition.onerror = null; recognition.stop(); } catch (_) {}
-      recognition = null;
-    }
-    micOn = false;
-  }
-
-  function startWebSpeechRecognition(selectedLang) {
-    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SR) {
-      console.warn('[STT] Web Speech API not supported in this browser — using backend recording.');
-      const el = document.getElementById('speech-output');
-      el.innerHTML = `<span style="color:var(--gray-400)">Live recognition isn't available in this browser. Recording instead — click “Stop &amp; Transcribe” when done.</span>`;
-      startBackendSttRecording(selectedLang);
-      return;
-    }
-
-    recognition = new SR();
-    recognition.continuous = true;
-    recognition.interimResults = true;
-    recognition.lang = (navigator.language && navigator.language.toLowerCase().startsWith('en'))
-      ? navigator.language : 'en-US';
-
-    const switchToBackend = (reasonMsg) => {
-      console.warn('[STT] ' + reasonMsg + ' — switching to backend recording.');
-      teardownWebSpeech();
-      const el = document.getElementById('speech-output');
-      el.innerHTML = `<span style="color:var(--gray-400)">Live recognition unavailable — recording instead. Click “Stop &amp; Transcribe” when you finish speaking.</span>`;
-      startBackendSttRecording(selectedLang);
-    };
-
-    recognition.onstart = () => {
-      console.log('[STT] Web Speech started (lang=' + recognition.lang + ')');
-      setStatus('Mic Active', true);
-      document.getElementById('mic-status').textContent = forcedLang === 'ar' ? 'جاري الاستماع...' : 'Listening…';
-    };
-    recognition.onaudiostart  = () => console.log('[STT] audio capture started');
-    recognition.onsoundstart  = () => console.log('[STT] sound detected');
-    recognition.onspeechstart = () => console.log('[STT] speech detected');
-    recognition.onspeechend   = () => console.log('[STT] speech ended');
-    recognition.onsoundend    = () => console.log('[STT] sound ended');
-    recognition.onaudioend    = () => console.log('[STT] audio capture ended');
-    recognition.onnomatch     = () => console.log('[STT] no recognisable match');
-
-    recognition.onresult = async (event) => {
-      let interim = '';
-      let final = '';
-      for (let i = event.resultIndex; i < event.results.length; i++) {
-        const t = event.results[i][0].transcript;
-        if (event.results[i].isFinal) final += t;
-        else interim += t;
-      }
-      console.log(`[STT] result interim="${interim}" final="${final}"`);
-
-      const el = document.getElementById('speech-output');
-      if (interim) el.innerHTML = `<span style="color:var(--gray-400)">${interim}</span>`;
-
-      if (final.trim()) {
-        if (s2sPlaying) {
-          pendingSpeechText = final.trim();
-          return;
-        }
-        el.innerHTML = `<span>${final.trim()}</span>`;
-        setStatus('Animating…', true);
-        await s2sAnimateText(final.trim());
-        setStatus('Mic Active', true);
-      }
-    };
-
-    recognition.onerror = (event) => {
-      const code = event?.error || 'unknown';
-      console.warn('[STT] Web Speech error:', code);
-      if (code === 'not-allowed') {
-        stopMic();
-        setStatus('Mic blocked', false);
-        document.getElementById('mic-status').textContent = forcedLang === 'ar' ? 'تم حجب الوصول للميكروفون.' : 'Microphone access blocked by browser.';
-        return;
-      }
-      if (code === 'audio-capture') {
-        stopMic();
-        setStatus('Mic unavailable', false);
-        document.getElementById('mic-status').textContent = forcedLang === 'ar' ? 'لم يتم العثور على ميكروفون.' : 'No microphone detected.';
-        return;
-      }
-      // network / service-not-allowed = browser can't reach Google's speech
-      // backend → the live API will never produce results. Fall back.
-      if (code === 'network' || code === 'service-not-allowed') {
-        switchToBackend('Speech service unreachable (' + code + ')');
-        return;
-      }
-      // no-speech / aborted → benign; keep listening (auto-restarts via onend).
-      document.getElementById('mic-status').textContent = forcedLang === 'ar' ? 'جاري الاستماع...' : 'Listening…';
-    };
-
-    recognition.onend = () => {
-      console.log('[STT] Web Speech ended (micOn=' + micOn + ')');
-      if (micOn && recognition) {
-        clearTimeout(micRestartTimer);
-        micRestartTimer = setTimeout(() => {
-          try { recognition && recognition.start(); }
-          catch (e) { console.warn('[STT] restart failed:', e); }
-        }, 250);
-      }
-    };
-
-    try {
-      recognition.start();
-    } catch (e) {
-      console.error('[STT] recognition.start() threw:', e);
-      switchToBackend('recognition.start() failed');
-      return;
-    }
-
-    micOn = true;
-    document.getElementById('mic-icon').textContent = '🔴';
-    document.getElementById('mic-status').textContent = forcedLang === 'ar' ? 'جاري الاستماع...' : 'Listening…';
-    document.getElementById('mic-btn').textContent = forcedLang === 'ar' ? 'إيقاف' : 'Stop';
-    document.getElementById('mic-btn').classList.add('on');
-    setStatus('Mic Active', true);
-    renderMobileQuickActions();
   }
 
   function stopMic() {
     micOn = false;
     clearTimeout(micRestartTimer);
+    stopMicLevelMeter();
     if (mediaRecorder && mediaRecorder.state !== 'inactive') {
       try { mediaRecorder.stop(); } catch (_) {}
       mediaRecorder = null;
