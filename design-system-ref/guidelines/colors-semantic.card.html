@@ -1,0 +1,24 @@
+<!-- @dsCard group="Colors" viewport="700x150" name="Semantic status" subtitle="Live, success, warning & danger" -->
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"/>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,200..800&family=DM+Sans:ital,opsz,wght@0,9..40,300..700;1,9..40,300..500&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../styles.css"/>
+<style>
+  body{margin:0}
+  .wrap{display:flex;gap:14px;padding:24px;flex-wrap:wrap}
+  .sw{flex:1;min-width:120px;border-radius:var(--radius-lg);overflow:hidden;border:1px solid var(--border);box-shadow:var(--shadow-sm)}
+  .chip{height:74px}
+  .meta{padding:10px 12px;background:var(--surface-solid)}
+  .nm{font-size:12.5px;font-weight:650;color:var(--text)}
+  .hex{font-family:var(--font-mono);font-size:11px;color:var(--faint);margin-top:2px}
+</style></head>
+<body class="t-scope">
+  <div class="wrap">
+    <div class="sw"><div class="chip" style="background:var(--live)"></div><div class="meta"><div class="nm">Live</div><div class="hex">#34D399 · --live</div></div></div>
+    <div class="sw"><div class="chip" style="background:var(--ok)"></div><div class="meta"><div class="nm">Success</div><div class="hex">#059669 · --ok</div></div></div>
+    <div class="sw"><div class="chip" style="background:var(--warn)"></div><div class="meta"><div class="nm">Warning</div><div class="hex">#F59E0B · --warn</div></div></div>
+    <div class="sw"><div class="chip" style="background:var(--danger)"></div><div class="meta"><div class="nm">Danger</div><div class="hex">#EF4444 · --danger</div></div></div>
+  </div>
+</body></html>

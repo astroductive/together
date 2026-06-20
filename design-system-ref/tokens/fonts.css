@@ -1,0 +1,18 @@
+/* ============================================================
+   TOGETHER · Fonts
+   ------------------------------------------------------------
+   Latin type is DM Sans (sans), Bricolage Grotesque (display)
+   and DM Mono (mono) — loaded from Google Fonts.
+   Thmanyah Sans + Serif-Display are the bundled brand faces
+   used for Arabic / RTL and as a graceful fallback.
+   ============================================================ */
+
+/* ── Bundled brand fonts (Arabic + fallback) ── */
+@font-face{font-family:'Thmanyah Sans';src:url('../assets/fonts/thmanyahsans-Light.woff2') format('woff2');font-weight:300;font-display:swap}
+@font-face{font-family:'Thmanyah Sans';src:url('../assets/fonts/thmanyahsans-Regular.woff2') format('woff2');font-weight:400;font-display:swap}
+@font-face{font-family:'Thmanyah Sans';src:url('../assets/fonts/thmanyahsans-Medium.woff2') format('woff2');font-weight:500;font-display:swap}
+@font-face{font-family:'Thmanyah Sans';src:url('../assets/fonts/thmanyahsans-Bold.woff2') format('woff2');font-weight:700;font-display:swap}
+@font-face{font-family:'Thmanyah Sans';src:url('../assets/fonts/thmanyahsans-Black.woff2') format('woff2');font-weight:800;font-display:swap}
+@font-face{font-family:'Thmanyah Serif';src:url('../assets/fonts/thmanyahserifdisplay-Regular.woff2') format('woff2');font-weight:400;font-display:swap}
+@font-face{font-family:'Thmanyah Serif';src:url('../assets/fonts/thmanyahserifdisplay-Bold.woff2') format('woff2');font-weight:700;font-display:swap}
+@font-face{font-family:'Thmanyah Serif';src:url('../assets/fonts/thmanyahserifdisplay-Black.woff2') format('woff2');font-weight:800;font-display:swap}

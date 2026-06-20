@@ -1,0 +1,130 @@
+// SignLens — Sign → Text & Voice workspace. Composes AppShell + DS primitives.
+const { useState, useRef, useEffect } = React;
+const DS = window.TogetherDesignSystem_58a58f;
+const { Button, Card, Badge, Segmented, Switch } = DS;
+const I = window.TIcons;
+
+// Scripted demo: gloss tokens stream in, transcript forms a sentence.
+const SCRIPT = [
+  { gloss: "YOU", t: "00:01" },
+  { gloss: "HOW", t: "00:02", sentence: "How are you?", ar: "إزيك؟" },
+  { gloss: "ME", t: "00:05" },
+  { gloss: "GOOD", t: "00:06" },
+  { gloss: "THANK-YOU", t: "00:07", sentence: "I'm good, thank you.", ar: "أنا كويس، شكراً." },
+];
+
+function LandmarkOverlay({ live }) {
+  // suggestive hand-landmark dots (MediaPipe vibe)
+  const pts = [[50,34],[46,42],[42,50],[39,58],[54,40],[55,50],[56,59],[60,40],[62,50],[63,60],[66,41],[68,50],[69,59]];
+  return (
+    <svg viewBox="0 0 100 100" style={{ position: "absolute", inset: 0, width: "100%", height: "100%", opacity: live ? 1 : .25, transition: "opacity .4s" }}>
+      <g stroke="var(--teal)" strokeWidth=".5" opacity=".5" fill="none">
+        <path d="M50 34 46 42 42 50 39 58M50 34 54 40 55 50 56 59M50 34 60 40 62 50 63 60M50 34 66 41 68 50 69 59" />
+      </g>
+      {pts.map((p, i) => <circle key={i} cx={p[0]} cy={p[1]} r="1.1" fill="var(--live)" style={{ animation: live ? `t-pulse 1.4s ${i * 0.05}s infinite` : "none" }} />)}
+    </svg>
+  );
+}
+
+function SignLens() {
+  const [live, setLive] = useState(false);
+  const [lang, setLang] = useState("ar");
+  const [speak, setSpeak] = useState(true);
+  const [log, setLog] = useState([]);
+  const [sentence, setSentence] = useState({ en: "", ar: "" });
+  const [copied, setCopied] = useState(false);
+  const idx = useRef(0);
+
+  useEffect(() => {
+    if (!live) return;
+    const id = setInterval(() => {
+      const step = SCRIPT[idx.current % SCRIPT.length];
+      setLog((l) => [{ ...step, id: Date.now() }, ...l].slice(0, 7));
+      if (step.sentence) setSentence({ en: step.sentence, ar: step.ar });
+      idx.current++;
+    }, 1300);
+    return () => clearInterval(id);
+  }, [live]);
+
+  const reset = () => { setLive(false); setLog([]); setSentence({ en: "", ar: "" }); idx.current = 0; };
+  const display = lang === "ar" ? sentence.ar : sentence.en;
+
+  return (
+    <window.AppShell active="SignLens" title="SignLens" sub="Sign → Text & Voice · Egyptian Sign Language"
+      status={live ? "live" : "idle"} statusLabel={live ? "Recognizing" : "Camera idle"}
+      actions={<Segmented value={lang} onChange={setLang} options={[{ value: "ar", label: "العربية" }, { value: "en", label: "English" }]} />}>
+      <div style={{ padding: "26px 32px", display: "grid", gridTemplateColumns: "1fr 330px", gap: 22, alignItems: "start" }} className="sl-content">
+        {/* Left: camera + transcript */}
+        <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
+          <Card variant="solid" padding={0} style={{ overflow: "hidden" }}>
+            <div style={{ position: "relative", minHeight: 320, background: "var(--viewport)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+              <LandmarkOverlay live={live} />
+              {live && <span style={{ position: "absolute", top: 14, insetInlineStart: 14, display: "inline-flex", alignItems: "center", gap: 7, padding: "5px 11px", borderRadius: 999, background: "rgba(8,8,12,.65)", color: "#fff", fontSize: 11, fontWeight: 700, letterSpacing: ".05em" }}>
+                <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#ef4444", boxShadow: "0 0 0 3px rgba(239,68,68,.3)", animation: "t-pulse 1.4s infinite" }} />REC</span>}
+              {!live && <div style={{ position: "relative", textAlign: "center", color: "var(--faint)", display: "flex", flexDirection: "column", alignItems: "center", gap: 12 }}>
+                <I.camera size={38} style={{ opacity: .4 }} />
+                <p style={{ fontSize: 13.5, maxWidth: 220, lineHeight: 1.5, margin: 0 }}>Camera is off. Start recognition to translate your signs in real time.</p>
+              </div>}
+              {live && <div style={{ position: "absolute", bottom: 14, insetInlineStart: "50%", transform: "translateX(-50%)", display: "inline-flex", alignItems: "center", gap: 8, padding: "7px 14px", borderRadius: 999, background: "rgba(8,8,12,.65)", color: "#fff", fontSize: 12, fontWeight: 600, whiteSpace: "nowrap" }}>
+                Detecting signs
+                <span style={{ display: "inline-flex", gap: 4 }}>{[0, 1, 2].map((i) => <span key={i} style={{ width: 5, height: 5, borderRadius: "50%", background: "var(--teal)", animation: `t-bounce 1.2s ${i * .15}s infinite` }} />)}</span>
+              </div>}
+            </div>
+            <div style={{ display: "flex", gap: 10, padding: 16, flexWrap: "wrap", alignItems: "center", borderTop: "1px solid var(--border)" }}>
+              <Button variant={live ? "ghost" : "accent"} iconLeft={live ? <I.pause size={15} /> : <I.play size={15} />} onClick={() => setLive((v) => !v)}>{live ? "Pause" : "Start recognition"}</Button>
+              <Button variant="ghost" iconLeft={<I.rotate size={15} />} onClick={reset}>Reset</Button>
+              <div style={{ display: "flex", alignItems: "center", gap: 9, marginInlineStart: "auto" }}>
+                <Switch checked={speak} onChange={setSpeak} />
+                <span style={{ fontSize: 13, color: "var(--muted)", display: "inline-flex", alignItems: "center", gap: 6 }}><I.volume size={15} /> Speak aloud</span>
+              </div>
+            </div>
+          </Card>
+
+          <Card variant="solid" padding={18}>
+            <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: ".07em", textTransform: "uppercase", color: "var(--faint)", marginBottom: 10 }}>Transcript</div>
+            <div dir={lang === "ar" ? "rtl" : "ltr"} style={{ fontFamily: "var(--font-display)", fontSize: 22, fontWeight: 500, lineHeight: 1.45, color: display ? "var(--text)" : "var(--faint)", minHeight: 32 }}>
+              {display || (live ? "Listening for hands…" : "Your translation will appear here.")}
+            </div>
+            <div style={{ display: "flex", gap: 9, marginTop: 16, flexWrap: "wrap" }}>
+              <Button size="sm" variant="soft" disabled={!display} iconLeft={copied ? <I.check size={14} /> : <I.copy size={14} />} onClick={() => { setCopied(true); setTimeout(() => setCopied(false), 1400); }}>{copied ? "Copied" : "Copy"}</Button>
+              <Button size="sm" variant="ghost" disabled={!display} iconLeft={<I.volume size={14} />}>Replay voice</Button>
+            </div>
+          </Card>
+        </div>
+
+        {/* Right: gloss log + metrics */}
+        <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
+          <Card variant="solid" padding={0}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "16px 18px 6px" }}>
+              <div style={{ fontSize: 13, fontWeight: 700, color: "var(--text)" }}>Detected signs</div>
+              <Badge tone="accent">{log.length}</Badge>
+            </div>
+            <ul style={{ listStyle: "none", margin: 0, padding: "4px 12px 14px", display: "flex", flexDirection: "column", gap: 1, fontSize: 13 }}>
+              {log.length === 0 && <li style={{ padding: "14px 8px", color: "var(--faint)", fontSize: 13 }}>No signs yet.</li>}
+              {log.map((e) => (
+                <li key={e.id} style={{ display: "flex", gap: 12, padding: "10px 8px", borderRadius: 10, alignItems: "baseline" }}>
+                  <span style={{ fontSize: 11.5, color: "var(--faint)", fontVariantNumeric: "tabular-nums", minWidth: 38, fontWeight: 600 }}>{e.t}</span>
+                  <span style={{ fontFamily: "var(--font-mono)", fontSize: 12, color: "var(--teal)", fontWeight: 500 }}>{e.gloss}</span>
+                </li>
+              ))}
+            </ul>
+          </Card>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 1, background: "var(--border)", borderRadius: 13, overflow: "hidden", border: "1px solid var(--border)" }}>
+            {[["94", "%", "Accuracy"], ["78", "ms", "Latency"], ["50", "+", "Signs"]].map((m) => (
+              <div key={m[2]} style={{ background: "var(--surface-solid)", padding: "14px 10px", textAlign: "center" }}>
+                <div style={{ fontSize: 20, fontWeight: 750, color: "var(--text)", fontVariantNumeric: "tabular-nums" }}>{m[0]}<span style={{ fontSize: 11.5, color: "var(--faint)", fontWeight: 600 }}>{m[1]}</span></div>
+                <div style={{ fontSize: 11, color: "var(--faint)", marginTop: 3 }}>{m[2]}</div>
+              </div>
+            ))}
+          </div>
+          <Card variant="solid" padding={18}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: "var(--text)", marginBottom: 6 }}>On-device & private</div>
+            <p style={{ fontSize: 12.5, lineHeight: 1.55, color: "var(--muted)", margin: 0 }}>Landmark detection and inference run locally. No video ever leaves your device.</p>
+          </Card>
+        </div>
+      </div>
+      <style>{`@keyframes t-pulse{50%{opacity:.4}}@keyframes t-bounce{0%,60%,100%{opacity:.35}30%{opacity:1}}@media(max-width:1080px){.sl-content{grid-template-columns:1fr!important}}`}</style>
+    </window.AppShell>
+  );
+}
+window.SignLens = SignLens;

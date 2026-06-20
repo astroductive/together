@@ -1,0 +1,25 @@
+<!-- @dsCard group="Colors" viewport="700x150" name="Ink & Paper" subtitle="Monochrome base — foreground ink, page paper" -->
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"/>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,200..800&family=DM+Sans:ital,opsz,wght@0,9..40,300..700;1,9..40,300..500&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../styles.css"/>
+<style>
+  body{margin:0}
+  .wrap{display:flex;gap:14px;padding:24px;flex-wrap:wrap}
+  .sw{flex:1;min-width:120px;border-radius:var(--radius-lg);overflow:hidden;border:1px solid var(--border);box-shadow:var(--shadow-sm)}
+  .chip{height:74px}
+  .meta{padding:10px 12px;background:var(--surface-solid)}
+  .nm{font-size:12.5px;font-weight:650;color:var(--text)}
+  .hex{font-family:var(--font-mono);font-size:11px;color:var(--faint);margin-top:2px}
+</style></head>
+<body class="t-scope">
+  <div class="wrap">
+    <div class="sw"><div class="chip" style="background:var(--ink)"></div><div class="meta"><div class="nm">Ink</div><div class="hex">#080808 · --ink</div></div></div>
+    <div class="sw"><div class="chip" style="background:var(--ink-2)"></div><div class="meta"><div class="nm">Ink 2 / App bg</div><div class="hex">#0A0A0C · --ink-2</div></div></div>
+    <div class="sw"><div class="chip" style="background:var(--paper)"></div><div class="meta"><div class="nm">Paper</div><div class="hex">#F4F4F1 · --paper</div></div></div>
+    <div class="sw"><div class="chip" style="background:var(--paper-2)"></div><div class="meta"><div class="nm">Paper 2</div><div class="hex">#F6F7F9 · --paper-2</div></div></div>
+    <div class="sw"><div class="chip" style="background:var(--white);border-bottom:1px solid var(--border)"></div><div class="meta"><div class="nm">White</div><div class="hex">#FFFFFF · --white</div></div></div>
+  </div>
+</body></html>

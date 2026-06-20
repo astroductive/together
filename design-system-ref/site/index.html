@@ -1,0 +1,30 @@
+<!-- @dsCard group="Site" viewport="1280x780" name="Site — Home" subtitle="Landing · 3D hero, products, bilingual" -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Together — Sign, speak, read</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,200..800&family=DM+Sans:ital,opsz,wght@0,9..40,300..700;1,9..40,300..500&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../styles.css" />
+<link rel="icon" href="../assets/logo-hands.png" />
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/three@0.149.0/build/three.min.js"></script>
+<script src="../_ds_bundle.js"></script>
+<style>html,body{margin:0;background:#f1f1ef}</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel" src="./lib/icons.jsx"></script>
+<script type="text/babel" src="./lib/site.jsx"></script>
+<script type="text/babel" src="./lib/three-hero.jsx"></script>
+<script type="text/babel" src="./Home.jsx"></script>
+<script type="text/babel">ReactDOM.createRoot(document.getElementById("root")).render(<window.Home />);</script>
+<script src="./lib/reveal.js?v=2"></script>
+<script src="./lib/cursor.js?v=4"></script>
+</body>
+</html>

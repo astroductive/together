@@ -1,0 +1,16 @@
+/* ============================================================
+   TOGETHER — Design System
+   Single global entry point. Consumers link this one file.
+   The remote webfont @import MUST stay first (a nested remote
+   @import is unreliable). Card/kit HTML also <link> the fonts
+   directly for belt-and-suspenders loading.
+   ============================================================ */
+
+@import url('https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,200..800&family=DM+Sans:ital,opsz,wght@0,9..40,300..700;1,9..40,300..500&family=DM+Mono:wght@300;400;500&display=swap');
+
+@import url('tokens/fonts.css');
+@import url('tokens/colors.css');
+@import url('tokens/typography.css');
+@import url('tokens/spacing.css');
+@import url('tokens/products.css');
+@import url('tokens/base.css');

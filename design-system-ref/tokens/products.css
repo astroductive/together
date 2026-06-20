@@ -1,0 +1,36 @@
+/* ============================================================
+   TOGETHER · Per-product accent tints
+   ------------------------------------------------------------
+   A subtle signature hue per product, layered over the
+   monochrome base. Apply by setting data-product on a wrapper:
+     <div data-product="signlens"> … uses --p-accent etc.
+   Defaults (no data-product) fall back to the teal brand.
+   ============================================================ */
+
+:root {
+  --p-accent: var(--teal);                 /* @kind color */
+  --p-accent-strong: var(--teal-strong);   /* @kind color */
+  --p-accent-soft: var(--teal-soft);        /* @kind color */
+  --p-accent-text: #ffffff;                 /* @kind color */
+}
+
+[data-product="signlens"] {
+  --p-accent: #1f8a82;                       /* @kind color */  /* teal */
+  --p-accent-strong: #16706a;                /* @kind color */
+  --p-accent-soft: rgba(31, 138, 130, .12);  /* @kind color */
+  --p-accent-text: #ffffff;                  /* @kind color */
+}
+
+[data-product="signbridge"] {
+  --p-accent: #c2873b;                       /* @kind color */  /* warm amber/sand */
+  --p-accent-strong: #a06d27;                /* @kind color */
+  --p-accent-soft: rgba(194, 135, 59, .14);  /* @kind color */
+  --p-accent-text: #ffffff;                  /* @kind color */
+}
+
+[data-product="handtalk"] {
+  --p-accent: #4c63d2;                       /* @kind color */  /* cool indigo */
+  --p-accent-strong: #3b4fb0;                /* @kind color */
+  --p-accent-soft: rgba(76, 99, 210, .12);   /* @kind color */
+  --p-accent-text: #ffffff;                  /* @kind color */
+}

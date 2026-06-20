@@ -1,0 +1,39 @@
+/* ============================================================
+   TOGETHER · Base — light resets + helpers used by specimens
+   and component cards. Components themselves only read tokens.
+   ============================================================ */
+
+.t-scope,
+body.t-scope {
+  font-family: var(--font-sans);
+  background: var(--bg);
+  color: var(--text);
+  letter-spacing: var(--tracking-normal);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* Headlines default to the display face */
+.t-display { font-family: var(--font-display); letter-spacing: var(--tracking-display); line-height: var(--lh-display); }
+
+/* Mono eyebrow — the recurring "( 01 ) — Label" motif */
+.t-eyebrow {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-eyebrow);
+  color: var(--muted);
+}
+
+/* Arabic / RTL text uses the bundled brand face */
+[lang="ar"], [dir="rtl"] { font-family: var(--font-arabic); }
+
+/* Selection mirrors the ink/paper inversion */
+::selection { background: var(--ink); color: var(--white); }
+
+@media (prefers-reduced-motion: reduce) {
+  .t-scope *, .t-scope *::before, .t-scope *::after {
+    animation-duration: .001ms !important;
+    transition-duration: .001ms !important;
+  }
+}

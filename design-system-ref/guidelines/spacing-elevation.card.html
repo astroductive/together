@@ -1,0 +1,20 @@
+<!-- @dsCard group="Spacing" viewport="700x180" name="Elevation & glass" subtitle="Shadow scale + frosted surface" -->
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"/>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,200..800&family=DM+Sans:ital,opsz,wght@0,9..40,300..700;1,9..40,300..500&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../styles.css"/>
+<style>body{margin:0;background:var(--paper-2)}.wrap{display:flex;gap:22px;padding:34px 28px;flex-wrap:wrap}
+.col{display:flex;flex-direction:column;align-items:center;gap:10px}
+.box{width:130px;height:78px;background:var(--surface-solid);border:1px solid var(--border);border-radius:var(--radius-lg)}
+.glass{background:var(--glass-bg);border:1px solid var(--glass-border);box-shadow:var(--shadow-glass);backdrop-filter:blur(var(--blur));border-radius:var(--radius-2xl)}
+.nm{font-family:var(--font-mono);font-size:10px;color:var(--faint)}</style></head>
+<body class="t-scope">
+  <div class="wrap">
+    <div class="col"><div class="box" style="box-shadow:var(--shadow-sm)"></div><div class="nm">shadow-sm</div></div>
+    <div class="col"><div class="box" style="box-shadow:var(--shadow)"></div><div class="nm">shadow</div></div>
+    <div class="col"><div class="box" style="box-shadow:var(--shadow-lg)"></div><div class="nm">shadow-lg</div></div>
+    <div class="col"><div class="box glass"></div><div class="nm">glass</div></div>
+  </div>
+</body></html>

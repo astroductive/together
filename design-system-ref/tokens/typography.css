@@ -1,0 +1,50 @@
+/* ============================================================
+   TOGETHER · Typography tokens
+   ------------------------------------------------------------
+   Display = Bricolage Grotesque (tight, confident headlines).
+   Sans    = DM Sans (UI + body).
+   Mono    = DM Mono (eyebrows, coordinates, timestamps, gloss).
+   Headlines run tight: negative tracking, ~0.9 line-height.
+   ============================================================ */
+
+:root {
+  /* ── Families ── */
+  --font-display: 'Bricolage Grotesque', 'Thmanyah Serif', Georgia, serif;
+  --font-sans: 'DM Sans', 'Thmanyah Sans', -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --font-mono: 'DM Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+  --font-arabic: 'Thmanyah Sans', 'DM Sans', sans-serif;
+
+  /* ── Type scale ── */
+  --text-xs: 12px;
+  --text-sm: 13px;
+  --text-base: 15px;
+  --text-md: 17px;
+  --text-lg: 20px;
+  --text-xl: 24px;
+  --text-2xl: 30px;
+  --text-3xl: 40px;
+  --text-4xl: 56px;
+  --text-5xl: 76px;
+  --text-6xl: 104px;
+
+  /* ── Weights ── */
+  --fw-light: 300;     /* @kind other */
+  --fw-regular: 400;   /* @kind other */
+  --fw-medium: 500;    /* @kind other */
+  --fw-semibold: 600;  /* @kind other */
+  --fw-bold: 700;      /* @kind other */
+  --fw-black: 800;     /* @kind other */
+
+  /* ── Line heights ── */
+  --lh-display: .9;    /* @kind other */
+  --lh-tight: 1.1;     /* @kind other */
+  --lh-snug: 1.35;     /* @kind other */
+  --lh-body: 1.6;      /* @kind other */
+
+  /* ── Letter spacing ── */
+  --tracking-display: -.045em;  /* @kind other */
+  --tracking-tight: -.025em;    /* @kind other */
+  --tracking-normal: -.012em;   /* @kind other */
+  --tracking-wide: .08em;       /* @kind other */
+  --tracking-eyebrow: .22em;    /* @kind other */
+}

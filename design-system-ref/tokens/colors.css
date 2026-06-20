@@ -1,0 +1,100 @@
+/* ============================================================
+   TOGETHER · Color tokens
+   ------------------------------------------------------------
+   A monochrome ink/paper base with a teal brand accent and a
+   warm sand secondary. Light is the default surface for
+   marketing; the app ships a true dark theme. Toggle by adding
+   .dark (or [data-theme="dark"]) to a wrapping element.
+   ============================================================ */
+
+:root {
+  /* ── Brand ── */
+  --teal: #1f8a82;          /* primary brand accent */
+  --teal-strong: #16706a;   /* hover / pressed */
+  --teal-soft: rgba(31, 138, 130, .12);
+  --sand: #e2b483;          /* warm secondary */
+  --sand-soft: rgba(226, 180, 131, .15);
+
+  /* ── Ink / paper ramp (monochrome) ── */
+  --ink: #080808;           /* near-black foreground */
+  --ink-2: #0a0a0c;
+  --paper: #f4f4f1;         /* warm off-white page */
+  --paper-2: #f6f7f9;       /* cool off-white page */
+  --white: #ffffff;
+
+  /* ── Neutral gray ramp ── */
+  --gray-50:  #f6f7f9;
+  --gray-100: #f1f3f7;
+  --gray-200: #e4e7ee;
+  --gray-300: #d3d8e2;
+  --gray-400: #969dab;
+  --gray-500: #6f6f69;
+  --gray-600: #545868;
+  --gray-700: #34343d;
+  --gray-800: #1a1a1f;
+  --gray-900: #0e1018;
+
+  /* ── Semantic status ── */
+  --live: #34d399;          /* "live / recording / connected" */
+  --live-soft: rgba(52, 211, 153, .25);
+  --ok: #059669;
+  --ok-soft: rgba(5, 150, 105, .12);
+  --warn: #f59e0b;
+  --warn-soft: rgba(245, 158, 11, .22);
+  --danger: #ef4444;
+  --danger-soft: rgba(239, 68, 68, .12);
+
+  /* ── Glass (marketing surfaces) ── */
+  --glass-bg: rgba(255, 255, 255, .55);
+  --glass-bg-2: rgba(255, 255, 255, .72);
+  --glass-border: rgba(255, 255, 255, .45);
+
+  /* ── LIGHT semantic aliases (default) ── */
+  --bg: var(--paper);
+  --surface: rgba(255, 255, 255, .58);
+  --surface-2: #f1f3f7;
+  --surface-solid: #ffffff;
+  --sidebar: rgba(255, 255, 255, .58);
+  --border: rgba(0, 0, 0, .09);
+  --border-strong: #d3d8e2;
+  --text: #080808;
+  --muted: #545868;
+  --faint: #969dab;
+  --accent: var(--teal);
+  --accent-strong: var(--teal-strong);
+  --accent-soft: var(--teal-soft);
+  --accent-text: #ffffff;
+  --ring: rgba(31, 138, 130, .35);
+  --viewport: linear-gradient(140deg, #eef0f6, #e4e8f0); /* @kind other */
+  --scrim: rgba(14, 16, 24, .38); /* @kind other */
+}
+
+/* ── DARK theme (the app default) ── */
+.dark,
+[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #0a0a0c;
+  --surface: #131316;
+  --surface-2: #1a1a1f;
+  --surface-solid: #131316;
+  --sidebar: #0c0c0e;
+  --border: #25252d;
+  --border-strong: #34343d;
+  --text: #f4f4f7;
+  --muted: #a8a8b3;
+  --faint: #6d6d78;
+  --accent: var(--teal);
+  --accent-strong: var(--teal-strong);
+  --accent-soft: rgba(31, 138, 130, .15);
+  --accent-text: #ffffff;
+  --ring: rgba(31, 138, 130, .45);
+  --glass-bg: rgba(20, 20, 26, .55);
+  --glass-bg-2: rgba(20, 20, 26, .72);
+  --glass-border: rgba(255, 255, 255, .08);
+  --live: #34d399;
+  --live-soft: rgba(52, 211, 153, .25);
+  --ok: #34d399;
+  --ok-soft: rgba(52, 211, 153, .15);
+  --viewport: linear-gradient(140deg, #191920, #0e0e14); /* @kind other */
+  --scrim: rgba(4, 4, 8, .65); /* @kind other */
+}

@@ -1,0 +1,30 @@
+<!-- @dsCard group="Colors" viewport="700x130" name="Neutral ramp" subtitle="Gray scale for borders, text & surfaces" -->
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"/>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,200..800&family=DM+Sans:ital,opsz,wght@0,9..40,300..700;1,9..40,300..500&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../styles.css"/>
+<style>
+  body{margin:0}
+  .wrap{display:flex;gap:0;padding:24px}
+  .col{flex:1;text-align:center}
+  .chip{height:60px;border-top:1px solid var(--border);border-bottom:1px solid var(--border)}
+  .col:first-child .chip{border-inline-start:1px solid var(--border);border-radius:var(--radius) 0 0 var(--radius)}
+  .col:last-child .chip{border-inline-end:1px solid var(--border);border-radius:0 var(--radius) var(--radius) 0}
+  .nm{font-family:var(--font-mono);font-size:10px;color:var(--faint);margin-top:8px}
+</style></head>
+<body class="t-scope">
+  <div class="wrap">
+    <div class="col"><div class="chip" style="background:var(--gray-50)"></div><div class="nm">50</div></div>
+    <div class="col"><div class="chip" style="background:var(--gray-100)"></div><div class="nm">100</div></div>
+    <div class="col"><div class="chip" style="background:var(--gray-200)"></div><div class="nm">200</div></div>
+    <div class="col"><div class="chip" style="background:var(--gray-300)"></div><div class="nm">300</div></div>
+    <div class="col"><div class="chip" style="background:var(--gray-400)"></div><div class="nm">400</div></div>
+    <div class="col"><div class="chip" style="background:var(--gray-500)"></div><div class="nm">500</div></div>
+    <div class="col"><div class="chip" style="background:var(--gray-600)"></div><div class="nm">600</div></div>
+    <div class="col"><div class="chip" style="background:var(--gray-700)"></div><div class="nm">700</div></div>
+    <div class="col"><div class="chip" style="background:var(--gray-800)"></div><div class="nm">800</div></div>
+    <div class="col"><div class="chip" style="background:var(--gray-900)"></div><div class="nm">900</div></div>
+  </div>
+</body></html>
