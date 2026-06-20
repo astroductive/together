@@ -14,10 +14,13 @@ from sqlalchemy import create_engine, text
 from sqlalchemy.orm import DeclarativeBase, sessionmaker
 
 # Default points at the docker-compose / local dev Postgres. Override in .env.
-DATABASE_URL = os.environ.get(
+_raw_url = os.environ.get(
     "DATABASE_URL",
     "postgresql+psycopg://together:together@localhost:5432/together",
 )
+# Render/Railway/Fly supply plain postgresql:// but we need psycopg v3 scheme.
+DATABASE_URL = _raw_url.replace("postgresql://", "postgresql+psycopg://", 1) \
+    if _raw_url.startswith("postgresql://") else _raw_url
 
 # pool_pre_ping recycles dead connections; pool_size/max_overflow keep a
 # bounded pool so blocking ML work in a threadpool can't exhaust connections.

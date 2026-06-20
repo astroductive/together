@@ -102,13 +102,12 @@
    by an opaque body background. */
 html{background:var(--bg)!important;overflow:hidden}
 body{background:transparent!important;overflow:hidden}
-#main-content{padding:0!important;height:100vh;overflow:hidden;background:transparent!important}
-/* app shell transparent so the ambient signal-line layer shows through .t-main
-   gaps (sidebar + cards keep their own solid surfaces, so it never competes) */
+#main-content{padding:0!important;flex:1;min-height:0;overflow:hidden;background:transparent!important}
 .t-scope.t-app{background:transparent}
+.t-main{height:100vh;overflow:hidden}
 
 /* ── Panel visibility ── */
-.d-panel{display:none}.d-panel.active{display:flex;flex-direction:column;flex:1;overflow:auto}
+.d-panel{display:none}.d-panel.active{display:flex;flex-direction:column;flex:1;min-height:0;overflow-y:auto}
 
 /* ── Two-column content layout ── */
 .d-col{display:grid;grid-template-columns:1fr 330px;gap:22px;padding:26px 32px;align-items:start;flex:1;overflow:auto}
@@ -119,8 +118,10 @@ body{background:transparent!important;overflow:hidden}
 
 /* ── Viewport (camera / avatar) ── */
 .d-vp{position:relative;border-radius:14px;overflow:hidden;background:var(--viewport);border:1px solid var(--border);
-  min-height:280px;display:flex;align-items:center;justify-content:center;margin:0 20px}
-.d-vp video,.d-vp canvas{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+  aspect-ratio:4/3;max-height:min(52vh,460px);display:flex;align-items:center;justify-content:center;margin:0 20px}
+.d-vp video,.d-vp canvas{position:absolute;inset:0;width:100%;height:100%;object-fit:contain}
+/* Mirror the user's own camera feed for a natural selfie view (skeleton canvas stays unflipped) */
+#webcam,#s2sp-webcam,#meeting-local-video{transform:scaleX(-1)}
 .d-vp-ph{display:flex;flex-direction:column;align-items:center;gap:12px;color:var(--faint);font-size:13.5px;text-align:center;padding:24px}
 .d-vp-ph svg{width:42px;height:42px;opacity:.4}
 .d-live{position:absolute;top:13px;inset-inline-start:13px;display:inline-flex;align-items:center;gap:7px;padding:5px 11px;
@@ -438,7 +439,10 @@ html[data-theme="light"] .d-blob{opacity:calc(.38*var(--intensity)+.04)}
               </div>
             </div>
             <div class="d-sentence-out" style="margin:0 20px 20px">
-              <div class="t-eyebrow" style="margin-bottom:9px">الجملة المنطوقة</div>
+              <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:9px">
+                <div class="t-eyebrow">الجملة المنطوقة</div>
+                <button id="s2sp-tts-btn" onclick="s2spReplayTts()" class="t-btn t-btn--ghost" style="padding:4px 10px;font-size:13px" title="قراءة بصوت عالٍ">🔊</button>
+              </div>
               <div class="d-box-text" id="s2sp-sentence-output"><span class="d-sentence-ph">بانتظار الإشارات…</span></div>
             </div>
           </div>
@@ -503,6 +507,13 @@ html[data-theme="light"] .d-blob{opacity:calc(.38*var(--intensity)+.04)}
                 إدخال الميكروفون
               </div>
               <button class="t-btn t-btn--accent" id="mic-btn" onclick="toggleMic()">بدء الاستماع</button>
+            </div>
+            <div style="display:flex;align-items:center;gap:8px;margin:0 0 10px">
+              <select id="mic-device-select" class="d-lang-sel" style="flex:1;min-width:0" title="اختر الميكروفون"></select>
+              <button class="t-btn t-btn--ghost" onclick="populateMicDevices()" title="تحديث قائمة الميكروفونات" style="padding:6px 11px">↻</button>
+            </div>
+            <div title="مستوى إدخال الميكروفون — يتحرك الشريط عند التحدث" style="height:9px;background:var(--gray-200);border-radius:5px;overflow:hidden;margin:0 6px 14px">
+              <div id="mic-level-bar" style="height:100%;width:0%;background:#22c55e;border-radius:5px;transition:width .05s linear"></div>
             </div>
             <div class="d-mic-state" id="mic-state">
               <div class="d-mic-icon" id="mic-icon">🎙️</div>
@@ -779,12 +790,14 @@ html[data-theme="light"] .d-blob{opacity:calc(.38*var(--intensity)+.04)}
   // Rolling 60-frame buffer for Sign-to-Text (Feature 1)
   const SEQ_LENGTH = 60;
   let frameBuffer = [];
-  const VOTE_BUFFER_SIZE = 6;
-  const STABILITY_FRAMES = 3;
-  const GLOBAL_COOLDOWN_FRM = 30;
+  // Latency tuning — see index.html for rationale. Fewer votes/round-trips and
+  // an earlier first inference make recognition feel responsive on a remote server.
+  const VOTE_BUFFER_SIZE = 4;
+  const STABILITY_FRAMES = 2;
+  const GLOBAL_COOLDOWN_FRM = 18;
   const MIN_HAND_FRAMES = 3;
   const MAX_HAND_GAP_FRAMES = 5;  // tolerance for flickering hand detection
-  const MIN_SEQ_FRAMES = 30;
+  const MIN_SEQ_FRAMES = 18;
   const moduleMap = {
     vision: { panel: 'panel-vision', nav: 'nav-vision', title: 'Sign to Text' },
     speech: { panel: 'panel-speech', nav: 'nav-speech', title: 'Sign to Speech' },
@@ -1159,14 +1172,18 @@ html[data-theme="light"] .d-blob{opacity:calc(.38*var(--intensity)+.04)}
     if (cameraOn) stopCamera();
     if (s2spCameraOn) stopS2SpCamera();
     if (meetingCamOn) stopMeetingCamera();
+    if (micOn) stopMic();
     resetInferenceState();
+
+    // Pre-load the microphone picker when entering Speech-to-Sign.
+    if (key === 'speech2sign') { try { populateMicDevices(); } catch (_) {} }
 
     const prev = moduleMap[currentModule];
     const next = moduleMap[key];
     document.getElementById(prev.panel).classList.remove('active');
-    document.getElementById(prev.nav).classList.remove('active');
+    document.getElementById(prev.nav).classList.remove('is-active');
     document.getElementById(next.panel).classList.add('active');
-    document.getElementById(next.nav).classList.add('active');
+    document.getElementById(next.nav).classList.add('is-active');
     document.getElementById('topbar-title').textContent = next.title;
 
     const mobileSel = document.getElementById('mobile-module-select');
@@ -1416,10 +1433,11 @@ html[data-theme="light"] .d-blob{opacity:calc(.38*var(--intensity)+.04)}
         });
 
         holistic.setOptions({
-          modelComplexity: 1,
-          smoothLandmarks: true,
-          minDetectionConfidence: 0.7,  // matches sign-to-text.py
-          minTrackingConfidence: 0.7,   // matches sign-to-text.py
+          modelComplexity: 0,
+          selfieMode: true,
+          smoothLandmarks: false,
+          minDetectionConfidence: 0.6,
+          minTrackingConfidence: 0.5,
         });
 
         holistic.onResults(onHolisticResults);
@@ -1447,11 +1465,16 @@ html[data-theme="light"] .d-blob{opacity:calc(.38*var(--intensity)+.04)}
           return;
         }
 
+        let _lastFrameMs = 0;
+        const _FRAME_INTERVAL = 1000 / 15;
         mpCamera = new window.Camera(video, {
           onFrame: async () => {
+            const now = performance.now();
+            if (now - _lastFrameMs < _FRAME_INTERVAL) return;
+            _lastFrameMs = now;
             if (holistic) await holistic.send({ image: video });
           },
-          width: 640, height: 480,
+          width: 480, height: 360,
         });
         mpCamera.start().then(() => console.log("[Camera] MediaPipe Camera started."));
       }
@@ -1461,7 +1484,9 @@ html[data-theme="light"] .d-blob{opacity:calc(.38*var(--intensity)+.04)}
     if (inMeeting && meetingCamStream) {
       handleStream(meetingCamStream);
     } else {
-      navigator.mediaDevices.getUserMedia({ video: true })
+      navigator.mediaDevices.getUserMedia({
+        video: { width: { ideal: 480 }, height: { ideal: 360 }, frameRate: { ideal: 15, max: 20 } }
+      })
         .then(handleStream)
         .catch(err => {
           console.error("[Camera] Error:", err);
@@ -1531,19 +1556,15 @@ html[data-theme="light"] .d-blob{opacity:calc(.38*var(--intensity)+.04)}
   // rolling window of landmark frames
 
   function onHolisticResults(results) {
-    // Mirror video onto overlay canvas
+    // Native <video> shows the smooth feed underneath (CSS-mirrored); the
+    // canvas only paints the skeleton so display is independent of inference.
     const canvas = document.getElementById('output_canvas');
     canvas.width = results.image.width;
     canvas.height = results.image.height;
     const ctx = canvas.getContext('2d');
-    ctx.save();
     ctx.clearRect(0, 0, canvas.width, canvas.height);
-    ctx.translate(canvas.width, 0);
-    ctx.scale(-1, 1);
-    ctx.drawImage(results.image, 0, 0, canvas.width, canvas.height);
-    ctx.restore();
 
-    // Draw MediaPipe skeleton overlay
+    // Draw skeleton overlay (landmarks already in flipped coordinates)
     if (window.drawConnectors && window.HAND_CONNECTIONS) {
       if (results.leftHandLandmarks)
         drawConnectors(ctx, results.leftHandLandmarks, HAND_CONNECTIONS, { color: '#00ffff', lineWidth: 2 });
@@ -1594,10 +1615,12 @@ html[data-theme="light"] .d-blob{opacity:calc(.38*var(--intensity)+.04)}
     // Order MUST match training extract_landmarks():
     //   face(468) + leftHand(21) + pose(33) + rightHand(21) = 543
     const out = [];
+    // Round to 4 dp — cuts the JSON payload ~3x (see index.html for rationale).
+    const r = (v) => Math.round(v * 1e4) / 1e4;
     function addPts(pts, n) {
       for (let i = 0; i < n; i++) {
         if (pts && pts[i]) {
-          out.push([pts[i].x, pts[i].y, pts[i].z || 0]);
+          out.push([r(pts[i].x), r(pts[i].y), r(pts[i].z || 0)]);
         } else {
           // Send null so it becomes NaN in Python, instead of 0.0
           // (0.0 forces the model to think the hand is at the top-left corner!)
@@ -1740,6 +1763,7 @@ html[data-theme="light"] .d-blob{opacity:calc(.38*var(--intensity)+.04)}
   }
 
   async function playLocalTts(text, language) {
+    console.log(`[TTS] Speaking: "${text}" (${language})`);
     if ('speechSynthesis' in window) {
       try {
         window.speechSynthesis.cancel();
@@ -1749,29 +1773,42 @@ html[data-theme="light"] .d-blob{opacity:calc(.38*var(--intensity)+.04)}
           const arVoice = voices.find(v => v.lang.startsWith('ar-EG') || v.lang.startsWith('ar'));
           if (arVoice) {
             utt.voice = arVoice;
+            console.log(`[TTS] Using voice: ${arVoice.name}`);
           } else {
             utt.lang = 'ar-EG';
+            console.log('[TTS] No Arabic voice found, using ar-EG lang tag');
           }
         } else {
           utt.lang = 'en-US';
         }
         utt.rate = 1.0;
         utt.volume = 1.0;
+        let spoken = false;
+        utt.onstart = () => { spoken = true; console.log('[TTS] Browser speech started'); };
+        utt.onend = () => console.log('[TTS] Browser speech ended');
+        utt.onerror = (e) => console.warn('[TTS] Browser speech error:', e.error);
         window.speechSynthesis.speak(utt);
-        return;
+        // Give browser TTS 1.5s to start; if it doesn't, fall through to backend
+        await new Promise(r => setTimeout(r, 1500));
+        if (spoken) return;
+        console.log('[TTS] Browser TTS did not start, falling back to backend');
+        window.speechSynthesis.cancel();
       } catch (e) {
-        console.warn("[SpeechSynthesis Error, falling back to backend]", e);
+        console.warn("[TTS] speechSynthesis error, falling back to backend:", e);
       }
     }
 
     try {
       const url = `/api/tts?text=${encodeURIComponent(text)}&language=${encodeURIComponent(language)}`;
+      console.log('[TTS] Calling backend TTS...');
       const res = await authFetch(url);
-      if (!res.ok) return;
+      if (!res.ok) { console.error('[TTS] Backend returned', res.status); return; }
       const blob = await res.blob();
       const audioUrl = URL.createObjectURL(blob);
       const audio = new Audio(audioUrl);
-      audio.play();
+      audio.onplay = () => console.log('[TTS] Backend audio playing');
+      audio.onerror = (e) => console.error('[TTS] Backend audio error:', e);
+      await audio.play().catch(e => console.error('[TTS] audio.play() blocked:', e));
     } catch (err) {
       console.error("[TTS Error]", err);
     }
@@ -2062,6 +2099,75 @@ html[data-theme="light"] .d-blob{opacity:calc(.38*var(--intensity)+.04)}
   let mediaRecorder = null;
   let audioChunks = [];
 
+  // ── Microphone input level meter (Web Audio) ──────────────────
+  let micAudioCtx = null, micAnalyser = null, micLevelRAF = null;
+
+  function startMicLevelMeter(stream) {
+    try {
+      micAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      const src = micAudioCtx.createMediaStreamSource(stream);
+      micAnalyser = micAudioCtx.createAnalyser();
+      micAnalyser.fftSize = 512;
+      src.connect(micAnalyser);
+      const data = new Uint8Array(micAnalyser.frequencyBinCount);
+      const bar = document.getElementById('mic-level-bar');
+      const tick = () => {
+        if (!micAnalyser) return;
+        micAnalyser.getByteTimeDomainData(data);
+        let peak = 0;
+        for (let i = 0; i < data.length; i++) {
+          const v = Math.abs(data[i] - 128);
+          if (v > peak) peak = v;
+        }
+        const pct = Math.min(100, Math.round((peak / 128) * 100 * 2.2));
+        if (bar) bar.style.width = pct + '%';
+        micLevelRAF = requestAnimationFrame(tick);
+      };
+      tick();
+    } catch (e) {
+      console.warn('[STT] level meter unavailable:', e);
+    }
+  }
+
+  function stopMicLevelMeter() {
+    if (micLevelRAF) cancelAnimationFrame(micLevelRAF);
+    micLevelRAF = null;
+    micAnalyser = null;
+    if (micAudioCtx) { try { micAudioCtx.close(); } catch (_) {} micAudioCtx = null; }
+    const bar = document.getElementById('mic-level-bar');
+    if (bar) bar.style.width = '0%';
+  }
+
+  // ── Microphone device picker ──────────────────────────────────
+  async function populateMicDevices() {
+    const sel = document.getElementById('mic-device-select');
+    if (!sel || !navigator.mediaDevices || !navigator.mediaDevices.enumerateDevices) return;
+    try {
+      let devices = await navigator.mediaDevices.enumerateDevices();
+      let mics = devices.filter(d => d.kind === 'audioinput');
+      if (mics.length && !mics[0].label) {
+        try {
+          const s = await navigator.mediaDevices.getUserMedia({ audio: true });
+          s.getTracks().forEach(t => t.stop());
+          devices = await navigator.mediaDevices.enumerateDevices();
+          mics = devices.filter(d => d.kind === 'audioinput');
+        } catch (_) { /* permission not granted yet */ }
+      }
+      const prev = sel.value;
+      sel.innerHTML = '';
+      mics.forEach((m, i) => {
+        const opt = document.createElement('option');
+        opt.value = m.deviceId;
+        opt.textContent = m.label || ('Microphone ' + (i + 1));
+        sel.appendChild(opt);
+      });
+      if (prev && mics.some(m => m.deviceId === prev)) sel.value = prev;
+      console.log('[STT] ' + mics.length + ' microphone(s) available');
+    } catch (e) {
+      console.warn('[STT] enumerateDevices failed:', e);
+    }
+  }
+
   function toggleMic() { micOn ? stopMic() : startMic(); }
 
   async function startMic() {
@@ -2072,155 +2178,94 @@ html[data-theme="light"] .d-blob{opacity:calc(.38*var(--intensity)+.04)}
       alert(mediaCheck.message);
       return;
     }
-
     const langSelect = document.getElementById('s2sp-cam-language-select');
     const selectedLang = langSelect ? langSelect.value : 'english';
-    const useBackendStt = (selectedLang === 'arabic' || selectedLang === 'egyptian');
+    // All languages now use the reliable, device-selectable backend recogniser.
+    await startBackendSttRecording(selectedLang);
+  }
 
+  // Record-then-transcribe via Gemini /api/stt. Targets the user-selected
+  // microphone and shows a live input-level meter.
+  async function startBackendSttRecording(selectedLang) {
+    const isAr = (selectedLang === 'arabic' || selectedLang === 'egyptian');
     try {
-      if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        
-        if (useBackendStt) {
-          audioChunks = [];
-          mediaRecorder = new MediaRecorder(stream);
-          mediaRecorder.ondataavailable = (e) => {
-            if (e.data.size > 0) audioChunks.push(e.data);
-          };
-          mediaRecorder.onstop = async () => {
-            stream.getTracks().forEach(t => t.stop());
-            if (audioChunks.length === 0) return;
-            const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
-            
-            const el = document.getElementById('speech-output');
-            el.innerHTML = `<span style="color:var(--gray-400)">${forcedLang === 'ar' ? 'جاري التعرف على الكلام...' : 'Transcribing speech...'}</span>`;
-            
-            const formData = new FormData();
-            formData.append('file', audioBlob, 'speech.webm');
-            formData.append('language', selectedLang);
-            
-            try {
-              const res = await authFetch('/api/stt', {
-                method: 'POST',
-                body: formData
-              });
-              if (!res.ok) throw new Error('STT request failed');
-              const data = await res.json();
-              const text = data.text || '';
-              el.innerHTML = `<span>${text}</span>`;
-              if (text.trim()) {
-                setStatus('Animating…', true);
-                await s2sAnimateText(text.trim());
-                setStatus('Ready', false);
-              } else {
-                el.innerHTML = `<span style="color:var(--gray-400)">${forcedLang === 'ar' ? 'لم يتم العثور على كلام. حاول ثانية.' : 'No speech detected. Try again.'}</span>`;
-              }
-            } catch (err) {
-              console.error(err);
-              el.innerHTML = `<span style="color:red">${forcedLang === 'ar' ? 'خطأ في التعرف على الصوت' : 'Transcription error'}</span>`;
-            }
-          };
-          mediaRecorder.start();
-          
-          micOn = true;
-          document.getElementById('mic-icon').textContent = '🔴';
-          document.getElementById('mic-status').textContent = forcedLang === 'ar' ? 'جاري تسجيل الصوت...' : 'Recording audio...';
-          document.getElementById('mic-btn').textContent = forcedLang === 'ar' ? 'إيقاف وإرسال' : 'Stop & Transcribe';
-          document.getElementById('mic-btn').classList.add('on');
-          setStatus('Mic Active', true);
-          renderMobileQuickActions();
+      const sel = document.getElementById('mic-device-select');
+      const deviceId = sel && sel.value ? sel.value : null;
+      const constraints = { audio: deviceId ? { deviceId: { exact: deviceId } } : true };
+      console.log('[STT] Opening mic' + (deviceId ? ' (deviceId=' + deviceId.slice(0, 8) + '…)' : ' (system default)'));
+      const stream = await navigator.mediaDevices.getUserMedia(constraints);
+
+      populateMicDevices();
+      startMicLevelMeter(stream);
+
+      audioChunks = [];
+      mediaRecorder = new MediaRecorder(stream);
+      mediaRecorder.ondataavailable = (e) => {
+        if (e.data.size > 0) audioChunks.push(e.data);
+      };
+      mediaRecorder.onstop = async () => {
+        stopMicLevelMeter();
+        stream.getTracks().forEach(t => t.stop());
+        if (audioChunks.length === 0) {
+          console.warn('[STT] No audio captured.');
           return;
-        } else {
-          // English path: release microphone stream before starting SpeechRecognition to avoid conflicts
-          stream.getTracks().forEach(t => t.stop());
         }
-      }
-    } catch (err) {
-      setStatus('Mic permission denied', false);
-      document.getElementById('mic-status').textContent = 'Microphone permission denied.';
-      return;
-    }
+        const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+        console.log(`[STT] Sending ${audioBlob.size} bytes to backend (${selectedLang})`);
 
-    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SR) {
-      setStatus('Speech API not supported', false);
-      document.getElementById('mic-status').textContent = 'Speech recognition is not supported in this browser.';
-      return;
-    }
+        const el = document.getElementById('speech-output');
+        el.innerHTML = `<span style="color:var(--gray-400)">${isAr ? 'جاري التعرف على الكلام...' : 'Transcribing speech…'}</span>`;
 
-    recognition = new SR();
-    recognition.continuous = true;
-    recognition.interimResults = true;
-    recognition.lang = navigator.language || 'en-US';
+        const formData = new FormData();
+        formData.append('file', audioBlob, 'speech.webm');
+        formData.append('language', selectedLang);
 
-    recognition.onstart = () => {
-      setStatus('Mic Active', true);
-      document.getElementById('mic-status').textContent = forcedLang === 'ar' ? 'جاري الاستماع...' : 'Listening...';
-    };
+        try {
+          const res = await authFetch('/api/stt', { method: 'POST', body: formData });
+          if (!res.ok) throw new Error('STT request failed: ' + res.status);
+          const data = await res.json();
+          const text = data.text || '';
+          console.log(`[STT] Backend transcript: "${text}"`);
+          el.innerHTML = `<span>${text}</span>`;
+          if (text.trim()) {
+            setStatus('Animating…', true);
+            await s2sAnimateText(text.trim());
+            setStatus('Ready', false);
+          } else {
+            el.innerHTML = `<span style="color:var(--gray-400)">${isAr ? 'لم يتم العثور على كلام. تحقق من مقياس الصوت والميكروفون المحدد ثم حاول ثانية.' : 'No speech detected — check the mic level meter and selected microphone, then try again.'}</span>`;
+          }
+        } catch (err) {
+          console.error('[STT] Backend error:', err);
+          el.innerHTML = `<span style="color:red">${isAr ? 'خطأ في التعرف على الصوت' : 'Transcription error'}</span>`;
+        }
+      };
+      mediaRecorder.start();
 
-    recognition.onresult = async (event) => {
-      let interim = '';
-      let final = '';
-      for (let i = event.resultIndex; i < event.results.length; i++) {
-        const t = event.results[i][0].transcript;
-        if (event.results[i].isFinal) final += t;
-        else interim += t;
-      }
-
+      micOn = true;
+      document.getElementById('mic-icon').textContent = '🔴';
+      document.getElementById('mic-status').textContent = isAr ? 'جاري التسجيل... تحدث ثم اضغط إيقاف وإرسال' : 'Recording… speak, then click Stop & Transcribe';
+      document.getElementById('mic-btn').textContent = isAr ? 'إيقاف وإرسال' : 'Stop & Transcribe';
+      document.getElementById('mic-btn').classList.add('on');
       const el = document.getElementById('speech-output');
-      if (interim) el.innerHTML = `<span style="color:var(--gray-400)">${interim}</span>`;
-
-      if (final.trim()) {
-        if (s2sPlaying) {
-          pendingSpeechText = final.trim();
-          return;
-        }
-        el.innerHTML = `<span>${final.trim()}</span>`;
-        setStatus('Animating…', true);
-        await s2sAnimateText(final.trim());
-        setStatus('Mic Active', true);
-      }
-    };
-
-    recognition.onerror = (event) => {
-      const code = event?.error || 'unknown';
-      if (code === 'not-allowed' || code === 'service-not-allowed') {
-        stopMic();
-        setStatus('Mic blocked', false);
-        document.getElementById('mic-status').textContent = forcedLang === 'ar' ? 'تم حجب الوصول للميكروفون.' : 'Microphone access blocked by browser.';
-        return;
-      }
-      if (code === 'audio-capture') {
-        setStatus('Mic unavailable', false);
-        document.getElementById('mic-status').textContent = forcedLang === 'ar' ? 'لم يتم العثور على ميكروفون.' : 'No microphone detected.';
-        return;
-      }
-      document.getElementById('mic-status').textContent = forcedLang === 'ar' ? 'جاري الاستماع...' : 'Listening...';
-    };
-
-    recognition.onend = () => {
-      if (micOn) {
-        clearTimeout(micRestartTimer);
-        micRestartTimer = setTimeout(() => {
-          try { recognition && recognition.start(); } catch (_) { }
-        }, 250);
-      }
-    };
-
-    recognition.start();
-
-    micOn = true;
-    document.getElementById('mic-icon').textContent = '🔴';
-    document.getElementById('mic-status').textContent = forcedLang === 'ar' ? 'جاري الاستماع...' : 'Listening...';
-    document.getElementById('mic-btn').textContent = forcedLang === 'ar' ? 'إيقاف' : 'Stop';
-    document.getElementById('mic-btn').classList.add('on');
-    setStatus('Mic Active', true);
-    renderMobileQuickActions();
+      el.innerHTML = `<span style="color:var(--gray-400)">${isAr ? 'تحدث الآن…' : 'Listening — speak now, then click “Stop & Transcribe”.'}</span>`;
+      setStatus('Mic Active', true);
+      renderMobileQuickActions();
+    } catch (err) {
+      console.error('[STT] getUserMedia failed:', err);
+      stopMicLevelMeter();
+      setStatus('Mic permission denied', false);
+      const name = err && err.name ? err.name : '';
+      document.getElementById('mic-status').textContent =
+        (name === 'OverconstrainedError' || name === 'NotFoundError')
+          ? 'Selected microphone unavailable — pick another from the list.'
+          : 'Microphone permission denied.';
+    }
   }
 
   function stopMic() {
     micOn = false;
     clearTimeout(micRestartTimer);
+    stopMicLevelMeter();
     if (mediaRecorder && mediaRecorder.state !== 'inactive') {
       try { mediaRecorder.stop(); } catch (_) {}
       mediaRecorder = null;
@@ -3327,6 +3372,13 @@ html[data-theme="light"] .d-blob{opacity:calc(.38*var(--intensity)+.04)}
   let s2spSameCount = 0;
   let s2spGlossTimer = null;
   let s2spSentences = [];
+  let s2spLastSentence = '';
+  let s2spLastLang = 'arabic';
+
+  function s2spReplayTts() {
+    if (!s2spLastSentence) return;
+    playLocalTts(s2spLastSentence, s2spLastLang);
+  }
 
   function toggleS2SpCamera() { s2spCameraOn ? stopS2SpCamera() : startS2SpCamera(); }
 
@@ -3349,7 +3401,9 @@ html[data-theme="light"] .d-blob{opacity:calc(.38*var(--intensity)+.04)}
       return;
     }
 
-    navigator.mediaDevices.getUserMedia({ video: true }).then(stream => {
+    navigator.mediaDevices.getUserMedia({
+      video: { width: { ideal: 480 }, height: { ideal: 360 }, frameRate: { ideal: 15, max: 20 } }
+    }).then(stream => {
       console.log("[Camera] Stream acquired.");
       if (!s2spCameraOn) {
         stream.getTracks().forEach(t => t.stop());
@@ -3375,21 +3429,26 @@ html[data-theme="light"] .d-blob{opacity:calc(.38*var(--intensity)+.04)}
         });
 
         s2spHolistic.setOptions({
-          modelComplexity: 1,
-          smoothLandmarks: true,
-          minDetectionConfidence: 0.7,  // matches sign-to-text.py
-          minTrackingConfidence: 0.7,   // matches sign-to-text.py
+          modelComplexity: 0,
+          selfieMode: true,
+          smoothLandmarks: false,
+          minDetectionConfidence: 0.6,
+          minTrackingConfidence: 0.5,
         });
         s2spHolistic.onResults(onS2SpHolisticResults);
       }
 
       console.log("[Camera] Initializing MediaPipe Camera helper (S2SP)...");
       if (!window.Camera) return;
+      let _s2spLastMs = 0;
       s2spMpCamera = new window.Camera(video, {
         onFrame: async () => {
+          const now = performance.now();
+          if (now - _s2spLastMs < 1000/15) return;
+          _s2spLastMs = now;
           if (s2spHolistic) await s2spHolistic.send({ image: video });
         },
-        width: 640, height: 480,
+        width: 480, height: 360,
       });
       s2spMpCamera.start().then(() => console.log("[Camera] S2SP MediaPipe Camera started."));
     }).catch(err => {
@@ -3441,11 +3500,7 @@ html[data-theme="light"] .d-blob{opacity:calc(.38*var(--intensity)+.04)}
     canvas.width = results.image.width;
     canvas.height = results.image.height;
     const ctx = canvas.getContext('2d');
-    ctx.save();
-    ctx.translate(canvas.width, 0);
-    ctx.scale(-1, 1);
-    ctx.drawImage(results.image, 0, 0, canvas.width, canvas.height);
-    ctx.restore();
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
 
     if (window.drawConnectors && window.HAND_CONNECTIONS) {
       if (results.leftHandLandmarks)
@@ -3595,15 +3650,10 @@ html[data-theme="light"] .d-blob{opacity:calc(.38*var(--intensity)+.04)}
       document.getElementById('s2sp-sentence-output').innerHTML =
         `<span>${sentence}</span>`;
 
-      // Speak it
-      if (isArabicMode) {
-        playLocalTts(sentence, 'arabic');
-      } else if ('speechSynthesis' in window) {
-        const utt = new SpeechSynthesisUtterance(sentence);
-        utt.rate = 1;
-        utt.volume = 1;
-        window.speechSynthesis.speak(utt);
-      }
+      // Store for replay button and speak
+      s2spLastSentence = sentence;
+      s2spLastLang = isArabicMode ? 'arabic' : 'english';
+      playLocalTts(sentence, s2spLastLang);
 
       // Log it
       s2spSentences.unshift({ text: sentence, time: new Date().toLocaleTimeString() });

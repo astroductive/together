@@ -165,6 +165,7 @@ class _SlidingWindowLimiter:
 
 
 _auth_limiter = _SlidingWindowLimiter(max_requests=10, window_seconds=60)
+_api_limiter = _SlidingWindowLimiter(max_requests=60, window_seconds=60)
 
 
 def require_auth_rate_limit(request: Request) -> None:
@@ -174,5 +175,16 @@ def require_auth_rate_limit(request: Request) -> None:
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
             detail="Too many requests. Please wait a moment before trying again.",
+            headers={"Retry-After": "60"},
+        )
+
+
+def require_api_rate_limit(request: Request) -> None:
+    """FastAPI dependency: 60 AI/translate calls per 60 s per IP."""
+    ip = request.client.host if request.client else "unknown"
+    if not _api_limiter.allow(ip):
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Rate limit exceeded. Max 60 API calls per minute.",
             headers={"Retry-After": "60"},
         )
