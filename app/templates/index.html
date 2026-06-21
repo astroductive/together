@@ -342,6 +342,47 @@ html[data-theme="light"] .sb-collapsed .t-sidebar .t-brand--logo::after{backgrou
 .d-usage-bar-lbl{font-size:11px;color:var(--faint);margin-bottom:7px;font-family:var(--font-mono);letter-spacing:.06em;text-transform:uppercase}
 .d-usage-bar-track{height:5px;background:var(--surface-2);border-radius:3px;overflow:hidden;border:1px solid var(--border)}
 .d-usage-bar-fill{height:100%;border-radius:3px;background:var(--accent);transition:width .6s cubic-bezier(.4,0,.2,1)}
+
+/* ══ Stat grid tiles ══ */
+.d-stat-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;padding:14px 28px 0;flex-shrink:0}
+@media(max-width:1280px){.d-stat-grid{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:860px){.d-stat-grid{display:none}}
+.d-stat-tile{background:color-mix(in srgb,var(--surface) 80%,transparent);backdrop-filter:blur(10px);border:1px solid var(--border);border-radius:14px;padding:14px 16px 38px;display:flex;flex-direction:column;gap:3px;position:relative;overflow:hidden;min-width:0}
+.d-stat-lbl{font-size:10.5px;color:var(--faint);font-family:var(--font-mono);letter-spacing:.1em;text-transform:uppercase;font-weight:500}
+.d-stat-val{font-size:26px;font-weight:800;color:var(--text);font-family:var(--font-display);line-height:1.1;font-variant-numeric:tabular-nums;margin-top:2px}
+.d-stat-sub{font-size:11px;color:var(--muted);margin-top:2px}
+.d-stat-spark{position:absolute;bottom:0;left:0;right:0;height:38px;pointer-events:none;opacity:.55}
+.d-stat-spark polyline{stroke:var(--accent);fill:none;stroke-width:1.8;vector-effect:non-scaling-stroke}
+.d-stat-spark-area{fill:var(--accent);opacity:.12}
+
+/* ══ Confidence ring ══ */
+.d-conf-ring-wrap{display:flex;flex-direction:column;align-items:center;padding:20px 20px 12px;gap:10px}
+.d-conf-ring{width:110px;height:110px;flex:none}
+.d-conf-ring-track{fill:none;stroke:var(--border);stroke-width:9}
+.d-conf-ring-fill{fill:none;stroke:var(--accent);stroke-width:9;stroke-linecap:round;transform-origin:55px 55px;transform:rotate(-90deg);transition:stroke-dashoffset .5s cubic-bezier(.4,0,.2,1),stroke .3s}
+.d-conf-ring-val{font-size:21px;font-weight:800;fill:var(--text);font-family:var(--font-display);text-anchor:middle;dominant-baseline:middle}
+.d-conf-ring-lbl{font-size:10px;fill:var(--faint);font-family:var(--font-mono);text-anchor:middle;letter-spacing:.07em;text-transform:uppercase}
+.d-conf-state-badge{display:inline-flex;align-items:center;gap:5px;padding:4px 11px;border-radius:99px;font-size:11px;font-weight:700;background:var(--surface-2);border:1px solid var(--border);color:var(--faint);transition:background .2s,color .2s,border-color .2s}
+.d-conf-state-badge[data-state="detecting"]{background:rgba(20,80,60,.35);color:#34d399;border-color:rgba(52,211,153,.25)}
+.d-conf-state-badge[data-state="locked"]{background:rgba(10,60,100,.35);color:#60a5fa;border-color:rgba(96,165,250,.25)}
+.d-conf-state-badge[data-state="cooldown"]{background:rgba(80,60,10,.35);color:#fbbf24;border-color:rgba(251,191,36,.25)}
+.d-conf-state-badge i{width:5px;height:5px;border-radius:50%;background:currentColor;flex:none}
+
+/* ══ Confidence sparkline in analytics card ══ */
+.d-conf-spark-wrap{padding:2px 16px 12px}
+.d-conf-spark-lbl{font-size:10px;color:var(--faint);font-family:var(--font-mono);letter-spacing:.08em;text-transform:uppercase;margin-bottom:4px;padding:0 16px}
+.d-conf-spark{width:100%;height:44px;display:block}
+.d-conf-spark polyline{stroke:var(--accent);fill:none;stroke-width:1.5;vector-effect:non-scaling-stroke}
+
+/* ══ Detection state pill on viewport ══ */
+.d-state-pill{position:absolute;bottom:13px;inset-inline-end:13px;display:inline-flex;align-items:center;gap:6px;
+  padding:4px 10px;border-radius:var(--radius-full);font-size:11px;font-weight:700;letter-spacing:.04em;
+  background:rgba(0,0,0,.55);backdrop-filter:blur(6px);color:#ccc;border:1px solid rgba(255,255,255,.1);
+  transition:background .2s,color .2s;pointer-events:none}
+.d-state-pill[data-state="detecting"]{background:rgba(16,74,56,.8);color:#34d399;border-color:rgba(52,211,153,.3)}
+.d-state-pill[data-state="locked"]{background:rgba(8,54,90,.8);color:#60a5fa;border-color:rgba(96,165,250,.3)}
+.d-state-pill[data-state="cooldown"]{background:rgba(74,54,8,.8);color:#fbbf24;border-color:rgba(251,191,36,.3)}
+.d-state-pill i{width:6px;height:6px;border-radius:50%;background:currentColor;flex:none}
 </style>
 
 <a href="#main-content" class="t-skip-link">Skip to content</a>
@@ -428,6 +469,43 @@ html[data-theme="light"] .sb-collapsed .t-sidebar .t-brand--logo::after{backgrou
       </div>
     </header>
 
+    <!-- ══ Stat grid ══ -->
+    <div class="d-stat-grid" id="stat-grid">
+      <div class="d-stat-tile">
+        <div class="d-stat-lbl">Signs Today</div>
+        <div class="d-stat-val" id="tile-signs">0</div>
+        <div class="d-stat-sub" id="tile-signs-sub">loading…</div>
+        <svg class="d-stat-spark" id="spark-signs" viewBox="0 0 120 38" preserveAspectRatio="none">
+          <polygon class="d-stat-spark-area" id="spark-signs-area" points="0,38 0,38 120,38"/>
+          <polyline id="spark-signs-pts" points="0,38"/>
+        </svg>
+      </div>
+      <div class="d-stat-tile">
+        <div class="d-stat-lbl">Avg. Confidence</div>
+        <div class="d-stat-val" id="tile-conf">—</div>
+        <div class="d-stat-sub">last 20 detections</div>
+        <svg class="d-stat-spark" id="spark-conf" viewBox="0 0 120 38" preserveAspectRatio="none">
+          <polygon class="d-stat-spark-area" id="spark-conf-area" points="0,38 0,38 120,38"/>
+          <polyline id="spark-conf-pts" points="0,38"/>
+        </svg>
+      </div>
+      <div class="d-stat-tile">
+        <div class="d-stat-lbl">Session Time</div>
+        <div class="d-stat-val" id="tile-time">00:00</div>
+        <div class="d-stat-sub">elapsed this session</div>
+      </div>
+      <div class="d-stat-tile">
+        <div class="d-stat-lbl">Status</div>
+        <div class="d-stat-val" id="tile-module-name" style="font-size:15px;margin-top:4px">HandScript</div>
+        <div class="d-stat-sub" id="tile-module-sub">Sign → Text</div>
+        <div style="margin-top:8px" id="tile-detect-wrap">
+          <span class="d-conf-state-badge" id="tile-detect-badge" data-state="idle">
+            <i></i><span id="tile-detect-text">Idle</span>
+          </span>
+        </div>
+      </div>
+    </div>
+
     <!-- Mobile module picker -->
     <div class="d-mobile-picker">
       <select id="mobile-module-select" class="t-input" onchange="switchModule(null,this.value)">
@@ -471,6 +549,7 @@ html[data-theme="light"] .sb-collapsed .t-sidebar .t-brand--logo::after{backgrou
               </div>
               <div class="t-vp-loading" id="cam-loading" aria-hidden="true"><div class="t-spinner"></div><span>Starting camera…</span></div>
               <div class="d-live" id="live-badge"><i></i> LIVE</div>
+              <div class="d-state-pill" id="detect-state-pill" data-state="idle"><i></i>Idle</div>
             </div>
             <div class="d-box">
               <div class="t-eyebrow">Transcription</div>
@@ -494,10 +573,30 @@ html[data-theme="light"] .sb-collapsed .t-sidebar .t-brand--logo::after{backgrou
             </div>
           </div>
           <div class="t-card" style="padding:0;overflow:hidden">
-            <div class="t-card-title t-card-title--sm" style="padding:14px 18px 12px;border-bottom:1px solid var(--border)">Usage</div>
-            <div class="d-usage-card">
+            <div class="t-card-title t-card-title--sm" style="padding:14px 18px 12px;border-bottom:1px solid var(--border)">Analytics</div>
+            <!-- Live confidence ring -->
+            <div class="d-conf-ring-wrap">
+              <svg class="d-conf-ring" viewBox="0 0 110 110">
+                <circle class="d-conf-ring-track" cx="55" cy="55" r="46"/>
+                <circle class="d-conf-ring-fill" id="conf-ring-fill" cx="55" cy="55" r="46"
+                  stroke-dasharray="289 289" stroke-dashoffset="289"/>
+                <text class="d-conf-ring-val" id="conf-ring-pct" x="55" y="52">—</text>
+                <text class="d-conf-ring-lbl" x="55" y="69">confidence</text>
+              </svg>
+              <span class="d-conf-state-badge" id="conf-state-badge" data-state="idle">
+                <i></i><span id="conf-state-text">Idle</span>
+              </span>
+            </div>
+            <!-- Confidence trend sparkline -->
+            <div class="d-conf-spark-lbl">Confidence trend</div>
+            <div class="d-conf-spark-wrap">
+              <svg class="d-conf-spark" id="conf-spark" viewBox="0 0 200 44" preserveAspectRatio="none">
+                <polyline id="conf-spark-pts" points="0,44"/>
+              </svg>
+            </div>
+            <!-- Stats rows -->
+            <div class="d-usage-card" style="border-top:1px solid var(--border)">
               <div class="d-usage-row"><span class="d-usage-lbl">Signs today</span><span class="d-usage-val" id="usage-signs-today">0</span></div>
-              <div class="d-usage-row"><span class="d-usage-lbl">Accuracy</span><span class="d-usage-val" id="usage-accuracy">—</span></div>
               <div class="d-usage-row"><span class="d-usage-lbl">Avg. confidence</span><span class="d-usage-val" id="usage-confidence">—</span></div>
             </div>
             <div class="d-usage-bar-wrap">
@@ -537,6 +636,7 @@ html[data-theme="light"] .sb-collapsed .t-sidebar .t-brand--logo::after{backgrou
               </div>
               <div class="t-vp-loading" id="s2sp-loading" aria-hidden="true"><div class="t-spinner"></div><span>Starting camera…</span></div>
               <div class="d-live" id="s2sp-badge"><i></i> LIVE</div>
+              <div class="d-state-pill" id="s2sp-state-pill" data-state="idle"><i></i>Idle</div>
             </div>
             <div class="d-box" style="margin-bottom:14px">
               <div class="t-eyebrow">Detected Signs</div>
@@ -564,6 +664,21 @@ html[data-theme="light"] .sb-collapsed .t-sidebar .t-brand--logo::after{backgrou
             <div class="t-card-title t-card-title--sm">Sentence Log</div>
             <div class="d-log" id="s2sp-log">
               <p class="d-log-ph">No sentences spoken yet.</p>
+            </div>
+          </div>
+          <div class="t-card" style="padding:0;overflow:hidden">
+            <div class="t-card-title t-card-title--sm" style="padding:14px 18px 12px;border-bottom:1px solid var(--border)">Live Confidence</div>
+            <div class="d-conf-ring-wrap">
+              <svg class="d-conf-ring" viewBox="0 0 110 110">
+                <circle class="d-conf-ring-track" cx="55" cy="55" r="46"/>
+                <circle class="d-conf-ring-fill" id="s2sp-conf-ring-fill" cx="55" cy="55" r="46"
+                  stroke-dasharray="289 289" stroke-dashoffset="289"/>
+                <text class="d-conf-ring-val" id="s2sp-conf-ring-pct" x="55" y="52">—</text>
+                <text class="d-conf-ring-lbl" x="55" y="69">confidence</text>
+              </svg>
+              <span class="d-conf-state-badge" id="s2sp-conf-state-badge" data-state="idle">
+                <i></i><span id="s2sp-conf-state-text">Idle</span>
+              </span>
             </div>
           </div>
         </div>
@@ -1788,6 +1903,9 @@ html[data-theme="light"] .sb-collapsed .t-sidebar .t-brand--logo::after{backgrou
       if (!cameraOn) { inferenceRunning = false; return; }
 
       if (data.text && data.confidence > 0) {
+        // Show live confidence on widgets
+        if (window._updateConfWidgets) _updateConfWidgets(data.confidence);
+        if (window._setDetectState) _setDetectState('detecting', 'Detecting', 'hs');
         // Accumulate into vote buffer (deque maxlen=VOTE_BUFFER_SIZE in script)
         voteBuffer.push(data.text);
         if (voteBuffer.length > VOTE_BUFFER_SIZE) voteBuffer.shift();
@@ -1806,6 +1924,9 @@ html[data-theme="light"] .sb-collapsed .t-sidebar .t-brand--logo::after{backgrou
             voteBuffer = [];            // vote_buffer.clear()
             frameBuffer = [];           // sequence.clear() — flush stale frames
             globalCooldown = GLOBAL_COOLDOWN_FRM;
+            if (window._setDetectState) _setDetectState('locked', 'Locked', 'hs');
+            setTimeout(() => { if (window._setDetectState) _setDetectState('cooldown', 'Cooldown', 'hs'); }, 200);
+            setTimeout(() => { if (window._setDetectState && cameraOn) _setDetectState('idle', 'Idle', 'hs'); }, GLOBAL_COOLDOWN_FRM * 33 + 200);
             handleDetectedSign(winner, count / VOTE_BUFFER_SIZE);
           }
         }
@@ -3762,6 +3883,8 @@ html[data-theme="light"] .sb-collapsed .t-sidebar .t-brand--logo::after{backgrou
       if (!s2spCameraOn) { s2spInferRunning = false; return; }
 
       if (data.text && data.confidence > 0) {
+        if (window._updateConfWidgets) _updateConfWidgets(data.confidence);
+        if (window._setDetectState) _setDetectState('detecting', 'Detecting', 's2sp');
         s2spVoteBuffer.push(data.text);
         if (s2spVoteBuffer.length > VOTE_BUFFER_SIZE) s2spVoteBuffer.shift();
 
@@ -3777,6 +3900,9 @@ html[data-theme="light"] .sb-collapsed .t-sidebar .t-brand--logo::after{backgrou
             s2spVoteBuffer = [];       // vote_buffer.clear()
             s2spFrameBuffer = [];      // sequence.clear()
             s2spGlobalCooldown = GLOBAL_COOLDOWN_FRM;
+            if (window._setDetectState) _setDetectState('locked', 'Locked', 's2sp');
+            setTimeout(() => { if (window._setDetectState) _setDetectState('cooldown', 'Cooldown', 's2sp'); }, 200);
+            setTimeout(() => { if (window._setDetectState && s2spCameraOn) _setDetectState('idle', 'Idle', 's2sp'); }, GLOBAL_COOLDOWN_FRM * 33 + 200);
             s2spHandleSign(winner);
           }
         }
@@ -3993,6 +4119,85 @@ let _signCount = parseInt(localStorage.getItem('signs-today-count') || '0', 10) 
 })();
 /* Single source of truth for the sign counter — call from ANY module when signs
    are detected/translated so the topbar chip reflects activity across all dashboards. */
+// ── Rolling confidence history for sparklines ───────────────
+const _confHistory = [];   // {conf, t} — last 40 detections
+const _signsSparkPts = []; // running count per 5-sign bucket for sparkline
+let _signsSparkBucket = 0;
+
+function _sparkPoints(arr, w, h) {
+  if (arr.length < 2) return '';
+  const xs = arr.map((_,i) => (i / (arr.length - 1)) * w);
+  const min = Math.min(...arr), range = Math.max(...arr) - min || 1;
+  const ys = arr.map(v => h - ((v - min) / range) * (h * 0.8) - h * 0.08);
+  return xs.map((x, i) => `${x.toFixed(1)},${ys[i].toFixed(1)}`).join(' ');
+}
+function _sparkArea(pts, w, h) {
+  if (!pts) return '';
+  const first = pts.split(' ')[0];
+  const last = pts.split(' ').pop();
+  return `${first.split(',')[0]},${h} ${pts} ${last.split(',')[0]},${h}`;
+}
+
+function _updateConfWidgets(conf) {
+  const pct = Math.round(conf * 100);
+  // Ring fill — circumference ≈ 289 for r=46
+  const circ = 289;
+  const offset = circ - (pct / 100) * circ;
+  const color = pct >= 80 ? 'var(--ok,#22c55e)' : pct >= 60 ? 'var(--accent)' : '#f59e0b';
+
+  ['conf-ring-fill','s2sp-conf-ring-fill'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) { el.style.strokeDashoffset = offset; el.style.stroke = color; }
+  });
+  ['conf-ring-pct','s2sp-conf-ring-pct'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.textContent = pct + '%';
+  });
+
+  // Push to history & update sparkline
+  _confHistory.push(pct);
+  if (_confHistory.length > 40) _confHistory.shift();
+  const pts = _sparkPoints(_confHistory, 200, 44);
+  const sparkLine = document.getElementById('conf-spark-pts');
+  if (sparkLine && pts) sparkLine.setAttribute('points', pts);
+  // Tile sparkline
+  const tilePts = _sparkPoints(_confHistory.slice(-20), 120, 38);
+  const tileEl = document.getElementById('spark-conf-pts');
+  if (tileEl && tilePts) tileEl.setAttribute('points', tilePts);
+  const tileArea = document.getElementById('spark-conf-area');
+  if (tileArea && tilePts) tileArea.setAttribute('points', _sparkArea(tilePts, 120, 38));
+  // Update avg display
+  const avg = Math.round(_confHistory.slice(-20).reduce((a,b)=>a+b,0) / Math.min(_confHistory.length,20));
+  const tileConf = document.getElementById('tile-conf');
+  if (tileConf) tileConf.textContent = avg + '%';
+  const usageConf = document.getElementById('usage-confidence');
+  if (usageConf) usageConf.textContent = avg + '%';
+}
+
+function _setDetectState(state, label, moduleId) {
+  // state: 'idle' | 'detecting' | 'locked' | 'cooldown'
+  const ids = moduleId === 's2sp'
+    ? ['s2sp-state-pill','s2sp-conf-state-badge','s2sp-conf-state-text']
+    : ['detect-state-pill','conf-state-badge','conf-state-text','tile-detect-badge','tile-detect-text'];
+
+  const pillId = moduleId === 's2sp' ? 's2sp-state-pill' : 'detect-state-pill';
+  const pill = document.getElementById(pillId);
+  if (pill) {
+    pill.setAttribute('data-state', state);
+    pill.innerHTML = `<i></i>${label}`;
+  }
+  ['conf-state-badge','s2sp-conf-state-badge','tile-detect-badge'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.setAttribute('data-state', state);
+  });
+  ['conf-state-text','s2sp-conf-state-text','tile-detect-text'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.textContent = label;
+  });
+}
+window._setDetectState = _setDetectState;
+window._updateConfWidgets = _updateConfWidgets;
+
 function bumpSignCount(n) {
   _signCount += (n || 1);
   localStorage.setItem('signs-today-count', String(_signCount));
@@ -4002,6 +4207,22 @@ function bumpSignCount(n) {
   if (usageToday) usageToday.textContent = _signCount;
   const bar = document.getElementById('usage-progress-bar');
   if (bar) bar.style.width = Math.min(_signCount * 2, 100) + '%';
+  // Tile
+  const tileSigns = document.getElementById('tile-signs');
+  if (tileSigns) tileSigns.textContent = _signCount;
+  const tileSub = document.getElementById('tile-signs-sub');
+  if (tileSub) tileSub.textContent = `${_signCount} sign${_signCount !== 1 ? 's' : ''} today`;
+  // Bump signs sparkline bucket
+  _signsSparkBucket++;
+  if (_signsSparkBucket % 3 === 0) {
+    _signsSparkPts.push(_signCount);
+    if (_signsSparkPts.length > 20) _signsSparkPts.shift();
+    const pts = _sparkPoints(_signsSparkPts, 120, 38);
+    const el = document.getElementById('spark-signs-pts');
+    if (el && pts) el.setAttribute('points', pts);
+    const areaEl = document.getElementById('spark-signs-area');
+    if (areaEl && pts) areaEl.setAttribute('points', _sparkArea(pts, 120, 38));
+  }
 }
 window.bumpSignCount = bumpSignCount;
 // Paint the persisted count on load
@@ -4013,17 +4234,35 @@ function _fmtUptime(ms) {
     : `${String(m).padStart(2,'0')}:${String(s % 60).padStart(2,'0')}`;
 }
 setInterval(function() {
+  const uptime = _fmtUptime(Date.now() - _sessionStart);
   const el = document.getElementById('chip-uptime');
-  if (el) el.textContent = _fmtUptime(Date.now() - _sessionStart);
+  if (el) el.textContent = uptime;
+  const tileTime = document.getElementById('tile-time');
+  if (tileTime) tileTime.textContent = uptime;
 }, 1000);
 
 const _moduleLabels = {
   vision: 'Sign→Text', speech: 'Sign→Speech',
   text2sign: 'Text→Sign', speech2sign: 'Speech→Sign', meeting: 'Meeting'
 };
+const _moduleNames = {
+  vision: 'HandScript', speech: 'VoiceBridge',
+  text2sign: 'SignType', speech2sign: 'TalkSide', meeting: 'Live Meeting'
+};
+const _moduleSubs = {
+  vision: 'Sign → Text', speech: 'Sign → Speech',
+  text2sign: 'Text → Sign', speech2sign: 'Speech → Sign', meeting: 'Two-way call'
+};
 function _updateChipModule(key) {
   const el = document.getElementById('chip-module');
   if (el) el.textContent = _moduleLabels[key] || key;
+  const nameEl = document.getElementById('tile-module-name');
+  if (nameEl) nameEl.textContent = _moduleNames[key] || key;
+  const subEl = document.getElementById('tile-module-sub');
+  if (subEl) subEl.textContent = _moduleSubs[key] || '';
+  // Hide stat grid on meeting panel
+  const grid = document.getElementById('stat-grid');
+  if (grid) grid.style.display = key === 'meeting' ? 'none' : '';
 }
 
 /* Patch switchModule to update chip */
