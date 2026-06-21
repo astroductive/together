@@ -102,6 +102,11 @@
    by an opaque body background. */
 html{background:var(--bg)!important;overflow:hidden}
 body{background:transparent!important;overflow:hidden}
+/* sidebar brand logo (replaces boxed "T") */
+.t-brand--logo{padding:2px 8px 22px}
+.t-brand-logo-img{height:34px;width:auto;display:block}
+html[data-theme="light"] .t-brand-logo-img{content:url('/static/img/logo-together-dark.svg')}
+.t-topbar .t-sub{font-family:var(--font-mono);font-size:10.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--faint)}
 #main-content{padding:0!important;flex:1;min-height:0;overflow:hidden;background:transparent!important}
 .t-scope.t-app{background:transparent}
 .t-main{height:100vh;overflow:hidden}
@@ -263,7 +268,9 @@ html[data-theme="light"] .d-blob{opacity:calc(.38*var(--intensity)+.04)}
 <div class="t-scope t-app" id="app" dir="rtl" lang="ar" style="height:100vh;overflow:hidden">
   <!-- ── Sidebar ── -->
   <aside class="t-sidebar">
-    <a href="/" class="t-brand" aria-label="Together — home"><span class="t-logo">T</span> Together</a>
+    <a href="/" class="t-brand t-brand--logo" aria-label="Together — home">
+      <img src="/static/img/logo-together.svg" alt="معاً" class="t-brand-logo-img">
+    </a>
     <nav aria-label="Modules">
       <a class="t-nav-item is-active" onclick="switchModule(event,'vision')" href="#" id="nav-vision" aria-current="page">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0z"/><path d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>

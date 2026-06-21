@@ -16,28 +16,29 @@
 
 <div class="pg-section">
   <h2>Our story</h2>
-  <p>Together began in 2024 as a research project at a university accessibility lab. The founding team — a Deaf software engineer, a computational linguist, and an ML researcher — were frustrated that the best available ASL recognition tools required cloud uploads, had small vocabularies, and offered no Arabic support.</p>
-  <p>We spent 18 months building a browser-native pipeline: MediaPipe landmarks, a quantized TFLite model for ASL, a PyTorch CNN-GRU for ArSL, and a live WebRTC meeting layer. The result is Together — a platform that works in the browser, offline, in any language, with no server in the middle.</p>
+  <p>Together started as our final-year graduation project in Computer Engineering. We wanted to tackle a real accessibility gap: no good, privacy-respecting, browser-native sign language translator existed for Arabic Sign Language.</p>
+  <p>We built the full stack ourselves — MediaPipe landmark detection, a TFLite model for ASL with a 250-class vocabulary, a PyTorch CNN-GRU for Egyptian ArSL, a WebRTC live meeting layer, and a bilingual Arabic-first UI. Everything runs in the browser. No server ever sees your camera feed.</p>
 </div>
 
 <div class="pg-section">
   <h2>The team</h2>
+  <p>Together is a graduation project by four 5th-year Computer Engineering students. We built it because we believe communication is a right — and we wanted to prove that browser-native AI can close real accessibility gaps, without cloud uploads, without interpreters on standby, and without a startup budget.</p>
   <div class="uc-grid">
     <div class="uc-card">
-      <div class="uc-title">Layla Hassan — CEO &amp; Co-founder</div>
-      <p class="uc-desc">Deaf software engineer and accessibility advocate. 10 years in distributed systems at a major tech firm before co-founding Together. ASL and ArSL fluent.</p>
+      <div class="uc-title">ML &amp; Computer Vision</div>
+      <p class="uc-desc">TFLite model pipeline, MediaPipe landmark extraction, and the ASL recognition engine.</p>
     </div>
     <div class="uc-card">
-      <div class="uc-title">Dr. James Osei — CTO &amp; Co-founder</div>
-      <p class="uc-desc">ML researcher specializing in on-device vision models. PhD in Computer Vision (UCL). Led the TFLite and ONNX model pipelines.</p>
+      <div class="uc-title">Backend &amp; WebRTC</div>
+      <p class="uc-desc">FastAPI server, Socket.IO live meeting layer, authentication, and API design.</p>
     </div>
     <div class="uc-card">
-      <div class="uc-title">Nour Al-Rashid — Head of Linguistics</div>
-      <p class="uc-desc">Computational linguist and ArSL researcher. Built the Egyptian ArSL dataset and annotation framework. Fluent in Arabic, ArSL, and ASL.</p>
+      <div class="uc-title">Arabic NLP &amp; ArSL</div>
+      <p class="uc-desc">PyTorch CNN-GRU for Egyptian ArSL, Arabic dataset annotation, and RTL UI engineering.</p>
     </div>
     <div class="uc-card">
-      <div class="uc-title">Marco Silva — Head of Design</div>
-      <p class="uc-desc">Product designer with a background in inclusive design and design systems. Led the Together UI system — teal-sand palette, Thmanyah typography, and liquid glass aesthetics.</p>
+      <div class="uc-title">Frontend &amp; Design System</div>
+      <p class="uc-desc">Design system, Jinja2 templates, accessibility audit, and glass-morphic UI components.</p>
     </div>
   </div>
 </div>
@@ -53,9 +54,9 @@
 </div>
 
 <div class="cta-strip">
-  <h3>Join the mission</h3>
-  <p>We're hiring engineers, linguists, and community advocates. We also welcome research partnerships and enterprise pilots.</p>
-  <a href="/partnership">Partner with Us</a>
+  <h3>Try it now</h3>
+  <p>Open the dashboard and start translating in seconds. No install, no signup required for the demo.</p>
+  <a href="/dashboard">Open Dashboard</a>
   <a href="/contact" class="sec">Get in Touch</a>
 </div>
 {% endblock %}

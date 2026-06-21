@@ -17,6 +17,9 @@
     border-bottom:1px solid var(--border);transition:background .4s}
   .lp-nav-brand{display:flex;align-items:center;text-decoration:none;flex-shrink:0}
   .lp-nav-brand img{height:42px;width:auto}
+  html[data-theme="light"] .lp-nav-brand img,
+  html[data-theme="light"] .lp-nav-logo-img,
+  html[data-theme="light"] .lp-footer-brand img{content:url('/static/img/logo-together-dark.svg')}
   .lp-nav-brand-fb{display:none;align-items:center;gap:10px;font-family:var(--font-display);font-weight:800;font-size:20px;color:var(--text)}
   .lp-nav-brand-fb .lp-logo{width:32px;height:32px;border-radius:9px;background:var(--accent);display:grid;place-items:center;color:#fff;font-size:15px;font-weight:800}
   .lp-nav-links{display:flex;align-items:center;gap:2px;margin-inline-start:18px;flex:1}
@@ -25,11 +28,13 @@
   .lp-dd-btn:hover,.lp-dd-btn:focus-visible{color:var(--text);background:var(--surface)}
   .lp-dd-btn svg{width:12px;height:12px;transition:transform .2s}
   .lp-dd:hover .lp-dd-btn svg,.lp-dd:focus-within .lp-dd-btn svg{transform:rotate(180deg)}
-  .lp-dd-menu{position:absolute;top:calc(100% + 8px);inset-inline-start:0;min-width:230px;
+  .lp-dd-menu{position:absolute;top:100%;inset-inline-start:0;min-width:230px;
     background:color-mix(in srgb,var(--surface) 92%,transparent);backdrop-filter:blur(20px);
     border:1px solid var(--border);border-radius:var(--radius-lg);box-shadow:var(--shadow-lg);
-    padding:8px;opacity:0;pointer-events:none;transform:translateY(-8px);transition:opacity .18s,transform .18s}
-  .lp-dd:hover .lp-dd-menu,.lp-dd:focus-within .lp-dd-menu{opacity:1;pointer-events:auto;transform:translateY(0)}
+    padding:8px;padding-top:16px;opacity:0;pointer-events:none;transform:translateY(-6px);transition:opacity .18s,transform .18s}
+  .lp-dd:hover .lp-dd-menu,.lp-dd:focus-within .lp-dd-menu,.lp-dd.is-open .lp-dd-menu{opacity:1;pointer-events:auto;transform:translateY(0)}
+  .lp-dd.is-open .lp-dd-btn{color:var(--text);background:var(--surface)}
+  .lp-dd.is-open .lp-dd-btn svg{transform:rotate(180deg)}
   .lp-dd-item{display:flex;align-items:flex-start;gap:11px;padding:10px 12px;border-radius:var(--radius);text-decoration:none;transition:background .15s}
   .lp-dd-item:hover{background:var(--surface-2)}
   .lp-dd-icon{width:32px;height:32px;border-radius:8px;background:var(--accent-soft);display:grid;place-items:center;flex-shrink:0;color:var(--accent)}
@@ -192,91 +197,7 @@
 {% endblock %}
 
 {% block nav %}
-<nav class="lp-nav" role="navigation" aria-label="Main navigation">
-  <a href="/" class="lp-nav-brand" aria-label="Together — home">
-    <img src="/static/img/logo-together.svg" alt="Together" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">
-    <span class="lp-nav-brand-fb"><span class="lp-logo">T</span>Together</span>
-  </a>
-
-  <div class="lp-nav-links">
-    <div class="lp-dd">
-      <button class="lp-dd-btn" aria-haspopup="true">Products
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="m6 9 6 6 6-6"/></svg>
-      </button>
-      <div class="lp-dd-menu">
-        <a href="/products/handscript" class="lp-dd-item">
-          <span class="lp-dd-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg></span>
-          <span><div class="lp-dd-label">HandScript</div><div class="lp-dd-desc">Sign → Text live transcription</div></span>
-        </a>
-        <a href="/products/voicebridge" class="lp-dd-item">
-          <span class="lp-dd-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2M12 19v4M8 23h8"/></svg></span>
-          <span><div class="lp-dd-label">VoiceBridge</div><div class="lp-dd-desc">Sign → Speech synthesis</div></span>
-        </a>
-        <a href="/products/signtype" class="lp-dd-item">
-          <span class="lp-dd-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></span>
-          <span><div class="lp-dd-label">SignType</div><div class="lp-dd-desc">Text → Sign avatar output</div></span>
-        </a>
-        <a href="/products/talkside" class="lp-dd-item">
-          <span class="lp-dd-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M4.93 4.93a10 10 0 0 0 0 14.14"/></svg></span>
-          <span><div class="lp-dd-label">TalkSide</div><div class="lp-dd-desc">Speech → Sign translation</div></span>
-        </a>
-      </div>
-    </div>
-
-    <div class="lp-dd">
-      <button class="lp-dd-btn" aria-haspopup="true">Languages
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="m6 9 6 6 6-6"/></svg>
-      </button>
-      <div class="lp-dd-menu">
-        <a href="/languages/asl" class="lp-dd-item">
-          <span class="lp-dd-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10A15.3 15.3 0 0 1 12 2z"/></svg></span>
-          <span><div class="lp-dd-label">ASL</div><div class="lp-dd-desc">American Sign Language — 250 classes</div></span>
-        </a>
-        <a href="/languages/arsl" class="lp-dd-item">
-          <span class="lp-dd-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10A15.3 15.3 0 0 1 12 2z"/></svg></span>
-          <span><div class="lp-dd-label">ArSL</div><div class="lp-dd-desc">Arabic Sign Language — 20 classes</div></span>
-        </a>
-      </div>
-    </div>
-
-    <a href="/resources" class="lp-nav-link">Resources</a>
-
-    <div class="lp-dd">
-      <button class="lp-dd-btn" aria-haspopup="true">Our Team
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="m6 9 6 6 6-6"/></svg>
-      </button>
-      <div class="lp-dd-menu">
-        <a href="/about" class="lp-dd-item">
-          <span class="lp-dd-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg></span>
-          <span><div class="lp-dd-label">About Us</div><div class="lp-dd-desc">Our story and mission</div></span>
-        </a>
-        <a href="/partnership" class="lp-dd-item">
-          <span class="lp-dd-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M16 16s-1.5-2-4-2-4 2-4 2"/><circle cx="12" cy="8" r="4"/></svg></span>
-          <span><div class="lp-dd-label">Partnership</div><div class="lp-dd-desc">Work with us</div></span>
-        </a>
-        <a href="/contact" class="lp-dd-item">
-          <span class="lp-dd-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg></span>
-          <span><div class="lp-dd-label">Contact Us</div><div class="lp-dd-desc">Get in touch</div></span>
-        </a>
-      </div>
-    </div>
-  </div>
-
-  <div class="lp-nav-end">
-    <a href="/?lang=ar" class="lp-nav-link" lang="ar" dir="rtl">العربية</a>
-    <a href="/demo" class="lp-btn-demo">Book a Demo</a>
-    <a href="/login" class="lp-btn-login">Together Login</a>
-    <span class="lp-nav-sep" aria-hidden="true"></span>
-    <div class="t-toggle" role="group" aria-label="Color theme">
-      <button type="button" data-theme-set="light" aria-pressed="false" aria-label="Light theme" title="Light">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4 12H2M22 12h-2M5 5l1.4 1.4M17.6 17.6 19 19M19 5l-1.4 1.4M6.4 17.6 5 19"/></svg>
-      </button>
-      <button type="button" data-theme-set="dark" aria-pressed="true" aria-label="Dark theme" title="Dark">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A8 8 0 1 1 11.2 3 6.2 6.2 0 0 0 21 12.8Z"/></svg>
-      </button>
-    </div>
-  </div>
-</nav>
+{% include '_lp_nav.html' %}
 {% endblock %}
 
 {% block content %}
@@ -490,41 +411,7 @@
   </div>
 
   <!-- Footer -->
-  <footer class="lp-footer">
-    <div class="lp-footer-inner">
-      <div class="lp-footer-brand">
-        <img src="/static/img/logo-together.svg" alt="Together" onerror="this.style.display='none'">
-        <p class="lp-footer-tagline">AI-powered sign language translation for the Deaf and Hard-of-Hearing community. One world, every language.</p>
-        <p class="lp-footer-address">Together Technologies<br>Cairo, Egypt · Alexandria<br>hello@together.app</p>
-      </div>
-      <div class="lp-footer-col">
-        <h4>Products</h4>
-        <a href="/products/handscript">HandScript</a>
-        <a href="/products/voicebridge">VoiceBridge</a>
-        <a href="/products/signtype">SignType</a>
-        <a href="/products/talkside">TalkSide</a>
-      </div>
-      <div class="lp-footer-col">
-        <h4>Menu</h4>
-        <a href="/resources">Resources</a>
-        <a href="/about">About Us</a>
-        <a href="/partnership">Partnership</a>
-        <a href="/demo">Book a Demo</a>
-        <a href="/login">Login</a>
-      </div>
-      <div class="lp-footer-col">
-        <h4>Contact</h4>
-        <a href="/contact">Contact Us</a>
-        <a href="mailto:hello@together.app">hello@together.app</a>
-        <a href="/languages/asl">ASL</a>
-        <a href="/languages/arsl">ArSL</a>
-      </div>
-    </div>
-    <div class="lp-footer-bottom">
-      <span class="lp-footer-copy">© 2026 Together Technologies. All rights reserved.</span>
-      <span class="lp-footer-copy">Built for the Deaf and Hard-of-Hearing community worldwide.</span>
-    </div>
-  </footer>
+  {% include '_lp_footer.html' %}
 </div>
 
 <script>

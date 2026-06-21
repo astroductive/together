@@ -23,6 +23,29 @@
   .lp-nav-end{display:flex;align-items:center;gap:10px;margin-inline-start:auto}
   .lp-nav-link{padding:7px 13px;border-radius:var(--radius-full);font-size:13.5px;font-weight:600;color:var(--muted);text-decoration:none;transition:color .18s,background .18s}
   .lp-nav-link:hover{color:var(--text);background:var(--surface)}
+  .lp-nav-logo-img{height:42px;width:auto}
+  html[data-theme="light"] .lp-nav-logo-img,
+  html[data-theme="light"] .lp-nav-brand img,
+  html[data-theme="light"] .lp-footer-brand img{content:url('/static/img/logo-together-dark.svg')}
+  .lp-nav-links{display:flex;align-items:center;gap:2px;margin-inline-start:18px;flex:1}
+  .lp-dd{position:relative}
+  .lp-dd-btn{display:inline-flex;align-items:center;gap:5px;padding:7px 13px;border-radius:var(--radius-full);font-size:13.5px;font-weight:600;color:var(--muted);background:none;border:none;cursor:pointer;transition:color .18s,background .18s;font-family:var(--font-arabic)}
+  .lp-dd-btn:hover,.lp-dd-btn:focus-visible,.lp-dd.is-open .lp-dd-btn{color:var(--text);background:var(--surface)}
+  .lp-dd-btn svg{width:12px;height:12px;transition:transform .2s}
+  .lp-dd.is-open .lp-dd-btn svg{transform:rotate(180deg)}
+  .lp-dd-menu{position:absolute;top:100%;inset-inline-start:0;min-width:230px;
+    background:color-mix(in srgb,var(--surface) 92%,transparent);backdrop-filter:blur(20px);
+    border:1px solid var(--border);border-radius:var(--radius-lg);box-shadow:var(--shadow-lg);
+    padding:8px;padding-top:16px;opacity:0;pointer-events:none;transform:translateY(-6px);transition:opacity .18s,transform .18s}
+  .lp-dd:hover .lp-dd-menu,.lp-dd:focus-within .lp-dd-menu,.lp-dd.is-open .lp-dd-menu{opacity:1;pointer-events:auto;transform:translateY(0)}
+  .lp-dd-item{display:flex;align-items:flex-start;gap:11px;padding:10px 12px;border-radius:var(--radius);text-decoration:none;transition:background .15s}
+  .lp-dd-item:hover{background:var(--surface-2)}
+  .lp-dd-icon{width:32px;height:32px;border-radius:8px;background:var(--accent-soft);display:grid;place-items:center;flex-shrink:0;color:var(--accent)}
+  .lp-dd-icon svg{width:16px;height:16px}
+  .lp-dd-label{font-size:13.5px;font-weight:600;color:var(--text);font-family:var(--font-arabic)}
+  .lp-dd-desc{font-size:11.5px;color:var(--muted);margin-top:2px;font-family:var(--font-arabic)}
+  .lp-nav-sep{width:1px;height:22px;background:var(--border)}
+  @media(max-width:680px){.lp-nav-links{display:none}}
   .lp-btn-en{padding:8px 18px;border-radius:var(--radius-full);font-size:13.5px;font-weight:700;
     background:var(--accent-soft);color:var(--accent);border:1px solid color-mix(in srgb,var(--accent) 25%,transparent);
     text-decoration:none;transition:background .18s}
@@ -118,6 +141,27 @@
   .hiw-label{font-size:15px;font-weight:700;color:var(--text);margin-bottom:8px;font-family:var(--font-arabic)}
   .hiw-text{font-size:13px;color:var(--muted);line-height:1.7;font-family:var(--font-arabic)}
 
+  /* ── Testimonials ── */
+  .test-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:22px;margin-top:54px}
+  .test-card{padding:28px;border-radius:var(--radius-lg);background:color-mix(in srgb,var(--surface) 82%,transparent);
+    border:1px solid var(--border);backdrop-filter:blur(12px)}
+  .test-stars{color:#f59e0b;font-size:15px;margin-bottom:14px;letter-spacing:2px}
+  .test-quote{font-size:14.5px;color:var(--text);line-height:1.8;font-family:var(--font-arabic)}
+  .test-author{display:flex;align-items:center;gap:12px;margin-top:18px}
+  .test-avatar{width:38px;height:38px;border-radius:50%;display:grid;place-items:center;font-weight:800;font-size:13px;color:#fff;flex-shrink:0}
+  .test-name{font-size:13.5px;font-weight:700;color:var(--text);font-family:var(--font-arabic)}
+  .test-role{font-size:12px;color:var(--muted);font-family:var(--font-arabic)}
+
+  /* ── FAQ ── */
+  .faq-list{margin-top:44px;display:flex;flex-direction:column;gap:12px}
+  details.faq-item{border-radius:var(--radius-lg);border:1px solid var(--border);background:color-mix(in srgb,var(--surface) 80%,transparent);backdrop-filter:blur(12px);overflow:hidden}
+  summary.faq-q{padding:18px 22px;font-size:15px;font-weight:700;color:var(--text);cursor:pointer;display:flex;align-items:center;justify-content:space-between;list-style:none;transition:color .18s;font-family:var(--font-arabic)}
+  summary.faq-q::-webkit-details-marker{display:none}
+  summary.faq-q::after{content:"+";font-size:20px;font-weight:400;color:var(--muted);transition:transform .2s;flex-shrink:0}
+  details[open] summary.faq-q::after{transform:rotate(45deg)}
+  summary.faq-q:hover{color:var(--accent)}
+  .faq-a{padding:0 22px 18px;font-size:14px;color:var(--muted);line-height:1.8;font-family:var(--font-arabic)}
+
   /* ── CTA ── */
   .cta-band{background:linear-gradient(135deg,var(--accent),color-mix(in srgb,var(--accent) 60%,#1a5c58));
     border-radius:var(--radius-xl);padding:56px 40px;text-align:center;position:relative;overflow:hidden}
@@ -152,14 +196,78 @@
 
 {% block nav %}
 <nav class="lp-nav" role="navigation" aria-label="التنقل الرئيسي" dir="rtl">
-  <a href="/" class="lp-nav-brand" aria-label="معاً — الرئيسية">
-    <img src="/static/img/logo-together.svg" alt="معاً" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">
-    <span class="lp-nav-brand-fb"><span class="lp-logo">م</span>معاً</span>
+  <a href="/?lang=ar" class="lp-nav-brand" aria-label="معاً — الرئيسية">
+    <img src="/static/img/logo-together.svg" alt="معاً" class="lp-nav-logo-img">
   </a>
+
+  <div class="lp-nav-links">
+    <div class="lp-dd">
+      <button class="lp-dd-btn" aria-haspopup="true" aria-expanded="false">المنتجات
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="m6 9 6 6 6-6"/></svg>
+      </button>
+      <div class="lp-dd-menu" role="menu">
+        <a href="/products/handscript" class="lp-dd-item" role="menuitem">
+          <span class="lp-dd-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg></span>
+          <span><div class="lp-dd-label">HandScript</div><div class="lp-dd-desc">إشارة → نص فوري</div></span>
+        </a>
+        <a href="/products/voicebridge" class="lp-dd-item" role="menuitem">
+          <span class="lp-dd-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2M12 19v4M8 23h8"/></svg></span>
+          <span><div class="lp-dd-label">VoiceBridge</div><div class="lp-dd-desc">إشارة → كلام</div></span>
+        </a>
+        <a href="/products/signtype" class="lp-dd-item" role="menuitem">
+          <span class="lp-dd-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></span>
+          <span><div class="lp-dd-label">SignType</div><div class="lp-dd-desc">نص → أفاتار إشارة</div></span>
+        </a>
+        <a href="/products/talkside" class="lp-dd-item" role="menuitem">
+          <span class="lp-dd-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M4.93 4.93a10 10 0 0 0 0 14.14"/></svg></span>
+          <span><div class="lp-dd-label">TalkSide</div><div class="lp-dd-desc">كلام → إشارة</div></span>
+        </a>
+      </div>
+    </div>
+
+    <div class="lp-dd">
+      <button class="lp-dd-btn" aria-haspopup="true" aria-expanded="false">اللغات
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="m6 9 6 6 6-6"/></svg>
+      </button>
+      <div class="lp-dd-menu" role="menu">
+        <a href="/languages/asl" class="lp-dd-item" role="menuitem">
+          <span class="lp-dd-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10A15.3 15.3 0 0 1 12 2z"/></svg></span>
+          <span><div class="lp-dd-label">ASL</div><div class="lp-dd-desc">لغة الإشارة الأمريكية — 250 فئة</div></span>
+        </a>
+        <a href="/languages/arsl" class="lp-dd-item" role="menuitem">
+          <span class="lp-dd-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10A15.3 15.3 0 0 1 12 2z"/></svg></span>
+          <span><div class="lp-dd-label">ArSL</div><div class="lp-dd-desc">لغة الإشارة العربية — 20 فئة</div></span>
+        </a>
+      </div>
+    </div>
+
+    <a href="/resources" class="lp-nav-link">الموارد</a>
+
+    <div class="lp-dd">
+      <button class="lp-dd-btn" aria-haspopup="true" aria-expanded="false">فريقنا
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="m6 9 6 6 6-6"/></svg>
+      </button>
+      <div class="lp-dd-menu" role="menu">
+        <a href="/about" class="lp-dd-item" role="menuitem">
+          <span class="lp-dd-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg></span>
+          <span><div class="lp-dd-label">عن المنصة</div><div class="lp-dd-desc">قصتنا ورسالتنا</div></span>
+        </a>
+        <a href="/partnership" class="lp-dd-item" role="menuitem">
+          <span class="lp-dd-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M16 16s-1.5-2-4-2-4 2-4 2"/><circle cx="12" cy="8" r="4"/></svg></span>
+          <span><div class="lp-dd-label">شراكة</div><div class="lp-dd-desc">اعمل معنا</div></span>
+        </a>
+        <a href="/contact" class="lp-dd-item" role="menuitem">
+          <span class="lp-dd-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg></span>
+          <span><div class="lp-dd-label">اتصل بنا</div><div class="lp-dd-desc">تواصل معنا</div></span>
+        </a>
+      </div>
+    </div>
+  </div>
 
   <div class="lp-nav-end">
     <a href="/?lang=en" class="lp-btn-en">English</a>
     <a href="/login" class="lp-btn-login">تسجيل الدخول</a>
+    <span class="lp-nav-sep" aria-hidden="true"></span>
     <div class="t-toggle" role="group" aria-label="لون السمة">
       <button type="button" data-theme-set="light" aria-pressed="false" aria-label="السمة الفاتحة">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4 12H2M22 12h-2M5 5l1.4 1.4M17.6 17.6 19 19M19 5l-1.4 1.4M6.4 17.6 5 19"/></svg>
@@ -170,6 +278,23 @@
     </div>
   </div>
 </nav>
+<script>
+(function(){
+  var dds = document.querySelectorAll('.lp-nav .lp-dd');
+  dds.forEach(function(dd){
+    var btn = dd.querySelector('.lp-dd-btn');
+    if(!btn) return;
+    btn.addEventListener('click', function(e){
+      e.stopPropagation();
+      var open = dd.classList.contains('is-open');
+      dds.forEach(function(d){ d.classList.remove('is-open'); var b=d.querySelector('.lp-dd-btn'); if(b) b.setAttribute('aria-expanded','false'); });
+      if(!open){ dd.classList.add('is-open'); btn.setAttribute('aria-expanded','true'); }
+    });
+  });
+  document.addEventListener('click', function(){ dds.forEach(function(d){ d.classList.remove('is-open'); var b=d.querySelector('.lp-dd-btn'); if(b) b.setAttribute('aria-expanded','false'); }); });
+  document.addEventListener('keydown', function(e){ if(e.key==='Escape') dds.forEach(function(d){ d.classList.remove('is-open'); }); });
+})();
+</script>
 {% endblock %}
 
 {% block content %}
@@ -310,6 +435,66 @@
     </div>
   </section>
 
+  <!-- Testimonials -->
+  <section class="lp-section" id="testimonials">
+    <p class="sec-eyebrow">( 04 ) — المجتمع</p>
+    <h2 class="sec-title">أصوات من<br>مجتمعنا.</h2>
+    <div class="test-grid">
+      <div class="test-card">
+        <div class="test-stars">★★★★★</div>
+        <p class="test-quote">"غيّر معاً طريقة تواصلي في العمل. أنا أُشير، وزملائي يقرؤون. لا حاجة لمترجم للأسئلة السريعة."</p>
+        <div class="test-author">
+          <div class="test-avatar" style="background:var(--accent)">س.ر</div>
+          <div><div class="test-name">سارة ر.</div><div class="test-role">مهندسة برمجيات · صمّاء</div></div>
+        </div>
+      </div>
+      <div class="test-card">
+        <div class="test-stars">★★★★★</div>
+        <p class="test-quote">"كمعلّم للصم، وجود لغة الإشارة العربية في المتصفح شيء مذهل. طلابي يستخدمونه كل حصة."</p>
+        <div class="test-author">
+          <div class="test-avatar" style="background:#e2b483;color:#7a4a00">م.ك</div>
+          <div><div class="test-name">محمد ك.</div><div class="test-role">معلّم تربية خاصة · القاهرة</div></div>
+        </div>
+      </div>
+      <div class="test-card">
+        <div class="test-stars">★★★★★</div>
+        <p class="test-quote">"ميزة تحويل الإشارة إلى كلام رائعة. أُشير إلى هاتفي فيتحدث عنّي في الصيدلية. حرية حقيقية."</p>
+        <div class="test-author">
+          <div class="test-avatar" style="background:#16706a">ع.ل</div>
+          <div><div class="test-name">علياء ل.</div><div class="test-role">ناشطة في مجال الوصول</div></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- FAQ -->
+  <section class="lp-section" id="faq">
+    <p class="sec-eyebrow">( 05 ) — الأسئلة الشائعة</p>
+    <h2 class="sec-title">أسئلة متكررة.</h2>
+    <div class="faq-list">
+      <details class="faq-item">
+        <summary class="faq-q">هل يحتاج معاً إلى اتصال بالإنترنت؟</summary>
+        <p class="faq-a">تعمل نماذج الذكاء الاصطناعي بالكامل في متصفحك باستخدام TFLite (للإشارة الأمريكية) وPyTorch (للإشارة العربية). بعد تحميلها، يعمل التعرّف على الإشارات دون اتصال تماماً. الجلسات المباشرة تحتاج اتصالاً لإشارات WebRTC فقط.</p>
+      </details>
+      <details class="faq-item">
+        <summary class="faq-q">هل يُرسَل بثّ الكاميرا إلى خوادمكم؟</summary>
+        <p class="faq-a">أبداً. تتم كل معالجة الفيديو على جهازك باستخدام MediaPipe في WebAssembly. تُشارَك فقط التنبؤات النصية المجهّلة في الجلسات المباشرة — وفقط عندما تختار ذلك.</p>
+      </details>
+      <details class="faq-item">
+        <summary class="faq-q">ما لغات الإشارة المدعومة؟</summary>
+        <p class="faq-a">حالياً لغة الإشارة الأمريكية (ASL) بـ 250 فئة، ولغة الإشارة العربية المصرية (ArSL) بـ 20 فئة. نُدرّب نماذج جديدة للإشارة الخليجية والبريطانية.</p>
+      </details>
+      <details class="faq-item">
+        <summary class="faq-q">ما مدى دقة التعرّف؟</summary>
+        <p class="faq-a">في إضاءة جيدة وإطار مناسب، تتجاوز دقة الإشارة الأمريكية 92% عبر 250 فئة، وتصل العربية إلى 89% على 20 فئة. تتحسّن الدقة مع خلفية محايدة وإضاءة كافية.</p>
+      </details>
+      <details class="faq-item">
+        <summary class="faq-q">هل يمكنني استخدام معاً في مكالمة فيديو؟</summary>
+        <p class="faq-a">نعم. تستخدم وحدة الاجتماعات المباشرة WebRTC عبر Socket.IO. شارك رابط الجلسة وتظهر الترجمة لجميع المشاركين مباشرةً. يدعم حتى 8 مشاركين لكل جلسة.</p>
+      </details>
+    </div>
+  </section>
+
   <!-- CTA -->
   <div class="lp-section" style="padding-top:0;padding-bottom:96px">
     <div class="cta-band">
@@ -323,34 +508,7 @@
   </div>
 
   <!-- Footer -->
-  <footer class="lp-footer">
-    <div class="lp-footer-inner">
-      <div class="lp-footer-brand">
-        <img src="/static/img/logo-together.svg" alt="معاً" onerror="this.style.display='none'">
-        <p class="lp-footer-tagline">ترجمة لغة الإشارة بالذكاء الاصطناعي لمجتمع الصم وضعاف السمع. عالم واحد، كل لغة.</p>
-        <p class="lp-footer-address">Together Technologies<br>القاهرة، مصر · الإسكندرية<br>hello@together.app</p>
-      </div>
-      <div class="lp-footer-col">
-        <h4>المنتجات</h4>
-        <a href="/products/handscript">HandScript</a>
-        <a href="/products/voicebridge">VoiceBridge</a>
-        <a href="/products/signtype">SignType</a>
-        <a href="/products/talkside">TalkSide</a>
-      </div>
-      <div class="lp-footer-col">
-        <h4>القائمة</h4>
-        <a href="/resources">الموارد</a>
-        <a href="/about">عن المنصة</a>
-        <a href="/demo">احجز عرضاً</a>
-        <a href="/login">تسجيل الدخول</a>
-        <a href="/">English</a>
-      </div>
-    </div>
-    <div class="lp-footer-bottom">
-      <span class="lp-footer-copy">© 2026 Together Technologies. جميع الحقوق محفوظة.</span>
-      <span class="lp-footer-copy">مبني لمجتمع الصم وضعاف السمع حول العالم.</span>
-    </div>
-  </footer>
+  {% include '_lp_footer_ar.html' %}
 </div>
 
 <script>

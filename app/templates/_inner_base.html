@@ -1,24 +1,60 @@
 {% extends "base.html" %}
 {% block main_style %}padding-top: 60px;{% endblock %}
 {% block head %}
-<link rel="stylesheet" href="/static/css/theme.css?v=phase7-1">
-<link rel="stylesheet" href="/static/css/ui.css?v=phase7-1">
-<script src="/static/js/theme.js?v=phase7-1"></script>
+<link rel="stylesheet" href="/static/css/theme.css?v=ds1">
+<link rel="stylesheet" href="/static/css/ui.css?v=ds1">
+<script src="/static/js/theme.js?v=ds1"></script>
 <style>
   body{background:var(--bg)!important;color:var(--text)!important;font-family:var(--font-sans)!important}
   #main-content{max-width:100%!important;background:transparent!important}
   #sf-canvas{position:fixed;inset:0;z-index:-2;pointer-events:none}
-  .pg-nav{position:fixed;top:0;inset-inline:0;z-index:100;display:flex;align-items:center;padding:0 28px;height:58px;background:color-mix(in srgb,var(--bg) 75%,transparent);backdrop-filter:blur(18px);border-bottom:1px solid var(--border)}
-  .pg-nav-logo{display:flex;align-items:center;text-decoration:none}
-  .pg-nav-logo img{height:38px;width:auto}
-  .pg-nav-logo span{display:none}
-  .pg-nav-back{margin-inline-start:auto;padding:7px 14px;border-radius:var(--radius-full);font-size:13px;font-weight:600;color:var(--muted);text-decoration:none}
-  .pg-nav-back:hover{color:var(--text);background:var(--surface)}
-  .pg-nav-login{margin-inline-start:10px;padding:8px 16px;border-radius:var(--radius-full);background:var(--accent);color:#fff;font-size:13px;font-weight:700;text-decoration:none}
-  .t-toggle{display:flex;border-radius:var(--radius-full);overflow:hidden;border:1px solid var(--border);background:var(--surface);margin-inline-start:12px}
-  .t-toggle button{padding:5px 9px;border:none;background:transparent;color:var(--muted);cursor:pointer;line-height:0}
+
+  /* ── Shared marketing nav ── */
+  .lp-nav{position:fixed;top:0;inset-inline:0;z-index:100;display:flex;align-items:center;gap:8px;padding:0 32px;height:60px;
+    background:color-mix(in srgb,var(--bg) 72%,transparent);backdrop-filter:blur(18px) saturate(130%);
+    border-bottom:1px solid var(--border);transition:background .4s}
+  .lp-nav-logo-img{height:42px;width:auto}
+  /* swap to dark-wordmark logo on light backgrounds */
+  html[data-theme="light"] .lp-nav-logo-img,
+  html[data-theme="light"] .lp-footer-brand img{content:url('/static/img/logo-together-dark.svg')}
+  .lp-nav-brand{display:flex;align-items:center;text-decoration:none;flex-shrink:0}
+  .lp-nav-links{display:flex;align-items:center;gap:2px;margin-inline-start:18px;flex:1}
+  .lp-dd{position:relative}
+  .lp-dd-btn{display:inline-flex;align-items:center;gap:5px;padding:7px 13px;border-radius:var(--radius-full);font-size:13.5px;font-weight:600;color:var(--muted);background:none;border:none;cursor:pointer;transition:color .18s,background .18s}
+  .lp-dd-btn:hover,.lp-dd-btn:focus-visible,.lp-dd.is-open .lp-dd-btn{color:var(--text);background:var(--surface)}
+  .lp-dd-btn svg{width:12px;height:12px;transition:transform .2s}
+  .lp-dd.is-open .lp-dd-btn svg{transform:rotate(180deg)}
+  .lp-dd-menu{position:absolute;top:100%;inset-inline-start:0;min-width:230px;
+    background:color-mix(in srgb,var(--surface) 92%,transparent);backdrop-filter:blur(20px);
+    border:1px solid var(--border);border-radius:var(--radius-lg);box-shadow:var(--shadow-lg);
+    padding:8px;padding-top:16px;
+    opacity:0;pointer-events:none;transform:translateY(-6px);
+    transition:opacity .18s,transform .18s}
+  .lp-dd:hover .lp-dd-menu,.lp-dd:focus-within .lp-dd-menu,.lp-dd.is-open .lp-dd-menu{opacity:1;pointer-events:auto;transform:translateY(0)}
+  .lp-dd-item{display:flex;align-items:flex-start;gap:11px;padding:10px 12px;border-radius:var(--radius);text-decoration:none;transition:background .15s}
+  .lp-dd-item:hover{background:var(--surface-2)}
+  .lp-dd-icon{width:32px;height:32px;border-radius:8px;background:var(--accent-soft);display:grid;place-items:center;flex-shrink:0;color:var(--accent)}
+  .lp-dd-icon svg{width:16px;height:16px}
+  .lp-dd-label{font-size:13.5px;font-weight:600;color:var(--text)}
+  .lp-dd-desc{font-size:11.5px;color:var(--muted);margin-top:2px}
+  .lp-nav-link{padding:7px 13px;border-radius:var(--radius-full);font-size:13.5px;font-weight:600;color:var(--muted);text-decoration:none;transition:color .18s,background .18s}
+  .lp-nav-link:hover{color:var(--text);background:var(--surface)}
+  .lp-nav-end{display:flex;align-items:center;gap:10px;margin-inline-start:auto}
+  .lp-nav-sep{width:1px;height:22px;background:var(--border)}
+  .lp-btn-demo{padding:8px 18px;border-radius:var(--radius-full);font-size:13.5px;font-weight:700;
+    background:var(--accent-soft);color:var(--accent);border:1px solid color-mix(in srgb,var(--accent) 25%,transparent);
+    text-decoration:none;transition:background .18s}
+  .lp-btn-demo:hover{background:color-mix(in srgb,var(--accent) 18%,transparent)}
+  .lp-btn-login{padding:8px 18px;border-radius:var(--radius-full);font-size:13.5px;font-weight:700;
+    background:var(--accent);color:#fff;text-decoration:none;transition:opacity .18s}
+  .lp-btn-login:hover{opacity:.88}
+  .t-toggle{display:flex;border-radius:var(--radius-full);overflow:hidden;border:1px solid var(--border);background:var(--surface)}
+  .t-toggle button{padding:5px 9px;border:none;background:transparent;color:var(--muted);cursor:pointer;line-height:0;transition:background .15s,color .15s}
   .t-toggle button svg{width:15px;height:15px}
   .t-toggle button[aria-pressed="true"]{background:var(--surface-2);color:var(--accent)}
+  @media(max-width:600px){.lp-nav-links{display:none}}
+
+  /* ── Inner page layout ── */
   .pg-hero{padding:80px 24px 60px;max-width:900px;margin-inline:auto}
   .pg-badge{display:inline-block;padding:5px 14px;border-radius:var(--radius-full);background:var(--accent-soft);color:var(--accent);font-size:12px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;margin-bottom:20px}
   .pg-h1{font-family:var(--font-display);font-size:clamp(38px,6vw,68px);font-weight:800;line-height:1.06;letter-spacing:-.03em;color:var(--text)}
@@ -37,26 +73,31 @@
   .uc-icon svg{width:18px;height:18px}
   .uc-title{font-size:14px;font-weight:700;color:var(--text);margin-bottom:6px}
   .uc-desc{font-size:13px;color:var(--muted);line-height:1.6}
-  .cta-strip{background:var(--accent);border-radius:var(--radius-xl);padding:44px 32px;text-align:center;margin:32px 24px 64px;max-width:900px;margin-inline:auto;margin-bottom:64px}
+  .cta-strip{background:var(--accent);border-radius:var(--radius-xl);padding:44px 32px;text-align:center;margin:32px 24px 0;max-width:900px;margin-inline:auto}
   .cta-strip h3{font-family:var(--font-display);font-size:28px;font-weight:800;color:#fff;margin-bottom:14px}
   .cta-strip p{font-size:15px;color:rgba(255,255,255,.8);margin-bottom:22px}
   .cta-strip a{display:inline-block;padding:12px 26px;border-radius:var(--radius-full);background:#fff;color:var(--accent);font-weight:700;font-size:14px;text-decoration:none;margin:4px}
   .cta-strip a.sec{background:rgba(255,255,255,.15);color:#fff;border:1px solid rgba(255,255,255,.3)}
+
+  /* ── Shared footer ── */
+  .lp-footer{background:color-mix(in srgb,var(--surface) 88%,transparent);backdrop-filter:blur(16px);border-top:1px solid var(--border);padding:56px 32px 32px;margin-top:64px}
+  .lp-footer-inner{max-width:1120px;margin-inline:auto;display:grid;grid-template-columns:2fr 1fr 1fr 1fr;gap:40px}
+  .lp-footer-brand img{height:44px;width:auto;margin-bottom:14px;display:block}
+  .lp-footer-tagline{font-size:13.5px;color:var(--muted);line-height:1.6;max-width:240px}
+  .lp-footer-address{font-size:12.5px;color:var(--faint);margin-top:16px;line-height:1.7}
+  .lp-footer-col h4{font-size:12px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--accent);margin-bottom:14px}
+  .lp-footer-col a{display:block;font-size:13.5px;color:var(--muted);text-decoration:none;margin-bottom:9px;transition:color .15s}
+  .lp-footer-col a:hover{color:var(--text)}
+  .lp-footer-bottom{max-width:1120px;margin:40px auto 0;padding-top:20px;border-top:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px}
+  .lp-footer-copy{font-size:12.5px;color:var(--faint)}
+  @media(max-width:600px){.lp-footer-inner{grid-template-columns:1fr 1fr}.lp-footer-brand{grid-column:1/-1}}
 </style>
 {% endblock %}
 {% block nav %}
-<nav class="pg-nav">
-  <a href="/" class="pg-nav-logo" aria-label="Together">
-    <img src="/static/img/logo-together.svg" alt="Together" onerror="this.style.display='none';this.nextElementSibling.style.display='inline'">
-    <span style="font-family:var(--font-display);font-weight:800;font-size:19px;color:var(--text)">Together</span>
-  </a>
-  <a href="/" class="pg-nav-back">← Home</a>
-  <a href="/login" class="pg-nav-login">Login</a>
-  <div class="t-toggle" role="group" aria-label="Color theme">
-    <button type="button" data-theme-set="light" aria-pressed="false" aria-label="Light theme"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4 12H2M22 12h-2M5 5l1.4 1.4M17.6 17.6 19 19M19 5l-1.4 1.4M6.4 17.6 5 19"/></svg></button>
-    <button type="button" data-theme-set="dark" aria-pressed="true" aria-label="Dark theme"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M21 12.8A8 8 0 1 1 11.2 3 6.2 6.2 0 0 0 21 12.8Z"/></svg></button>
-  </div>
-</nav>
+{% include '_lp_nav.html' %}
+{% endblock %}
+{% block footer %}
+{% include '_lp_footer.html' %}
 {% endblock %}
 {% block scripts %}
 <script>
