@@ -266,6 +266,19 @@ html[data-theme="light"] .t-brand-logo-img{content:url('/static/img/logo-togethe
 .t-sidebar{background:color-mix(in srgb,var(--sidebar) 80%,transparent)!important;backdrop-filter:blur(20px) saturate(130%)!important}
 .t-topbar,.d-topbar{background:color-mix(in srgb,var(--sidebar) 75%,transparent)!important;backdrop-filter:blur(16px) saturate(130%)!important}
 @media(prefers-reduced-motion:reduce){.d-blob{animation:none!important}.d-aurora-inner{transition:none}}
+
+/* ══ DS dashboard restyle (visual only — no functional changes) ══ */
+/* Mono eyebrow motif on card sub-labels */
+.t-eyebrow{font-family:var(--font-mono);font-size:10.5px;font-weight:500;letter-spacing:.2em;text-transform:uppercase;color:var(--muted);margin-bottom:10px;display:flex;align-items:center;gap:7px}
+.t-eyebrow::before{content:"";width:18px;height:1px;background:currentColor;opacity:.5;flex:none}
+/* Per-product accent tints, scoped to each module workspace */
+.module-panel[data-product] .t-card-icon{background:var(--p-accent-soft);color:var(--p-accent)}
+.module-panel[data-product] .t-eyebrow{color:var(--p-accent)}
+.module-panel[data-product] .t-btn--soft{background:var(--p-accent-soft);color:var(--p-accent)}
+.module-panel[data-product] .t-card-title svg{color:var(--p-accent)}
+/* Glass caption bars over the ambient aurora */
+.module-panel[data-product] .d-box{background:var(--glass-bg);backdrop-filter:blur(var(--blur-sm)) saturate(130%);border-color:var(--glass-border)}
+.d-meet-caption-box{background:var(--glass-bg);backdrop-filter:blur(var(--blur-sm)) saturate(130%);border-color:var(--glass-border)}
 </style>
 
 <a href="#main-content" class="t-skip-link">Skip to content</a>
@@ -357,7 +370,7 @@ html[data-theme="light"] .t-brand-logo-img{content:url('/static/img/logo-togethe
     </div>
 
     <!-- ══ MODULE 1: SIGN TO TEXT ══ -->
-    <div class="d-panel module-panel active" id="panel-vision">
+    <div class="d-panel module-panel active" id="panel-vision" data-product="handscript">
       <div class="d-col">
         <div class="d-col-l">
           <div class="t-card">
@@ -411,7 +424,7 @@ html[data-theme="light"] .t-brand-logo-img{content:url('/static/img/logo-togethe
     </div>
 
     <!-- ══ MODULE 2: SIGN TO SPEECH ══ -->
-    <div class="d-panel module-panel" id="panel-speech">
+    <div class="d-panel module-panel" id="panel-speech" data-product="voicebridge">
       <div class="d-col">
         <div class="d-col-l">
           <div class="t-card">
@@ -472,7 +485,7 @@ html[data-theme="light"] .t-brand-logo-img{content:url('/static/img/logo-togethe
     </div>
 
     <!-- ══ MODULE 3: TEXT TO SIGN ══ -->
-    <div class="d-panel module-panel" id="panel-text2sign">
+    <div class="d-panel module-panel" id="panel-text2sign" data-product="signtype">
       <div class="d-col">
         <div class="d-col-l">
           <div class="t-card">
@@ -510,7 +523,7 @@ html[data-theme="light"] .t-brand-logo-img{content:url('/static/img/logo-togethe
     </div>
 
     <!-- ══ MODULE 4: SPEECH TO SIGN ══ -->
-    <div class="d-panel module-panel" id="panel-speech2sign">
+    <div class="d-panel module-panel" id="panel-speech2sign" data-product="talkside">
       <div class="d-col">
         <div class="d-col-l">
           <div class="t-card">
