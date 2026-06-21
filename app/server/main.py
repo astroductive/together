@@ -53,7 +53,7 @@ import socketio
 import os
 import uvicorn
 from email_validator import EmailNotValidError, validate_email
-from threading import Lock
+from threading import Lock, Thread
 import time
 import re
 
@@ -140,6 +140,34 @@ def _ensure_database_ready():
         init_db()
     except Exception as e:
         print(f"[startup] init_db skipped: {e}")
+
+
+@app.on_event("startup")
+def _warm_models_on_boot():
+    """Pre-load the recognition models at boot instead of lazily on first request.
+
+    On a warm (paid / always-on) instance this moves the one-time 500–1000 ms
+    model-load cost off the user's first translation and onto server boot, so the
+    first sign someone signs is fast. Runs in a background thread so it never
+    delays port binding / the health check (important for the platform's
+    "service is live" probe). Controlled by PRELOAD_MODELS (default on); set to
+    "0" to keep the old lazy behaviour (e.g. to speed cold boots on free tier
+    where the process may be torn down again before traffic arrives).
+    """
+    if os.getenv("PRELOAD_MODELS", "1") != "1":
+        return
+
+    def _warm():
+        import time as _t
+        for name, loader in (("ASL", get_asl_engine), ("Arabic", get_arabic_engine)):
+            try:
+                t0 = _t.perf_counter()
+                loader()
+                print(f"[warm] {name} engine ready in {(_t.perf_counter()-t0)*1000:.0f} ms")
+            except Exception as e:  # never crash boot over a warm-up
+                print(f"[warm] {name} engine warm-up skipped: {e}")
+
+    Thread(target=_warm, name="model-warmup", daemon=True).start()
 
 
 def normalize_and_validate_email(raw_email: str, *, check_deliverability: bool = False) -> str:
