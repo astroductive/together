@@ -102,12 +102,23 @@
    by an opaque body background. */
 html{background:var(--bg)!important;overflow:hidden}
 body{background:transparent!important;overflow:hidden}
-/* sidebar brand logo */
-.t-brand--logo{padding:2px 8px 22px}
-.t-brand-logo-img{height:32px;width:auto;display:block}
+/* sidebar brand row: logo + collapse toggle together inside the sidebar */
+.t-brand-row{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:2px 6px 20px}
+.t-brand--logo{padding:0;display:flex;align-items:center;min-width:0}
+.t-brand-logo-img{height:30px;width:auto;max-width:100%;display:block;object-fit:contain}
 .logo-on-dark{display:block}.logo-on-light{display:none}
 html[data-theme="light"] .logo-on-dark{display:none}
 html[data-theme="light"] .logo-on-light{display:block}
+#sb-toggle{display:flex;align-items:center;justify-content:center;width:28px;height:28px;flex:none;
+  border-radius:8px;border:1px solid var(--border);background:var(--surface-2);color:var(--muted);
+  cursor:pointer;transition:background .15s,color .15s}
+#sb-toggle:hover{background:var(--accent-soft);color:var(--accent)}
+#sb-toggle svg{width:15px;height:15px;transition:transform .25s}
+.sb-collapsed #sb-toggle svg{transform:rotate(180deg)}
+.t-nav-label{display:flex;flex-direction:column;line-height:1.15;min-width:0}
+.t-nav-label b{font-weight:700;font-size:13.5px;color:inherit;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.t-nav-label i{font-style:normal;font-family:var(--font-mono);font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--faint);margin-top:1px}
+.t-nav-item.is-active .t-nav-label i{color:inherit;opacity:.7}
 .t-topbar .t-sub{font-family:var(--font-mono);font-size:10.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--faint)}
 #main-content{padding:0!important;flex:1;min-height:0;overflow:hidden;background:transparent!important}
 .t-scope.t-app{background:transparent}
@@ -275,23 +286,20 @@ html[data-theme="light"] .d-blob{opacity:calc(.38*var(--intensity)+.04)}
 
 /* ══ Sidebar collapse ══ */
 .t-scope.t-app{grid-template-columns:256px 1fr;transition:grid-template-columns .25s cubic-bezier(.4,0,.2,1)}
-.t-scope.t-app.sb-collapsed{grid-template-columns:64px 1fr}
+.t-scope.t-app.sb-collapsed{grid-template-columns:72px 1fr}
 .t-sidebar{transition:width .25s;overflow:hidden}
-.sb-collapsed .t-sidebar .t-nav-item span,
+.sb-collapsed .t-sidebar .t-nav-label,
 .sb-collapsed .t-sidebar .t-user-name,
 .sb-collapsed .t-sidebar .t-user-role,
-.sb-collapsed .t-sidebar .t-sidebar-sep{opacity:0;width:0;overflow:hidden;pointer-events:none;transition:opacity .15s}
-.sb-collapsed .t-sidebar .t-brand--logo{padding:2px 4px 22px;overflow:hidden}
+.sb-collapsed .t-sidebar .t-sidebar-sep{opacity:0;width:0;overflow:hidden;pointer-events:none;transition:opacity .12s}
+.sb-collapsed .t-sidebar .t-brand-row{flex-direction:column;gap:10px;padding:2px 6px 18px}
 .sb-collapsed .t-sidebar .logo-on-dark,.sb-collapsed .t-sidebar .logo-on-light{display:none!important}
-.sb-collapsed .t-sidebar .t-brand--logo::after{content:"";display:block;width:36px;height:36px;background:url('/static/img/logo-mark-white.png') center/contain no-repeat}
+.sb-collapsed .t-sidebar .t-brand--logo::after{content:"";display:block;width:38px;height:38px;background:url('/static/img/logo-mark-white.png') center/contain no-repeat}
 html[data-theme="light"] .sb-collapsed .t-sidebar .t-brand--logo::after{background-image:url('/static/img/logo-mark-dark.png')}
-.sb-collapsed .t-sidebar .t-nav-item{padding:10px 12px;justify-content:center}
+.sb-collapsed .t-sidebar .t-nav-item{padding:11px 0;justify-content:center}
+.sb-collapsed .t-sidebar nav{display:flex;flex-direction:column;align-items:stretch}
 .sb-collapsed .t-sidebar .t-user{flex-direction:column;gap:0}
 .sb-collapsed .t-sidebar .t-avatar{margin:0 auto}
-#sb-toggle{display:flex;align-items:center;justify-content:center;width:30px;height:30px;border-radius:8px;border:1px solid var(--border);background:var(--surface-2);color:var(--muted);cursor:pointer;flex:none;transition:background .15s,color .15s}
-#sb-toggle:hover{background:var(--accent-soft);color:var(--accent)}
-#sb-toggle svg{width:16px;height:16px;transition:transform .25s}
-.sb-collapsed #sb-toggle svg{transform:scaleX(-1)}
 /* ══ Topbar stats chips ══ */
 .t-stat-chips{display:flex;gap:8px;align-items:center}
 .t-stat-chip{display:inline-flex;align-items:center;gap:6px;padding:5px 11px;border-radius:var(--radius-full);background:var(--surface-2);border:1px solid var(--border);font-size:11.5px;font-weight:600;color:var(--muted);font-family:var(--font-mono);letter-spacing:.04em}
@@ -324,30 +332,35 @@ html[data-theme="light"] .sb-collapsed .t-sidebar .t-brand--logo::after{backgrou
 <div class="t-scope t-app" id="app" dir="rtl" lang="ar" style="height:100vh;overflow:hidden">
   <!-- ── Sidebar ── -->
   <aside class="t-sidebar" id="sidebar">
-    <a href="/" class="t-brand t-brand--logo" aria-label="Together — home">
-      <img src="/static/img/logo-lockup-white.png" alt="معاً" class="t-brand-logo-img logo-on-dark">
-      <img src="/static/img/logo-lockup-color.png" alt="معاً" class="t-brand-logo-img logo-on-light">
-    </a>
+    <div class="t-brand-row">
+      <a href="/" class="t-brand t-brand--logo" aria-label="Together — home">
+        <img src="/static/img/logo-lockup-white.png" alt="معاً" class="t-brand-logo-img logo-on-dark">
+        <img src="/static/img/logo-lockup-color.png" alt="معاً" class="t-brand-logo-img logo-on-light">
+      </a>
+      <button id="sb-toggle" onclick="toggleSidebar()" aria-label="تبديل الشريط الجانبي" title="طي / توسيع الشريط الجانبي">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg>
+      </button>
+    </div>
     <nav aria-label="Modules">
-      <a class="t-nav-item is-active" onclick="switchModule(event,'vision')" href="#" id="nav-vision" aria-current="page">
+      <a class="t-nav-item is-active" onclick="switchModule(event,'vision')" href="#" id="nav-vision" aria-current="page" data-product="handscript">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0z"/><path d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
-        <span>الترجمة إلى نص</span>
+        <span class="t-nav-label"><b>HandScript</b><i>إشارة → نص</i></span>
       </a>
-      <a class="t-nav-item" onclick="switchModule(event,'speech')" href="#" id="nav-speech">
+      <a class="t-nav-item" onclick="switchModule(event,'speech')" href="#" id="nav-speech" data-product="voicebridge">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M19 11a7 7 0 0 1-7 7m0 0a7 7 0 0 1-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 0 1-3-3V5a3 3 0 1 1 6 0v6a3 3 0 0 1-3 3z"/></svg>
-        <span>الترجمة إلى كلام</span>
+        <span class="t-nav-label"><b>VoiceBridge</b><i>إشارة → كلام</i></span>
       </a>
-      <a class="t-nav-item" onclick="switchModule(event,'text2sign')" href="#" id="nav-text2sign">
+      <a class="t-nav-item" onclick="switchModule(event,'text2sign')" href="#" id="nav-text2sign" data-product="signtype">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 12h6m-6 4h6m2 5H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5.586a1 1 0 0 1 .707.293l5.414 5.414a1 1 0 0 1 .293.707V19a2 2 0 0 1-2 2z"/></svg>
-        <span>تحويل النص إلى إشارة</span>
+        <span class="t-nav-label"><b>SignType</b><i>نص → إشارة</i></span>
       </a>
-      <a class="t-nav-item" onclick="switchModule(event,'speech2sign')" href="#" id="nav-speech2sign">
+      <a class="t-nav-item" onclick="switchModule(event,'speech2sign')" href="#" id="nav-speech2sign" data-product="talkside">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5.882V19.24a1.76 1.76 0 0 1-3.417.592l-2.147-6.15M18 13a3 3 0 1 0 0-6M5.436 13.683A4 4 0 0 1 7 6h1.832c4.1 0 7.625-1.234 9.168-3v14c-1.543-1.766-5.067-3-9.168-3H7a3.988 3.988 0 0 1-1.564-.317z"/></svg>
-        <span>تحويل الكلام إلى إشارة</span>
+        <span class="t-nav-label"><b>TalkSide</b><i>كلام → إشارة</i></span>
       </a>
       <a class="t-nav-item" onclick="switchModule(event,'meeting')" href="#" id="nav-meeting">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M17 20h5v-2a3 3 0 0 0-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 0 1 5.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 0 1 9.288 0M15 7a3 3 0 1 1-6 0 3 3 0 0 1 6 0z"/></svg>
-        <span>اجتماع مباشر</span>
+        <span class="t-nav-label"><b>اجتماع مباشر</b><i>مكالمة ثنائية</i></span>
       </a>
     </nav>
     <div class="t-sidebar-sep"></div>
@@ -369,12 +382,7 @@ html[data-theme="light"] .sb-collapsed .t-sidebar .t-brand--logo::after{backgrou
   <div class="t-main">
     <!-- Topbar -->
     <header class="t-topbar">
-      <div style="display:flex;align-items:center;gap:12px">
-        <button id="sb-toggle" onclick="toggleSidebar()" aria-label="تبديل الشريط الجانبي" title="تبديل الشريط الجانبي">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 3v18"/></svg>
-        </button>
-        <div><div class="t-title" id="topbar-title">الترجمة إلى نص</div><div class="t-sub">Together · لوحة التحكم العربية</div></div>
-      </div>
+      <div><div class="t-title" id="topbar-title">الترجمة إلى نص</div><div class="t-sub">Together · لوحة التحكم العربية</div></div>
       <div class="t-stat-chips">
         <span class="t-stat-chip"><span class="t-chip-dot"></span>إشارات<span class="t-chip-val" id="chip-signs">0</span></span>
         <span class="t-stat-chip"><span class="t-chip-dot"></span>جلسة<span class="t-chip-val" id="chip-uptime">00:00</span></span>
@@ -1835,6 +1843,9 @@ html[data-theme="light"] .sb-collapsed .t-sidebar .t-brand--logo::after{backgrou
       updateTranscription(glossBuffer.join(' '));
     }
 
+    // Count every accepted sign toward the cross-dashboard topbar counter
+    if (typeof bumpSignCount === 'function') bumpSignCount(1);
+
     // Broadcast to Live Meeting room if connected
     if (inMeeting && socket) {
       const roomId = currentMeetingRoom || document.getElementById('meeting-room-id').value.trim() || 'general';
@@ -1921,6 +1932,9 @@ html[data-theme="light"] .sb-collapsed .t-sidebar .t-brand--logo::after{backgrou
 
       // Show sentence in transcription box
       updateTranscription(sentence, true);
+      // Log the composed sentence (was previously dropped)
+      signs.push({ text: sentence, time: new Date().toLocaleTimeString(), kind: 'sentence' });
+      updateLog();
 
       if (inMeeting && socket) {
         const roomId = currentMeetingRoom || document.getElementById('meeting-room-id').value.trim() || 'general';
@@ -1934,15 +1948,18 @@ html[data-theme="light"] .sb-collapsed .t-sidebar .t-brand--logo::after{backgrou
       }
 
       // TTS is disabled in the Sign to Text feature (Feature 1) as requested.
-    } catch (_) { }
+    } catch (err) {
+      updateTranscription(isArabicMode ? 'تعذر تكوين الجملة — حاول مرة أخرى' : 'Could not compose sentence — please try again', true);
+      console.error('[compose ar] sentence error:', err);
+    }
   }
 
   function updateTranscription(text, isSentence = false) {
     const el = document.getElementById('transcription-output');
-    const color = isSentence ? 'var(--black)' : '#555';
+    const color = isSentence ? 'var(--text)' : 'var(--muted)';
     el.innerHTML = text
       ? `<span style="color:${color}">${text}</span>`
-      : '<span class="transcription-placeholder">Waiting for input…</span>';
+      : '<span class="d-box-ph">بانتظار الإشارة…</span>';
 
     if (text && !isSentence) {
       signs.push({ text, time: new Date().toLocaleTimeString() });
@@ -1953,14 +1970,14 @@ html[data-theme="light"] .sb-collapsed .t-sidebar .t-brand--logo::after{backgrou
   function updateLog() {
     const log = document.getElementById('session-log');
     if (signs.length === 0) {
-      log.innerHTML = '<p style="font-size:12px;color:var(--gray-400);">No signs detected yet.</p>';
+      log.innerHTML = '<p class="d-log-ph">لم يتم الكشف عن إشارات بعد.</p>';
       return;
     }
     log.innerHTML = signs.slice(-20).reverse().map(s =>
-      `<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 12px;background:var(--gray-50);border:1px solid var(--gray-200);border-radius:8px;">
-      <span style="font-size:13px;font-weight:600;">${s.text}</span>
-      <span style="font-size:10px;color:var(--gray-400);">${s.time}</span>
-    </div>`
+      `<div class="d-log-item">
+        <span class="d-log-time">${s.time}</span>
+        <span class="d-log-msg${s.kind === 'sentence' ? '' : ' d-log-gloss'}">${s.text}</span>
+      </div>`
     ).join('');
   }
 
@@ -2151,14 +2168,14 @@ html[data-theme="light"] .sb-collapsed .t-sidebar .t-brand--logo::after{backgrou
   function renderT2SHistory() {
     const el = document.getElementById('t2s-history');
     if (t2sHistory.length === 0) {
-      el.innerHTML = '<p style="font-size:12px;color:var(--gray-400);">No translations yet.</p>';
+      el.innerHTML = '<p class="d-log-ph">لا توجد ترجمات بعد.</p>';
       return;
     }
     el.innerHTML = t2sHistory.map(h =>
-      `<div style="padding:10px 14px;background:var(--gray-50);border:1px solid var(--gray-200);border-radius:10px;">
-      <div style="font-size:13px;font-weight:600;">${h.text}</div>
-      <div style="font-size:10px;color:var(--gray-400);margin-top:4px;">${h.time}</div>
-    </div>`
+      `<div class="d-log-item">
+        <span class="d-log-time">${h.time}</span>
+        <span class="d-log-msg">${h.text}</span>
+      </div>`
     ).join('');
   }
 
@@ -3674,7 +3691,7 @@ html[data-theme="light"] .sb-collapsed .t-sidebar .t-brand--logo::after{backgrou
     if (forcedLang === 'ar') {
       s2spGlossBuf = [];
       const el = document.getElementById('s2sp-gloss-output');
-      el.innerHTML = `<span style="color:var(--black);">${word}</span>`;
+      el.innerHTML = `<span style="color:var(--text);">${word}</span>`;
 
       if (window.s2spArClearTimeout) {
         clearTimeout(window.s2spArClearTimeout);
@@ -3686,27 +3703,37 @@ html[data-theme="light"] .sb-collapsed .t-sidebar .t-brand--logo::after{backgrou
 
       // Log it
       s2spSentences.unshift({ text: word, time: new Date().toLocaleTimeString() });
-      const log = document.getElementById('s2sp-log');
-      if (log) {
-        log.innerHTML = s2spSentences.slice(0, 20).map(s =>
-          `<div style="padding:8px 12px;background:var(--gray-50);border:1px solid var(--gray-200);border-radius:8px;">
-          <div style="font-size:13px;font-weight:600;">${s.text}</div>
-          <div style="font-size:10px;color:var(--gray-400);margin-top:2px;">${s.time}</div>
-        </div>`
-        ).join('');
-      }
+      renderS2spLog();
+      if (typeof bumpSignCount === 'function') bumpSignCount(1);
 
       // Clear the display outputs after 2 seconds
       window.s2spArClearTimeout = setTimeout(() => {
-        document.getElementById('s2sp-sentence-output').innerHTML = '<span style="color:var(--gray-300);font-weight:500;font-size:15px;">Waiting for signs…</span>';
-        document.getElementById('s2sp-gloss-output').innerHTML = '<span class="transcription-placeholder">Signs appear here…</span>';
+        document.getElementById('s2sp-sentence-output').innerHTML = '<span class="d-box-ph">بانتظار الإشارات…</span>';
+        document.getElementById('s2sp-gloss-output').innerHTML = '<span class="d-box-ph">تظهر الإشارات هنا…</span>';
       }, 2000);
     } else {
       // Voting already ensured uniqueness — just push the word
       s2spGlossBuf.push(word);
       const el = document.getElementById('s2sp-gloss-output');
-      el.innerHTML = `<span style="color:var(--black);">${s2spGlossBuf.join(' ')}</span>`;
+      el.innerHTML = `<span style="color:var(--text);">${s2spGlossBuf.join(' ')}</span>`;
+      if (typeof bumpSignCount === 'function') bumpSignCount(1);
     }
+  }
+
+  // Theme-aware Sign→Speech log renderer (shared by detection + sentence paths)
+  function renderS2spLog() {
+    const log = document.getElementById('s2sp-log');
+    if (!log) return;
+    if (!s2spSentences.length) {
+      log.innerHTML = '<p class="d-log-ph">لم يُنطق أي جملة بعد.</p>';
+      return;
+    }
+    log.innerHTML = s2spSentences.slice(0, 20).map(s =>
+      `<div class="d-log-item">
+        <span class="d-log-time">${s.time}</span>
+        <span class="d-log-msg">${s.text}</span>
+      </div>`
+    ).join('');
   }
 
   async function s2spTriggerSentence() {
@@ -3743,14 +3770,12 @@ html[data-theme="light"] .sb-collapsed .t-sidebar .t-brand--logo::after{backgrou
 
       // Log it
       s2spSentences.unshift({ text: sentence, time: new Date().toLocaleTimeString() });
-      const log = document.getElementById('s2sp-log');
-      log.innerHTML = s2spSentences.slice(0, 20).map(s =>
-        `<div style="padding:8px 12px;background:var(--gray-50);border:1px solid var(--gray-200);border-radius:8px;">
-        <div style="font-size:13px;font-weight:600;">${s.text}</div>
-        <div style="font-size:10px;color:var(--gray-400);margin-top:2px;">${s.time}</div>
-      </div>`
-      ).join('');
-    } catch (_) { }
+      renderS2spLog();
+    } catch (err) {
+      document.getElementById('s2sp-sentence-output').innerHTML =
+        `<span style="color:var(--danger,#ef4444);">${isArabicMode ? 'تعذر تكوين الجملة — حاول مرة أخرى' : 'Could not compose sentence — please try again'}</span>`;
+      console.error('[compose s2sp ar] error:', err);
+    }
   }
 
   function s2spClear() {
@@ -3758,8 +3783,8 @@ html[data-theme="light"] .sb-collapsed .t-sidebar .t-brand--logo::after{backgrou
     s2spVoteBuffer = [];
     s2spFrameBuffer = [];
     s2spLastPredWord = null;
-    document.getElementById('s2sp-gloss-output').innerHTML = '<span class="transcription-placeholder">Signs appear here…</span>';
-    document.getElementById('s2sp-sentence-output').innerHTML = '<span style="color:var(--gray-300);font-weight:500;font-size:15px;">Waiting for signs…</span>';
+    document.getElementById('s2sp-gloss-output').innerHTML = '<span class="d-box-ph">تظهر الإشارات هنا…</span>';
+    document.getElementById('s2sp-sentence-output').innerHTML = '<span class="d-box-ph">بانتظار الإشارات…</span>';
   }
 
   // ═══════════════════════════════════════════════════════════
@@ -3815,7 +3840,8 @@ html[data-theme="light"] .sb-collapsed .t-sidebar .t-brand--logo::after{backgrou
 
   window.addEventListener('keydown', (e) => {
     if (e.key === 'Enter') {
-      if (forcedLang === 'ar') return;
+      const tag = (e.target.tagName || '').toLowerCase();
+      if (tag === 'input' || tag === 'textarea' || e.target.isContentEditable) return;
       const activePanel = document.querySelector('.module-panel.active').id;
       if (activePanel === 'panel-vision' && typeof triggerSentenceTranslation === 'function') {
         e.preventDefault();
@@ -3851,7 +3877,27 @@ function toggleSidebar() {
 })();
 
 let _sessionStart = Date.now();
-let _signCount = 0;
+let _signCount = parseInt(localStorage.getItem('signs-today-count') || '0', 10) || 0;
+(function(){
+  const today = new Date().toDateString();
+  if (localStorage.getItem('signs-today-date') !== today) {
+    _signCount = 0;
+    localStorage.setItem('signs-today-date', today);
+    localStorage.setItem('signs-today-count', '0');
+  }
+})();
+function bumpSignCount(n) {
+  _signCount += (n || 1);
+  localStorage.setItem('signs-today-count', String(_signCount));
+  const chipSigns = document.getElementById('chip-signs');
+  if (chipSigns) chipSigns.textContent = _signCount;
+  const usageToday = document.getElementById('usage-signs-today');
+  if (usageToday) usageToday.textContent = _signCount;
+  const bar = document.getElementById('usage-progress-bar');
+  if (bar) bar.style.width = Math.min(_signCount * 2, 100) + '%';
+}
+window.bumpSignCount = bumpSignCount;
+bumpSignCount(0);
 function _fmtUptime(ms) {
   const s = Math.floor(ms / 1000), m = Math.floor(s / 60), h = Math.floor(m / 60);
   return h > 0
@@ -3900,13 +3946,6 @@ function _addReplayBtn(item, logId) {
     if (action) action(text);
   };
   item.appendChild(btn);
-  _signCount++;
-  const chipSigns = document.getElementById('chip-signs');
-  if (chipSigns) chipSigns.textContent = _signCount;
-  const usageToday = document.getElementById('usage-signs-today');
-  if (usageToday) usageToday.textContent = _signCount;
-  const bar = document.getElementById('usage-progress-bar');
-  if (bar) bar.style.width = Math.min(_signCount * 2, 100) + '%';
 }
 
 ['session-log','s2sp-log','t2s-history'].forEach(function(id) {
