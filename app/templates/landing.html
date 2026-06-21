@@ -16,10 +16,11 @@
     background:color-mix(in srgb,var(--bg) 72%,transparent);backdrop-filter:blur(18px) saturate(130%);
     border-bottom:1px solid var(--border);transition:background .4s}
   .lp-nav-brand{display:flex;align-items:center;text-decoration:none;flex-shrink:0}
-  .lp-nav-brand img{height:42px;width:auto}
-  html[data-theme="light"] .lp-nav-brand img,
-  html[data-theme="light"] .lp-nav-logo-img,
-  html[data-theme="light"] .lp-footer-brand img{content:url('/static/img/logo-together-dark.svg')}
+  .lp-nav-logo-img{height:38px;width:auto;display:block}
+  .logo-on-dark{display:block}.logo-on-light{display:none}
+  html[data-theme="light"] .logo-on-dark{display:none}
+  html[data-theme="light"] .logo-on-light{display:block}
+  .lp-footer-brand .logo-on-dark,.lp-footer-brand .logo-on-light{height:38px;width:auto;margin-bottom:14px}
   .lp-nav-brand-fb{display:none;align-items:center;gap:10px;font-family:var(--font-display);font-weight:800;font-size:20px;color:var(--text)}
   .lp-nav-brand-fb .lp-logo{width:32px;height:32px;border-radius:9px;background:var(--accent);display:grid;place-items:center;color:#fff;font-size:15px;font-weight:800}
   .lp-nav-links{display:flex;align-items:center;gap:2px;margin-inline-start:18px;flex:1}
