@@ -40,7 +40,7 @@ _HERE = _os.path.dirname(_os.path.abspath(__file__))
 if _HERE not in sys.path:
     sys.path.insert(0, _HERE)
 
-from fastapi import FastAPI, Depends, HTTPException, status, Request
+from fastapi import FastAPI, Depends, HTTPException, status, Request, Response
 from fastapi.security import OAuth2PasswordRequestForm
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
@@ -876,9 +876,19 @@ def translate_arabic_to_english(word: str) -> str:
 
 
 
+def _with_server_timing(payload: dict, response: Response, infer_ms: float) -> dict:
+    """Expose server-side inference time so the browser can separate compute from
+    network RTT (visible in Chrome DevTools → Network → Timing, and as `server_ms`
+    in the JSON body). Pure observability — no behavioural change."""
+    response.headers["Server-Timing"] = f"infer;dur={infer_ms:.1f}"
+    payload["server_ms"] = round(infer_ms, 1)
+    return payload
+
+
 @app.post("/api/translate")
 async def translate_sign(
     body: TranslateRequest,
+    response: Response,
     current_user: dict = Depends(get_current_user),
     _rl: None = Depends(require_api_rate_limit),
 ):
@@ -892,7 +902,7 @@ async def translate_sign(
         w = body.w if body.w is not None else 640
         h = body.h if body.h is not None else 480
         # Run blocking PyTorch inference in a worker thread to keep the event loop free.
-        with Timer("infer.arabic"):
+        with Timer("infer.arabic") as _t:
             prediction, confidence = await run_in_threadpool(
                 engine.predict_sign_from_landmarks, body.frames, w, h
             )
@@ -902,20 +912,20 @@ async def translate_sign(
                 print(f"[/api/translate] Detected Arabic: {arabic_prediction} ({confidence:.2f})")
             except UnicodeEncodeError:
                 print(f"[/api/translate] Detected Arabic: (safe/transliterated) {prediction} ({confidence:.2f})")
-            return {"text": arabic_prediction, "confidence": float(confidence)}
-        return {"text": "", "confidence": 0.0}
+            return _with_server_timing({"text": arabic_prediction, "confidence": float(confidence)}, response, _t.elapsed_ms)
+        return _with_server_timing({"text": "", "confidence": 0.0}, response, _t.elapsed_ms)
     else:
         engine = get_asl_engine()
         if engine is None:
             # Try to warm it up; return pending if still loading
             return {"text": "", "confidence": 0.0, "status": "engine_loading"}
         # Run blocking TFLite inference in a worker thread.
-        with Timer("infer.asl"):
+        with Timer("infer.asl") as _t:
             prediction, confidence = await run_in_threadpool(engine.predict_sign, body.frames)
         if prediction:
             print(f"[/api/translate] Detected ASL: {prediction} ({confidence:.2f})")
-            return {"text": prediction, "confidence": float(confidence)}
-        return {"text": "", "confidence": 0.0}
+            return _with_server_timing({"text": prediction, "confidence": float(confidence)}, response, _t.elapsed_ms)
+        return _with_server_timing({"text": "", "confidence": 0.0}, response, _t.elapsed_ms)
 
 
 @app.post("/api/translate/sentence")

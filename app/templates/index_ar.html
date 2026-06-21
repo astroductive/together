@@ -1710,7 +1710,8 @@ html[data-theme="light"] .sb-collapsed .t-sidebar .t-brand--logo::after{backgrou
     //   face(468) + leftHand(21) + pose(33) + rightHand(21) = 543
     const out = [];
     // Round to 4 dp — cuts the JSON payload ~3x (see index.html for rationale).
-    const r = (v) => Math.round(v * 1e4) / 1e4;
+    // 3 decimals: landmarks are normalized 0–1, ~0.1% error, ~25% smaller upload.
+    const r = (v) => Math.round(v * 1e3) / 1e3;
     function addPts(pts, n) {
       for (let i = 0; i < n; i++) {
         if (pts && pts[i]) {

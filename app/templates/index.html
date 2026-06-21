@@ -1727,7 +1727,9 @@ html[data-theme="light"] .sb-collapsed .t-sidebar .t-brand--logo::after{backgrou
     // precision at 1000px — imperceptible to the model but cuts the JSON
     // payload ~3x (full-precision floats are 15+ chars each), which is the
     // dominant cost of each /api/translate round-trip to the remote server.
-    const r = (v) => Math.round(v * 1e4) / 1e4;
+    // 3 decimals: landmarks are normalized 0–1, so this is ~0.1% error (well below
+    // model sensitivity) while shaving ~25% more off the JSON upload vs 4 decimals.
+    const r = (v) => Math.round(v * 1e3) / 1e3;
     function addPts(pts, n) {
       for (let i = 0; i < n; i++) {
         if (pts && pts[i]) {
