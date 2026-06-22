@@ -1297,6 +1297,9 @@ async def on_connect(sid, environ, auth=None):
 @sio.on("disconnect")
 async def on_disconnect(sid):
     print(f"[WS] Client disconnected: {sid}")
+    # Drop any live streaming buffers held for this client
+    for key in [k for k in _stream_states if k[0] == sid]:
+        _stream_states.pop(key, None)
     room_id = rooms.pop(sid, None)
     if room_id:
         await sio.emit("peer_left", {"sid": sid}, room=room_id)
@@ -1359,6 +1362,150 @@ async def webrtc_ice_candidate(sid, data):
 async def translate_sentence(sid, data):
     room = data.get("room", "general")
     await sio.emit("remote_sentence", data, room=room, skip_sid=sid)
+
+
+# ═══════════════════════════════════════════════════════════════
+# SOCKET.IO — Live streaming sign recognition
+# ═══════════════════════════════════════════════════════════════
+# Server-side mirror of the old client-side voting loop. The browser streams
+# ONE landmark frame per tick over the persistent socket (instead of POSTing
+# the whole 60-frame window to /api/translate every ~750ms). The server keeps
+# the rolling buffer + vote buffer per (sid, module), runs inference as frames
+# arrive, votes, and pushes an accepted sign back. This removes the repeated
+# window re-upload and the per-inference HTTP round-trip blocking.
+from collections import deque as _deque, Counter as _Counter
+
+_STREAM_SEQ_LENGTH = 60
+_STREAM_VOTE_BUFFER = 4
+_STREAM_STABILITY = 2
+_STREAM_COOLDOWN = 18
+_STREAM_MIN_SEQ = 18
+# Minimum gap between inferences per stream. Frames arrive ~15-30/s; without a
+# throttle a single CPU would melt running inference on every one. ~120ms (~8/s)
+# is still ~6x more responsive than the old HTTP round-trip cadence (~1.3/s).
+_STREAM_MIN_INTERVAL = float(os.environ.get("STREAM_MIN_INTERVAL_S", "0.12"))
+
+
+class _StreamState:
+    __slots__ = ("frames", "votes", "cooldown", "last_pred", "language", "w", "h", "busy", "last_infer")
+
+    def __init__(self, language: str, w: int, h: int):
+        self.frames = _deque(maxlen=_STREAM_SEQ_LENGTH)
+        self.votes = _deque(maxlen=_STREAM_VOTE_BUFFER)
+        self.cooldown = 0
+        self.last_pred = None
+        self.language = language
+        self.w = w
+        self.h = h
+        self.busy = False
+        self.last_infer = 0.0
+
+
+# keyed by (sid, module) so a client can run vision + speech panels independently
+_stream_states: dict = {}
+
+
+@sio.on("sign_start")
+async def sign_start(sid, data):
+    module = (data or {}).get("module") or "vision"
+    language = ((data or {}).get("language") or "english").lower().strip()
+    try:
+        w = int((data or {}).get("w") or 640)
+        h = int((data or {}).get("h") or 480)
+    except (TypeError, ValueError):
+        w, h = 640, 480
+    _stream_states[(sid, module)] = _StreamState(language, w, h)
+    await sio.emit("sign_ready", {"module": module}, to=sid)
+
+
+@sio.on("sign_reset")
+async def sign_reset(sid, data):
+    """Client signals a true hand-gap: flush stale frames/votes (mirrors sequence.clear())."""
+    module = (data or {}).get("module") or "vision"
+    st = _stream_states.get((sid, module))
+    if st is not None:
+        st.frames.clear()
+        st.votes.clear()
+        st.last_pred = None
+
+
+@sio.on("sign_stop")
+async def sign_stop(sid, data):
+    module = (data or {}).get("module") or "vision"
+    _stream_states.pop((sid, module), None)
+
+
+@sio.on("sign_frame")
+async def sign_frame(sid, data):
+    module = (data or {}).get("module") or "vision"
+    st = _stream_states.get((sid, module))
+    if st is None:
+        return
+    frame = (data or {}).get("frame")
+    if frame is None:
+        return
+
+    st.frames.append(frame)
+
+    # Per-frame cooldown tick (mirrors the script's global_cooldown decrement)
+    if st.cooldown > 0:
+        st.cooldown -= 1
+        return
+    # Drop frames that arrive while an inference is still running, and wait until
+    # we have a usable window. Dropping is fine — the rolling buffer stays fresh.
+    if st.busy or len(st.frames) < _STREAM_MIN_SEQ:
+        return
+    # Throttle inference cadence so a single CPU isn't pegged by the frame stream.
+    now = time.monotonic()
+    if now - st.last_infer < _STREAM_MIN_INTERVAL:
+        return
+    st.last_infer = now
+
+    st.busy = True
+    try:
+        frames = list(st.frames)
+        lang = st.language
+        if lang in ("arabic", "ar", "egyptian", "eg"):
+            engine = get_arabic_engine()
+            if engine is None:
+                return
+            with Timer("stream.infer.arabic"):
+                prediction, confidence = await run_in_threadpool(
+                    engine.predict_sign_from_landmarks, frames, st.w, st.h
+                )
+            display = ARABIC_TRANSLATIONS.get(prediction.lower(), prediction) if prediction else ""
+        else:
+            engine = get_asl_engine()
+            if engine is None:
+                return
+            with Timer("stream.infer.asl"):
+                prediction, confidence = await run_in_threadpool(engine.predict_sign, frames)
+            display = prediction or ""
+
+        if not prediction:
+            return
+
+        # Live confidence for the dashboard ring / sparkline (every inference)
+        await sio.emit("sign_conf", {"module": module, "confidence": float(confidence)}, to=sid)
+
+        # Majority vote — mirrors Counter(vote_buffer).most_common(1)
+        st.votes.append(prediction)
+        if len(st.votes) >= _STREAM_VOTE_BUFFER:
+            winner, count = _Counter(st.votes).most_common(1)[0]
+            if count >= _STREAM_STABILITY and winner != st.last_pred:
+                st.last_pred = winner
+                st.votes.clear()
+                st.frames.clear()
+                st.cooldown = _STREAM_COOLDOWN
+                disp = (ARABIC_TRANSLATIONS.get(winner.lower(), winner)
+                        if lang in ("arabic", "ar", "egyptian", "eg") else winner)
+                await sio.emit("sign_detected", {
+                    "module": module,
+                    "word": disp,
+                    "confidence": float(count) / _STREAM_VOTE_BUFFER,
+                }, to=sid)
+    finally:
+        st.busy = False
 
 
 # ═══════════════════════════════════════════════════════════════

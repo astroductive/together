@@ -1575,6 +1575,78 @@ html[data-theme="light"] .sb-collapsed .t-sidebar .t-brand--logo::after{backgrou
   // ═══════════════════════════════════════════════════════════
 
 
+  // ══════════════════════════════════════════════════════════════
+  // LIVE STREAMING RECOGNITION (Socket.IO) — see EN dashboard for rationale
+  // ══════════════════════════════════════════════════════════════
+  let streamSocket = null;
+  const streamActive = { vision: false, speech: false };
+  const streamLang = { vision: null, speech: null };
+
+  function ensureStreamSocket() {
+    if (streamSocket) return streamSocket;
+    try {
+      streamSocket = io({ auth: { token: getToken() || '' } });
+    } catch (e) {
+      console.warn('[Stream] socket init failed, HTTP fallback:', e);
+      streamSocket = null;
+      return null;
+    }
+    streamSocket.on('connect', () => console.log('[Stream] connected', streamSocket.id));
+    streamSocket.on('connect_error', (err) => console.warn('[Stream] connect_error:', err && err.message));
+
+    streamSocket.on('sign_conf', (d) => {
+      if (!d) return;
+      const mod = d.module === 'speech' ? 's2sp' : 'hs';
+      if (window._updateConfWidgets) _updateConfWidgets(d.confidence);
+      if (window._setDetectState) _setDetectState('detecting', 'يرصد', mod);
+    });
+
+    streamSocket.on('sign_detected', (d) => {
+      if (!d || !d.word) return;
+      if (d.module === 'speech') {
+        if (s2spCameraOn) {
+          if (window._setDetectState) _setDetectState('locked', 'مؤكّد', 's2sp');
+          setTimeout(() => { if (window._setDetectState) _setDetectState('cooldown', 'تأخير', 's2sp'); }, 200);
+          setTimeout(() => { if (window._setDetectState && s2spCameraOn) _setDetectState('idle', 'خامل', 's2sp'); }, 800);
+          s2spHandleSign(d.word);
+        }
+      } else {
+        if (cameraOn) {
+          if (window._setDetectState) _setDetectState('locked', 'مؤكّد', 'hs');
+          setTimeout(() => { if (window._setDetectState) _setDetectState('cooldown', 'تأخير', 'hs'); }, 200);
+          setTimeout(() => { if (window._setDetectState && cameraOn) _setDetectState('idle', 'خامل', 'hs'); }, 800);
+          handleDetectedSign(d.word, d.confidence || 0);
+        }
+      }
+    });
+    return streamSocket;
+  }
+
+  function streamStart(module, language) {
+    const s = ensureStreamSocket();
+    if (!s) return false;
+    const videoId = module === 'speech' ? 's2sp-webcam' : 'webcam';
+    const v = document.getElementById(videoId);
+    s.emit('sign_start', {
+      module, language,
+      w: (v && v.videoWidth) || 640,
+      h: (v && v.videoHeight) || 480,
+    });
+    streamActive[module] = true;
+    return true;
+  }
+
+  function streamStop(module) {
+    streamActive[module] = false;
+    if (streamSocket && streamSocket.connected) streamSocket.emit('sign_stop', { module });
+  }
+
+  function streamReset(module) {
+    if (streamActive[module] && streamSocket && streamSocket.connected) {
+      streamSocket.emit('sign_reset', { module });
+    }
+  }
+
   function toggleCamera() { cameraOn ? stopCamera() : startCamera(); }
 
   function startCamera() {
@@ -1704,6 +1776,9 @@ html[data-theme="light"] .sb-collapsed .t-sidebar .t-brand--logo::after{backgrou
   function stopCamera() {
     if (!cameraOn) return;
 
+    streamStop('vision');
+    streamLang.vision = null;
+
     // 1. Unplug the Camera Helper
     if (mpCamera) {
       mpCamera.stop();
@@ -1790,6 +1865,7 @@ html[data-theme="light"] .sb-collapsed .t-sidebar .t-brand--logo::after{backgrou
         frameBuffer = [];     // clear sequence so stale frames don't bleed
         voteBuffer = [];      // ONLY clear votes on true gap (not just every missed frame)
         lastPredWord = null;  // allow same sign again after silence (mirrors script)
+        streamReset('vision'); // flush the server-side buffer too (streaming mode)
         // (Automatic sentence translation removed: user triggers it via Enter/Button)
       }
     }
@@ -1803,8 +1879,23 @@ html[data-theme="light"] .sb-collapsed .t-sidebar .t-brand--logo::after{backgrou
     // Skip inference during cooldown or before enough hand frames
     if (globalCooldown > 0 || consecutiveHand < MIN_HAND_FRAMES) return;
 
-    // Always append frame to sequence (mirrors extract_landmarks every frame)
     const frame = buildLandmarkFrame(results);
+
+    // ── Streaming path: send only the new frame; server buffers + votes ──
+    const langSel = document.getElementById('cam-language-select');
+    const language = langSel ? langSel.value : 'arabic';
+    const s = ensureStreamSocket();
+    if (s && s.connected) {
+      if (!streamActive.vision || streamLang.vision !== language) {
+        streamStart('vision', language);
+        streamLang.vision = language;
+      }
+      const single = preparePayload([frame], language)[0];
+      s.emit('sign_frame', { module: 'vision', frame: single });
+      return;
+    }
+
+    // ── HTTP fallback ──
     frameBuffer.push(frame);
     if (frameBuffer.length > SEQ_LENGTH) frameBuffer.shift();
 
@@ -3691,6 +3782,8 @@ html[data-theme="light"] .sb-collapsed .t-sidebar .t-brand--logo::after{backgrou
 
   function stopS2SpCamera() {
     if (!s2spCameraOn) return;
+    streamStop('speech');
+    streamLang.speech = null;
     const video = document.getElementById('s2sp-webcam');
     if (s2spMpCamera) { s2spMpCamera.stop(); s2spMpCamera = null; }
     if (video.srcObject) { video.srcObject.getTracks().forEach(t => t.stop()); video.srcObject = null; }
@@ -3751,6 +3844,7 @@ html[data-theme="light"] .sb-collapsed .t-sidebar .t-brand--logo::after{backgrou
         s2spFrameBuffer = [];     // clear sequence on true gap
         s2spVoteBuffer = [];      // clear votes on true gap
         s2spLastPredWord = null;  // allow same sign again after silence
+        streamReset('speech');    // flush the server-side buffer too (streaming mode)
       }
     }
 
@@ -3759,6 +3853,22 @@ html[data-theme="light"] .sb-collapsed .t-sidebar .t-brand--logo::after{backgrou
     if (s2spGlobalCooldown > 0 || s2spConsecHand < MIN_HAND_FRAMES) return;
 
     const frame = buildLandmarkFrame(results);
+
+    // ── Streaming path: send only the new frame; server buffers + votes ──
+    const s2spLangSel = document.getElementById('s2sp-cam-language-select');
+    const s2spLanguage = s2spLangSel ? s2spLangSel.value : 'arabic';
+    const ss = ensureStreamSocket();
+    if (ss && ss.connected) {
+      if (!streamActive.speech || streamLang.speech !== s2spLanguage) {
+        streamStart('speech', s2spLanguage);
+        streamLang.speech = s2spLanguage;
+      }
+      const single = preparePayload([frame], s2spLanguage)[0];
+      ss.emit('sign_frame', { module: 'speech', frame: single });
+      return;
+    }
+
+    // ── HTTP fallback ──
     s2spFrameBuffer.push(frame);
     if (s2spFrameBuffer.length > SEQ_LENGTH) s2spFrameBuffer.shift();
 
