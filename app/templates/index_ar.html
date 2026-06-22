@@ -996,12 +996,12 @@ html[data-theme="light"] .sb-collapsed .t-sidebar .t-brand--logo::after{backgrou
   let frameBuffer = [];
   // Latency tuning — see index.html for rationale. Fewer votes/round-trips and
   // an earlier first inference make recognition feel responsive on a remote server.
-  const VOTE_BUFFER_SIZE = 4;
+  const VOTE_BUFFER_SIZE = 3;    // was 4 — mirrors server _STREAM_VOTE_BUFFER
   const STABILITY_FRAMES = 2;
   const GLOBAL_COOLDOWN_FRM = 18;
-  const MIN_HAND_FRAMES = 3;
-  const MAX_HAND_GAP_FRAMES = 5;  // tolerance for flickering hand detection
-  const MIN_SEQ_FRAMES = 18;
+  const MIN_HAND_FRAMES = 2;     // was 3 — start inference after 2 good hand frames, not 3
+  const MAX_HAND_GAP_FRAMES = 5;
+  const MIN_SEQ_FRAMES = 10;     // was 18 — first HTTP-fallback inference fires sooner
   const moduleMap = {
     vision: { panel: 'panel-vision', nav: 'nav-vision', title: 'Sign to Text' },
     speech: { panel: 'panel-speech', nav: 'nav-speech', title: 'Sign to Speech' },
@@ -1762,7 +1762,7 @@ html[data-theme="light"] .sb-collapsed .t-sidebar .t-brand--logo::after{backgrou
         }
 
         let _lastFrameMs = 0;
-        const _FRAME_INTERVAL = 1000 / 15;
+        const _FRAME_INTERVAL = 1000 / 20; // 20fps — fills the server buffer ~33% faster
         mpCamera = new window.Camera(video, {
           onFrame: async () => {
             const now = performance.now();
@@ -3792,7 +3792,7 @@ html[data-theme="light"] .sb-collapsed .t-sidebar .t-brand--logo::after{backgrou
       s2spMpCamera = new window.Camera(video, {
         onFrame: async () => {
           const now = performance.now();
-          if (now - _s2spLastMs < 1000/15) return;
+          if (now - _s2spLastMs < 1000/20) return;
           if (_s2spHolisticBusy) return;
           _s2spLastMs = now;
           _s2spHolisticBusy = true;

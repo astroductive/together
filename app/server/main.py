@@ -159,13 +159,34 @@ def _warm_models_on_boot():
 
     def _warm():
         import time as _t
-        for name, loader in (("ASL", get_asl_engine), ("Arabic", get_arabic_engine)):
-            try:
-                t0 = _t.perf_counter()
-                loader()
-                print(f"[warm] {name} engine ready in {(_t.perf_counter()-t0)*1000:.0f} ms")
-            except Exception as e:  # never crash boot over a warm-up
-                print(f"[warm] {name} engine warm-up skipped: {e}")
+        import numpy as _np
+
+        # 1. Load the ASL TFLite engine and run one dummy inference.
+        #    TFLite's XNNPACK delegate does JIT kernel compilation on the very first
+        #    invoke(); loading alone does not trigger it. Without this the first real
+        #    user request pays a hidden ~200-400ms compilation cost.
+        try:
+            t0 = _t.perf_counter()
+            asl = get_asl_engine()
+            if asl is not None:
+                dummy = _np.zeros((1, 60, 543, 3), dtype=_np.float32)
+                asl.predict_sign([dummy[0]])   # one forward pass — warms XNNPACK
+            print(f"[warm] ASL engine ready in {(_t.perf_counter()-t0)*1000:.0f} ms")
+        except Exception as e:
+            print(f"[warm] ASL engine warm-up skipped: {e}")
+
+        # 2. Load the Arabic PyTorch engine and run one dummy inference.
+        #    torch.inference_mode() still traces operator kernels on first use;
+        #    a dummy pass eliminates that from the critical path.
+        try:
+            t0 = _t.perf_counter()
+            ar = get_arabic_engine()
+            if ar is not None:
+                dummy_lm = [[[0.0, 0.0, 0.0]] * 59] * 10   # 10 frames × 59 landmarks
+                ar.predict_sign_from_landmarks(dummy_lm, 640, 480)
+            print(f"[warm] Arabic engine ready in {(_t.perf_counter()-t0)*1000:.0f} ms")
+        except Exception as e:
+            print(f"[warm] Arabic engine warm-up skipped: {e}")
 
     Thread(target=_warm, name="model-warmup", daemon=True).start()
 
@@ -1382,14 +1403,14 @@ async def translate_sentence(sid, data):
 from collections import deque as _deque, Counter as _Counter
 
 _STREAM_SEQ_LENGTH = 60
-_STREAM_VOTE_BUFFER = 4
-_STREAM_STABILITY = 2
-_STREAM_COOLDOWN = 18
-_STREAM_MIN_SEQ = 18
-# Minimum gap between inferences per stream. Frames arrive ~15-30/s; without a
-# throttle a single CPU would melt running inference on every one. ~120ms (~8/s)
-# is still ~6x more responsive than the old HTTP round-trip cadence (~1.3/s).
-_STREAM_MIN_INTERVAL = float(os.environ.get("STREAM_MIN_INTERVAL_S", "0.12"))
+_STREAM_VOTE_BUFFER = 3        # was 4 — 3 consistent predictions is enough; saves ~0.3s/sign
+_STREAM_STABILITY = 2          # 2/3 agreement (was 2/4); same accuracy, faster
+_STREAM_COOLDOWN = 18          # frames of silence after acceptance (~1.2s at 15fps)
+_STREAM_MIN_SEQ = 10           # was 18 — first inference after ~0.7s of frames, not 1.5-2s
+# Minimum gap between inferences per stream. Reduced from 0.12s (8.3/s) to 0.08s
+# (12.5/s) so the 3-vote buffer fills ~40% faster. Render Standard 1 CPU shows
+# <30% utilization at the old rate; this uses more but stays in headroom.
+_STREAM_MIN_INTERVAL = float(os.environ.get("STREAM_MIN_INTERVAL_S", "0.08"))
 
 
 class _StreamState:
