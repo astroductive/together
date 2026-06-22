@@ -359,6 +359,14 @@ html[data-theme="light"] .sb-collapsed .t-sidebar .t-brand--logo::after{backgrou
 .d-state-pill[data-state="locked"]{background:rgba(8,54,90,.8);color:#60a5fa;border-color:rgba(96,165,250,.3)}
 .d-state-pill[data-state="cooldown"]{background:rgba(74,54,8,.8);color:#fbbf24;border-color:rgba(251,191,36,.3)}
 .d-state-pill i{width:6px;height:6px;border-radius:50%;background:currentColor;flex:none}
+.d-compose-badge{display:inline-flex;align-items:center;gap:6px;margin-inline-start:8px;
+  padding:2px 9px;border-radius:var(--radius-full);font-size:11px;font-weight:700;letter-spacing:.03em;
+  background:rgba(8,54,90,.55);color:#60a5fa;border:1px solid rgba(96,165,250,.3);vertical-align:middle}
+.d-compose-badge::before{content:"";width:7px;height:7px;border-radius:50%;background:currentColor;
+  animation:dComposePulse 1s ease-in-out infinite}
+.d-compose-badge[hidden]{display:none}
+@keyframes dComposePulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.3;transform:scale(.55)}}
+button.is-busy{opacity:.6;cursor:progress}
 </style>
 
 <a href="#main-content" class="t-skip-link">تخطّي إلى المحتوى</a>
@@ -528,14 +536,14 @@ html[data-theme="light"] .sb-collapsed .t-sidebar .t-brand--logo::after{backgrou
               <div class="d-state-pill" id="detect-state-pill" data-state="idle"><i></i>خامل</div>
             </div>
             <div class="d-box">
-              <div class="t-eyebrow">النص المترجم</div>
+              <div class="t-eyebrow">النص المترجم<span id="compose-badge" class="d-compose-badge" hidden>جاري التكوين…</span></div>
               <div class="d-box-row">
                 <div>
                   <div class="d-box-text" id="transcription-output"><span class="d-box-ph">بانتظار الإشارة…</span></div>
                   <div class="d-box-hint" style="display:none">اضغط <kbd>Enter</kbd> لتكوين جملة</div>
                 </div>
                 <div class="d-box-actions">
-                  <button onclick="triggerSentenceTranslation()" class="t-btn t-btn--soft" style="display:none">تكوين</button>
+                  <button id="compose-btn" onclick="triggerSentenceTranslation()" class="t-btn t-btn--soft" style="display:none">تكوين</button>
                 </div>
               </div>
             </div>
@@ -612,14 +620,14 @@ html[data-theme="light"] .sb-collapsed .t-sidebar .t-brand--logo::after{backgrou
               <div class="d-state-pill" id="s2sp-state-pill" data-state="idle"><i></i>خامل</div>
             </div>
             <div class="d-box" style="margin-bottom:14px">
-              <div class="t-eyebrow">الإشارات المكتشفة</div>
+              <div class="t-eyebrow">الإشارات المكتشفة<span id="s2sp-compose-badge" class="d-compose-badge" hidden>جاري التكوين…</span></div>
               <div class="d-box-row">
                 <div>
                   <div class="d-box-text" id="s2sp-gloss-output"><span class="d-box-ph">تظهر الإشارات هنا…</span></div>
                   <div class="d-box-hint" style="display:none">اضغط <kbd>Enter</kbd> للنطق</div>
                 </div>
                 <div class="d-box-actions">
-                  <button onclick="s2spTriggerSentence()" class="t-btn t-btn--soft" style="display:none">تكوين</button>
+                  <button id="s2sp-compose-btn" onclick="s2spTriggerSentence()" class="t-btn t-btn--soft" style="display:none">تكوين</button>
                 </div>
               </div>
             </div>
@@ -985,6 +993,8 @@ html[data-theme="light"] .sb-collapsed .t-sidebar .t-brand--logo::after{backgrou
   let inferenceRunning = false; // prevent overlapping async calls
   let _holisticBusy = false;   // prevent re-entrant holistic.send() calls (WASM abort guard)
   let _warmingUp = false;      // flag: warmup request in flight, ignore its result
+  let composing = false;       // true while a sentence compose request is in flight (HandScript)
+  let s2spComposing = false;   // same, for Sign-to-Speech
 
   // Dedup state for handleDetectedSign
   let lastAccepted = null;
@@ -996,12 +1006,14 @@ html[data-theme="light"] .sb-collapsed .t-sidebar .t-brand--logo::after{backgrou
   let frameBuffer = [];
   // Latency tuning — see index.html for rationale. Fewer votes/round-trips and
   // an earlier first inference make recognition feel responsive on a remote server.
-  const VOTE_BUFFER_SIZE = 3;    // was 4 — mirrors server _STREAM_VOTE_BUFFER
-  const STABILITY_FRAMES = 2;
+  // Accuracy-tuned: more votes + higher agreement = far fewer false detections.
+  // Mirrors the server stream constants (_STREAM_VOTE_BUFFER / _STREAM_STABILITY).
+  const VOTE_BUFFER_SIZE = 5;    // need 3 of the last 5 predictions to agree
+  const STABILITY_FRAMES = 3;
   const GLOBAL_COOLDOWN_FRM = 18;
-  const MIN_HAND_FRAMES = 2;     // was 3 — start inference after 2 good hand frames, not 3
+  const MIN_HAND_FRAMES = 3;     // hand must be stably present for 3 frames before inferring
   const MAX_HAND_GAP_FRAMES = 5;
-  const MIN_SEQ_FRAMES = 10;     // was 18 — first HTTP-fallback inference fires sooner
+  const MIN_SEQ_FRAMES = 12;     // a bit more temporal context before the first inference
   const moduleMap = {
     vision: { panel: 'panel-vision', nav: 'nav-vision', title: 'Sign to Text' },
     speech: { panel: 'panel-speech', nav: 'nav-speech', title: 'Sign to Speech' },
@@ -1727,11 +1739,11 @@ html[data-theme="light"] .sb-collapsed .t-sidebar .t-brand--logo::after{backgrou
         });
 
         holistic.setOptions({
-          modelComplexity: 0,
+          modelComplexity: 1,        // full model — better tracking, fewer false signs
           selfieMode: true,
-          smoothLandmarks: false,
+          smoothLandmarks: true,     // temporal smoothing kills landmark jitter
           minDetectionConfidence: 0.6,
-          minTrackingConfidence: 0.5,
+          minTrackingConfidence: 0.6,
         });
 
         holistic.onResults(onHolisticResults);
@@ -2057,8 +2069,9 @@ html[data-theme="light"] .sb-collapsed .t-sidebar .t-brand--logo::after{backgrou
         clearTimeout(window.arClearTimeout);
       }
 
-      // Show the current detected word immediately
-      updateTranscription(word, true);
+      // Show the current detected word immediately (but never clobber an
+      // in-progress composition — the word is still logged below).
+      if (!composing) updateTranscription(word, true);
       // playLocalTts(word, 'arabic'); // Disabled TTS in Sign-to-Text feature
 
       // Add to session log
@@ -2073,8 +2086,10 @@ html[data-theme="light"] .sb-collapsed .t-sidebar .t-brand--logo::after{backgrou
       // Accumulate for sentence
       glossBuffer.push(word);
       lastSignTime = Date.now();
-      // Update live transcription box with ALL accumulated words
-      updateTranscription(glossBuffer.join(' '));
+      // Update live transcription box with ALL accumulated words — but while a
+      // sentence is being composed, keep buffering silently so the new sign
+      // doesn't overwrite the "Composing…" / freshly composed sentence.
+      if (!composing) updateTranscription(glossBuffer.join(' '));
     }
 
     // Count every accepted sign toward the cross-dashboard topbar counter
@@ -2156,11 +2171,22 @@ html[data-theme="light"] .sb-collapsed .t-sidebar .t-brand--logo::after{backgrou
     }
   }
 
+  // Toggle the "Composing…" indicator + disable the Compose button while in flight.
+  function setComposing(on) {
+    composing = on;
+    const badge = document.getElementById('compose-badge');
+    if (badge) badge.hidden = !on;
+    const btn = document.getElementById('compose-btn');
+    if (btn) { btn.disabled = on; btn.classList.toggle('is-busy', on); }
+  }
+
   async function triggerSentenceTranslation() {
+    if (composing) return;            // ignore a second press while one is in flight
     if (glossBuffer.length === 0) return;
     const gloss = [...glossBuffer];
     glossBuffer = []; // Clear buffer immediately after sending
     const isArabicMode = forcedLang === 'ar';
+    setComposing(true);
 
     // Show loading indicator
     updateTranscription(isArabicMode ? `جاري تكوين الجملة: ${gloss.join(' ')}...` : `Forming sentence: ${gloss.join(' ')}...`);
@@ -2196,6 +2222,8 @@ html[data-theme="light"] .sb-collapsed .t-sidebar .t-brand--logo::after{backgrou
     } catch (err) {
       updateTranscription(isArabicMode ? 'تعذر تكوين الجملة — حاول مرة أخرى' : 'Could not compose sentence — please try again', true);
       console.error('[compose ar] sentence error:', err);
+    } finally {
+      setComposing(false);
     }
   }
 
@@ -3777,11 +3805,11 @@ html[data-theme="light"] .sb-collapsed .t-sidebar .t-brand--logo::after{backgrou
         });
 
         s2spHolistic.setOptions({
-          modelComplexity: 0,
+          modelComplexity: 1,        // full model — better tracking, fewer false signs
           selfieMode: true,
-          smoothLandmarks: false,
+          smoothLandmarks: true,     // temporal smoothing kills landmark jitter
           minDetectionConfidence: 0.6,
-          minTrackingConfidence: 0.5,
+          minTrackingConfidence: 0.6,
         });
         s2spHolistic.onResults(onS2SpHolisticResults);
       }
@@ -3990,10 +4018,22 @@ html[data-theme="light"] .sb-collapsed .t-sidebar .t-brand--logo::after{backgrou
     } else {
       // Voting already ensured uniqueness — just push the word
       s2spGlossBuf.push(word);
-      const el = document.getElementById('s2sp-gloss-output');
-      el.innerHTML = `<span style="color:var(--text);">${s2spGlossBuf.join(' ')}</span>`;
+      // Don't overwrite the gloss box while a sentence is being composed.
+      if (!s2spComposing) {
+        const el = document.getElementById('s2sp-gloss-output');
+        el.innerHTML = `<span style="color:var(--text);">${s2spGlossBuf.join(' ')}</span>`;
+      }
       if (typeof bumpSignCount === 'function') bumpSignCount(1);
     }
+  }
+
+  // Toggle the S2SP "Composing…" indicator + disable its Compose button.
+  function s2spSetComposing(on) {
+    s2spComposing = on;
+    const badge = document.getElementById('s2sp-compose-badge');
+    if (badge) badge.hidden = !on;
+    const btn = document.getElementById('s2sp-compose-btn');
+    if (btn) { btn.disabled = on; btn.classList.toggle('is-busy', on); }
   }
 
   // Theme-aware Sign→Speech log renderer (shared by detection + sentence paths)
@@ -4013,11 +4053,13 @@ html[data-theme="light"] .sb-collapsed .t-sidebar .t-brand--logo::after{backgrou
   }
 
   async function s2spTriggerSentence() {
+    if (s2spComposing) return;
     if (s2spGlossBuf.length === 0) return;
     const gloss = [...s2spGlossBuf];
     s2spGlossBuf = [];
     const isArabicMode = forcedLang === 'ar';
-    
+    s2spSetComposing(true);
+
     document.getElementById('s2sp-sentence-output').innerHTML =
         isArabicMode
           ? '<span style="color:var(--gray-400);font-size:15px;">جاري تكوين الجملة...</span>'
@@ -4051,6 +4093,8 @@ html[data-theme="light"] .sb-collapsed .t-sidebar .t-brand--logo::after{backgrou
       document.getElementById('s2sp-sentence-output').innerHTML =
         `<span style="color:var(--danger,#ef4444);">${isArabicMode ? 'تعذر تكوين الجملة — حاول مرة أخرى' : 'Could not compose sentence — please try again'}</span>`;
       console.error('[compose s2sp ar] error:', err);
+    } finally {
+      s2spSetComposing(false);
     }
   }
 

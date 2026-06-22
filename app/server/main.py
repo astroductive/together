@@ -1403,13 +1403,16 @@ async def translate_sentence(sid, data):
 from collections import deque as _deque, Counter as _Counter
 
 _STREAM_SEQ_LENGTH = 60
-_STREAM_VOTE_BUFFER = 3        # was 4 — 3 consistent predictions is enough; saves ~0.3s/sign
-_STREAM_STABILITY = 2          # 2/3 agreement (was 2/4); same accuracy, faster
-_STREAM_COOLDOWN = 18          # frames of silence after acceptance (~1.2s at 15fps)
-_STREAM_MIN_SEQ = 10           # was 18 — first inference after ~0.7s of frames, not 1.5-2s
-# Minimum gap between inferences per stream. Reduced from 0.12s (8.3/s) to 0.08s
-# (12.5/s) so the 3-vote buffer fills ~40% faster. Render Standard 1 CPU shows
-# <30% utilization at the old rate; this uses more but stays in headroom.
+# Accuracy-tuned: require 3 of the last 5 predictions to agree before accepting a
+# sign. More votes + higher agreement dramatically cuts false detections; the
+# fast 0.08s cadence keeps the larger buffer filling quickly so latency barely moves.
+_STREAM_VOTE_BUFFER = 5        # was 3
+_STREAM_STABILITY = 3          # was 2 — 3/5 agreement
+_STREAM_COOLDOWN = 18          # frames of silence after acceptance (~1.2s)
+_STREAM_MIN_SEQ = 12           # a bit more temporal context before first inference
+# Minimum gap between inferences per stream. 0.08s (~12.5/s) fills the 5-vote
+# buffer in ~0.4s. Render Standard 1 CPU peaks under 20%, so there is ample
+# headroom; lower STREAM_MIN_INTERVAL_S further to trade CPU for responsiveness.
 _STREAM_MIN_INTERVAL = float(os.environ.get("STREAM_MIN_INTERVAL_S", "0.08"))
 
 
