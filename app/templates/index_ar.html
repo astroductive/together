@@ -624,9 +624,12 @@ html[data-theme="light"] .sb-collapsed .t-sidebar .t-brand--logo::after{backgrou
               </div>
             </div>
             <div class="d-sentence-out" style="margin:0 20px 20px">
-              <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:9px">
+              <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:9px;gap:10px">
                 <div class="t-eyebrow">الجملة المنطوقة</div>
-                <button id="s2sp-tts-btn" onclick="s2spReplayTts()" class="t-btn t-btn--ghost" style="padding:4px 10px;font-size:13px" title="قراءة بصوت عالٍ">🔊</button>
+                <div style="display:flex;align-items:center;gap:7px">
+                  <select id="tts-voice-select" class="d-lang-sel" title="اختر صوت النطق" onchange="setTtsVoice(this.value)" style="max-width:140px"></select>
+                  <button id="s2sp-tts-btn" onclick="s2spReplayTts()" class="t-btn t-btn--ghost" style="padding:4px 10px;font-size:13px" title="قراءة بصوت عالٍ">🔊</button>
+                </div>
               </div>
               <div class="d-box-text" id="s2sp-sentence-output"><span class="d-sentence-ph">بانتظار الإشارات…</span></div>
             </div>
@@ -1971,9 +1974,19 @@ html[data-theme="light"] .sb-collapsed .t-sidebar .t-brand--logo::after{backgrou
     }
   }
 
+  // Selected Gemini voice (empty = "Auto", use the browser's built-in voices).
+  let _selectedVoice = localStorage.getItem('tts-voice') || '';
+  function setTtsVoice(v) {
+    _selectedVoice = v || '';
+    localStorage.setItem('tts-voice', _selectedVoice);
+  }
+  window.setTtsVoice = setTtsVoice;
+
   async function playLocalTts(text, language) {
-    console.log(`[TTS] Speaking: "${text}" (${language})`);
-    if ('speechSynthesis' in window) {
+    console.log(`[TTS] Speaking: "${text}" (${language})`, _selectedVoice ? `voice=${_selectedVoice}` : '(auto)');
+    // When the user picked a specific Gemini voice, skip browser TTS entirely
+    // and go straight to the backend so the chosen voice is actually used.
+    if (!_selectedVoice && 'speechSynthesis' in window) {
       try {
         window.speechSynthesis.cancel();
         const utt = new SpeechSynthesisUtterance(text);
@@ -2008,7 +2021,8 @@ html[data-theme="light"] .sb-collapsed .t-sidebar .t-brand--logo::after{backgrou
     }
 
     try {
-      const url = `/api/tts?text=${encodeURIComponent(text)}&language=${encodeURIComponent(language)}`;
+      let url = `/api/tts?text=${encodeURIComponent(text)}&language=${encodeURIComponent(language)}`;
+      if (_selectedVoice) url += `&voice=${encodeURIComponent(_selectedVoice)}`;
       console.log('[TTS] Calling backend TTS...');
       const res = await authFetch(url);
       if (!res.ok) { console.error('[TTS] Backend returned', res.status); return; }
@@ -4097,6 +4111,26 @@ function bumpSignCount(n) {
 }
 window.bumpSignCount = bumpSignCount;
 bumpSignCount(0);
+
+// ── Populate the TTS voice picker from the backend ──
+(async function _initVoicePicker() {
+  const sel = document.getElementById('tts-voice-select');
+  if (!sel) return;
+  try {
+    const res = await authFetch('/api/tts/voices');
+    if (!res.ok) { sel.style.display = 'none'; return; }
+    const data = await res.json();
+    const saved = localStorage.getItem('tts-voice') || '';
+    let html = '<option value="">تلقائي</option>';
+    (data.voices || []).forEach(v => {
+      html += `<option value="${v}"${v === saved ? ' selected' : ''}>${v}</option>`;
+    });
+    sel.innerHTML = html;
+  } catch (_) {
+    sel.style.display = 'none';
+  }
+})();
+
 function _fmtUptime(ms) {
   const s = Math.floor(ms / 1000), m = Math.floor(s / 60), h = Math.floor(m / 60);
   return h > 0
