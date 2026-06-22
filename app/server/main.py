@@ -82,9 +82,9 @@ def call_gemini_llm(prompt: str, temperature: float = 0.0) -> str:
         return ""
 
 
-def call_gemini_tts(text: str, language: str = "arabic") -> bytes:
+def call_gemini_tts(text: str, language: str = "arabic", voice: str | None = None) -> bytes:
     """Backwards-compatible name: routes through the configured TTS provider chain."""
-    return get_tts_provider().synthesize(text, language)
+    return get_tts_provider().synthesize(text, language, voice)
 
 
 def call_gemini_stt(audio_bytes: bytes, mime_type: str = "audio/wav", language: str = "arabic") -> str:
@@ -985,13 +985,17 @@ import io
 def text_to_speech_endpoint(
     text: str,
     language: str = "english",
+    voice: str | None = None,
     request: Request = None,
     _rl: None = Depends(require_api_rate_limit),
 ):
+    """Synthesize speech. Optional ?voice=<name> overrides the provider default.
+    For Gemini TTS, voice names include: Puck, Aoede, Schedar, Kore, Charon, Fenrir, etc.
+    """
     lang = language.lower().strip()
     if lang in ["arabic", "ar", "egyptian", "eg", "english", "en"]:
         try:
-            audio_bytes = call_gemini_tts(text, lang)
+            audio_bytes = call_gemini_tts(text, lang, voice or None)
             return StreamingResponse(io.BytesIO(audio_bytes), media_type="audio/wav")
         except Exception as e:
             raise HTTPException(status_code=500, detail=f"TTS synthesis failed: {str(e)}")
@@ -1000,6 +1004,24 @@ def text_to_speech_endpoint(
 
 
 from fastapi import UploadFile as _UploadFile, File as _File, Form as _Form
+
+@app.get("/api/tts/voices")
+def tts_voices():
+    """List available Gemini TTS prebuilt voices and the current per-language defaults."""
+    from providers.gemini import GeminiTTS
+    tts = get_tts_provider()
+    voices = [
+        "Aoede","Puck","Charon","Kore","Fenrir","Leda","Orus","Zephyr",
+        "Autonoe","Callirrhoe","Despina","Erinome","Gacrux","Iocaste",
+        "Laomedeia","Pulcherrima","Rasalgethi","Sadachbia","Sadaltager",
+        "Schedar","Sulafat","Umbriel","Vindemiatrix","Zubenelgenubi",
+    ]
+    defaults = {}
+    if isinstance(tts, GeminiTTS):
+        for lang in ("english", "arabic", "egyptian"):
+            defaults[lang] = tts._resolve_voice(lang)
+    return {"voices": voices, "defaults": defaults, "provider": getattr(tts, "name", "unknown")}
+
 
 @app.post("/api/stt")
 async def speech_to_text_endpoint(

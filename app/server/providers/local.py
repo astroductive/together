@@ -25,7 +25,7 @@ class Pyttsx3TTS(TTSProvider):
         except Exception:
             return False
 
-    def synthesize(self, text: str, language: str = "english") -> bytes:
+    def synthesize(self, text: str, language: str = "english", voice: str | None = None) -> bytes:
         try:
             import pyttsx3
         except ImportError as e:

@@ -52,19 +52,55 @@ class GeminiLLM(LLMProvider):
 class GeminiTTS(TTSProvider):
     name = "gemini"
 
+    # Available prebuilt voices (Gemini TTS preview, as of 2026):
+    # Aoede, Puck, Charon, Kore, Fenrir, Leda, Orus, Zephyr, Autonoe, Callirrhoe,
+    # Despina, Erinome, Gacrux, Iocaste, Laomedeia, Pulcherrima, Rasalgethi,
+    # Sadachbia, Sadaltager, Schedar, Sulafat, Umbriel, Vindemiatrix, Zubenelgenubi
+    #
+    # Per-language overrides via env vars:
+    #   GEMINI_TTS_VOICE          — global default (fallback for any language)
+    #   GEMINI_TTS_VOICE_EN       — English (ASL users)
+    #   GEMINI_TTS_VOICE_AR       — Arabic / Modern Standard
+    #   GEMINI_TTS_VOICE_EG       — Egyptian Arabic
+    _VOICE_ENV = {
+        "en":       "GEMINI_TTS_VOICE_EN",
+        "english":  "GEMINI_TTS_VOICE_EN",
+        "ar":       "GEMINI_TTS_VOICE_AR",
+        "arabic":   "GEMINI_TTS_VOICE_AR",
+        "eg":       "GEMINI_TTS_VOICE_EG",
+        "egyptian": "GEMINI_TTS_VOICE_EG",
+    }
+    _DEFAULT_VOICES = {
+        "GEMINI_TTS_VOICE_EN": "Puck",      # natural male EN voice
+        "GEMINI_TTS_VOICE_AR": "Schedar",   # clear Arabic voice
+        "GEMINI_TTS_VOICE_EG": "Schedar",   # same for Egyptian
+    }
+
     def __init__(self) -> None:
         self.model = os.environ.get("GEMINI_TTS_MODEL", "gemini-2.5-flash-preview-tts")
 
     def available(self) -> bool:
         return bool(os.environ.get("GEMINI_API_KEY", "").strip())
 
-    def synthesize(self, text: str, language: str = "english") -> bytes:
+    def _resolve_voice(self, language: str, voice_override: str | None = None) -> str:
+        if voice_override:
+            return voice_override
+        env_key = self._VOICE_ENV.get(language.lower().strip(), "GEMINI_TTS_VOICE_EN")
+        # Check specific language env var first, then global default, then hardcoded default
+        return (
+            os.environ.get(env_key)
+            or os.environ.get("GEMINI_TTS_VOICE")
+            or self._DEFAULT_VOICES.get(env_key, "Aoede")
+        )
+
+    def synthesize(self, text: str, language: str = "english", voice: str | None = None) -> bytes:
         if language in ("egyptian", "eg"):
             lang_name = "Egyptian Arabic dialect"
         elif language in ("english", "en"):
             lang_name = "American English"
         else:
             lang_name = "Modern Standard Arabic"
+        voice_name = self._resolve_voice(language, voice)
         prompt = (
             f"Please read the following text aloud. Pronounce it naturally as a native "
             f"speaker of {lang_name}. Output ONLY the audio representation of this text, "
@@ -76,7 +112,7 @@ class GeminiTTS(TTSProvider):
             "generationConfig": {
                 "responseModalities": ["AUDIO"],
                 "speechConfig": {
-                    "voiceConfig": {"prebuiltVoiceConfig": {"voiceName": "Aoede"}}
+                    "voiceConfig": {"prebuiltVoiceConfig": {"voiceName": voice_name}}
                 },
             },
         }

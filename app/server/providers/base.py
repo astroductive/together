@@ -34,8 +34,12 @@ class TTSProvider(ABC):
     name: str = "tts"
 
     @abstractmethod
-    def synthesize(self, text: str, language: str = "english") -> bytes:
-        """Return WAV-encoded audio bytes for the text. May raise ProviderError."""
+    def synthesize(self, text: str, language: str = "english", voice: str | None = None) -> bytes:
+        """Return WAV-encoded audio bytes for the text. May raise ProviderError.
+
+        voice: optional provider-specific voice name/ID that overrides the default
+               for this language. None = use the provider's configured default.
+        """
         raise NotImplementedError
 
     def available(self) -> bool:
