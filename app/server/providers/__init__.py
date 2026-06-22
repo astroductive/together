@@ -50,13 +50,13 @@ class FallbackLLM(_FallbackMixin, LLMProvider):
 class FallbackTTS(_FallbackMixin, TTSProvider):
     name = "fallback-tts"
 
-    def synthesize(self, text: str, language: str = "english") -> bytes:
+    def synthesize(self, text: str, language: str = "english", voice: str | None = None) -> bytes:
         last_err = None
         for p in self._providers:
             try:
                 if not p.available():
                     continue
-                return p.synthesize(text, language)
+                return p.synthesize(text, language, voice)
             except ProviderError as e:
                 last_err = e
                 continue
