@@ -290,15 +290,29 @@ class ASLService(SignDB):
             idx = int(np.argmax(out_arr))
             top_prob = float(out_arr[idx])
 
-            CONFIDENCE_THRESH = 0.80
-            if top_prob > CONFIDENCE_THRESH:
-                label = self.labels.get(idx, self.labels.get(str(idx), f"class_{idx}"))
+            # The model output is already a normalized probability distribution
+            # (a softmax layer is baked into the graph), so `out_arr` sums to ~1
+            # and `top_prob` IS the model's confidence. Re-running softmax over a
+            # distribution that already sums to 1 — as the old code did — flattens
+            # the top value across all 250 classes (0.90 → ~0.01-0.08), which is
+            # what produced the absurdly low confidence on the dashboard.
+            # Only fall back to an explicit softmax if the output looks like raw
+            # logits (negative values or a sum far from 1).
+            arr_sum = float(out_arr.sum())
+            if out_arr.min() < 0.0 or not (0.95 <= arr_sum <= 1.05):
                 exp_o = np.exp(out_arr - np.max(out_arr))
-                softmax_conf = float(exp_o[idx] / exp_o.sum())
-                print(f"[Inference] {label} logit={top_prob:.2f} p={softmax_conf:.3f}")
-                return label, softmax_conf
+                probs = exp_o / exp_o.sum()
+                conf = float(probs[idx])
+            else:
+                conf = top_prob
 
-            print(f"[Inference] No sign detected (top_logit={top_prob:.2f})")
+            CONFIDENCE_THRESH = 0.80
+            if conf > CONFIDENCE_THRESH:
+                label = self.labels.get(idx, self.labels.get(str(idx), f"class_{idx}"))
+                print(f"[Inference] {label} p={conf:.3f}")
+                return label, conf
+
+            print(f"[Inference] No sign detected (top_p={conf:.3f})")
             return None, 0.0
         except Exception as e:
             print(f"[Inference Error] {e}")
