@@ -4268,6 +4268,21 @@ button.is-busy{opacity:.6;cursor:progress}
     }
   })();
 
+  // ── Keep-warm ping ──────────────────────────────────────────
+  // Render (and similar PaaS) spin the container down after a few minutes of
+  // inactivity; the next request then re-pays the full model load + XNNPACK JIT
+  // (the 2-3s idle). A cheap periodic /api/health ping while a tab is open keeps
+  // the container alive so the models stay resident in memory. Plain ping (no
+  // ?warm) — just enough traffic to defer the idle timeout. Pauses while the tab
+  // is hidden to avoid needless requests.
+  (function keepWarm() {
+    const KEEP_WARM_MS = 4 * 60 * 1000; // 4 min — under typical ~5-15 min idle windows
+    setInterval(() => {
+      if (document.hidden) return;
+      authFetch('/api/health').catch(() => {});
+    }, KEEP_WARM_MS);
+  })();
+
 
   // ═══════════════════════════════════════════════════════════
   // UTILITIES & GLOBAL EVENTS

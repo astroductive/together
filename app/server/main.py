@@ -157,27 +157,47 @@ def _warm_models_on_boot():
     if os.getenv("PRELOAD_MODELS", "1") != "1":
         return
 
-    def _warm():
-        import time as _t
-        import numpy as _np
+    Thread(target=_warm_engines, name="model-warmup", daemon=True).start()
 
-        # 1. Load the ASL TFLite engine and run one dummy inference.
-        #    TFLite's XNNPACK delegate does JIT kernel compilation on the very first
-        #    invoke(); loading alone does not trigger it. Without this the first real
-        #    user request pays a hidden ~200-400ms compilation cost.
+
+# True once both engines have had a real forward pass (XNNPACK / torch kernels
+# JIT-compiled). The frontend pre-warm path checks this so the dummy inference
+# runs at most once per process, not on every ?warm=1 request.
+_models_warmed = False
+_warm_lock = Lock()
+
+
+def _warm_engines():
+    """Load both recognition engines AND run one dummy forward pass each.
+
+    Loading alone does not trigger TFLite's XNNPACK JIT kernel compilation or
+    torch's first-use operator tracing — those happen on the first invoke(),
+    costing the user a hidden ~200-400ms (TFLite) / longer (torch) on their very
+    first sign. A single dummy pass moves that cost off the user's timeline.
+
+    Idempotent and serialized: safe to call from the boot thread and from the
+    frontend pre-warm request concurrently; the heavy pass runs at most once.
+    """
+    global _models_warmed
+    import time as _t
+    import numpy as _np
+
+    with _warm_lock:
+        if _models_warmed:
+            return
+
+        # 1. ASL TFLite engine — load + one dummy inference (warms XNNPACK).
         try:
             t0 = _t.perf_counter()
             asl = get_asl_engine()
             if asl is not None:
                 dummy = _np.zeros((1, 60, 543, 3), dtype=_np.float32)
-                asl.predict_sign([dummy[0]])   # one forward pass — warms XNNPACK
+                asl.predict_sign([dummy[0]])
             print(f"[warm] ASL engine ready in {(_t.perf_counter()-t0)*1000:.0f} ms")
         except Exception as e:
             print(f"[warm] ASL engine warm-up skipped: {e}")
 
-        # 2. Load the Arabic PyTorch engine and run one dummy inference.
-        #    torch.inference_mode() still traces operator kernels on first use;
-        #    a dummy pass eliminates that from the critical path.
+        # 2. Arabic PyTorch engine — load + one dummy inference (warms torch kernels).
         try:
             t0 = _t.perf_counter()
             ar = get_arabic_engine()
@@ -188,7 +208,7 @@ def _warm_models_on_boot():
         except Exception as e:
             print(f"[warm] Arabic engine warm-up skipped: {e}")
 
-    Thread(target=_warm, name="model-warmup", daemon=True).start()
+        _models_warmed = True
 
 
 def normalize_and_validate_email(raw_email: str, *, check_deliverability: bool = False) -> str:
@@ -477,8 +497,11 @@ async def health(warm: bool = False):
 
     if warm:
         get_sign_db()
-        get_asl_engine()
-        get_arabic_engine()
+        # Load AND run a one-time dummy forward pass so XNNPACK / torch kernels are
+        # JIT-compiled here (off the user's camera timeline) rather than on their
+        # first real sign. Runs in the threadpool so we don't block the event loop;
+        # _warm_engines is idempotent so concurrent boot/pre-warm calls are safe.
+        await run_in_threadpool(_warm_engines)
 
     db_status = "ok" if _sign_db is not None else ("error" if _sign_db_error else "not_loaded")
     engine_status = "ok" if _asl_engine is not None else ("error" if _asl_engine_error else "not_loaded")
