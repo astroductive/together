@@ -1009,6 +1009,7 @@ html[data-theme="light"] .sb-collapsed .t-sidebar .t-brand--logo::after{backgrou
   let globalCooldown = 0;    // frames remaining to skip inference
   let lastPredWord = null;
   let inferenceRunning = false; // prevent overlapping async calls
+  let _holisticBusy = false;   // prevent re-entrant holistic.send() calls (WASM abort guard)
   let _warmingUp = false;      // flag: warmup request in flight, ignore its result
 
   // Dedup state for handleDetectedSign
@@ -1443,6 +1444,7 @@ html[data-theme="light"] .sb-collapsed .t-sidebar .t-brand--logo::after{backgrou
     globalCooldown = 0;
     lastPredWord = null;
     inferenceRunning = false;
+    _holisticBusy = false;
     frameBuffer = [];
     lastAccepted = null;
     sameSignCount = 0;
@@ -1752,11 +1754,13 @@ html[data-theme="light"] .sb-collapsed .t-sidebar .t-brand--logo::after{backgrou
         console.log("[Camera] Reusing meeting stream frame loop...");
         const runFrame = async () => {
           if (!cameraOn || !inMeeting) return;
-          if (video.readyState >= 2 && holistic) {
+          if (video.readyState >= 2 && holistic && !_holisticBusy) {
+            _holisticBusy = true;
             try {
               await holistic.send({ image: video });
             } catch (e) {
               console.error("[Camera] Holistic send frame error:", e);
+              _holisticBusy = false;
             }
           }
           requestAnimationFrame(runFrame);
@@ -1776,7 +1780,9 @@ html[data-theme="light"] .sb-collapsed .t-sidebar .t-brand--logo::after{backgrou
           onFrame: async () => {
             const now = performance.now();
             if (now - _lastFrameMs < _FRAME_INTERVAL) return;
+            if (_holisticBusy) return;
             _lastFrameMs = now;
+            _holisticBusy = true;
             if (holistic) await holistic.send({ image: video });
           },
           width: 480, height: 360,
@@ -1865,6 +1871,7 @@ html[data-theme="light"] .sb-collapsed .t-sidebar .t-brand--logo::after{backgrou
   // rolling window of landmark frames
 
   function onHolisticResults(results) {
+    _holisticBusy = false; // WASM has finished — safe to send the next frame
     // The <video> element shows the smooth, full-framerate feed underneath
     // (CSS-mirrored). We only paint the skeleton onto the transparent canvas,
     // so display smoothness is independent of inference rate. selfieMode:true
@@ -3884,7 +3891,9 @@ html[data-theme="light"] .sb-collapsed .t-sidebar .t-brand--logo::after{backgrou
         onFrame: async () => {
           const now = performance.now();
           if (now - _s2spLastMs < 1000/15) return;
+          if (_s2spHolisticBusy) return;
           _s2spLastMs = now;
+          _s2spHolisticBusy = true;
           if (s2spHolistic) await s2spHolistic.send({ image: video });
         },
         width: 480, height: 360,
@@ -3921,6 +3930,7 @@ html[data-theme="light"] .sb-collapsed .t-sidebar .t-brand--logo::after{backgrou
     s2spGlobalCooldown = 0;
     s2spLastPredWord = null;
     s2spInferRunning = false;
+    _s2spHolisticBusy = false;
     clearTimeout(s2spGlossTimer);
     s2spGlossTimer = null;
     s2spGlossBuf = [];
@@ -3934,9 +3944,11 @@ html[data-theme="light"] .sb-collapsed .t-sidebar .t-brand--logo::after{backgrou
   let s2spGlobalCooldown = 0;
   let s2spLastPredWord = null;
   let s2spInferRunning = false;
+  let _s2spHolisticBusy = false; // re-entrancy guard for s2spHolistic.send()
   let s2spFrameBuffer = [];   // rolling 60-frame window for Sign-to-Speech
 
   function onS2SpHolisticResults(results) {
+    _s2spHolisticBusy = false; // WASM finished — safe to send next frame
     const canvas = document.getElementById('s2sp-canvas');
     canvas.width = results.image.width;
     canvas.height = results.image.height;
