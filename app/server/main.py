@@ -1016,10 +1016,16 @@ def tts_voices():
         "Laomedeia","Pulcherrima","Rasalgethi","Sadachbia","Sadaltager",
         "Schedar","Sulafat","Umbriel","Vindemiatrix","Zubenelgenubi",
     ]
+    # get_tts_provider() returns a FallbackTTS wrapper, never a bare GeminiTTS, so
+    # dig the GeminiTTS out of the provider chain to expose the real per-language
+    # defaults (otherwise this always returned an empty dict).
+    gemini = tts if isinstance(tts, GeminiTTS) else next(
+        (p for p in getattr(tts, "_providers", []) if isinstance(p, GeminiTTS)), None
+    )
     defaults = {}
-    if isinstance(tts, GeminiTTS):
+    if gemini is not None:
         for lang in ("english", "arabic", "egyptian"):
-            defaults[lang] = tts._resolve_voice(lang)
+            defaults[lang] = gemini._resolve_voice(lang)
     return {"voices": voices, "defaults": defaults, "provider": getattr(tts, "name", "unknown")}
 
 
@@ -1450,16 +1456,24 @@ async def sign_frame(sid, data):
     # Per-frame cooldown tick (mirrors the script's global_cooldown decrement)
     if st.cooldown > 0:
         st.cooldown -= 1
+        if st.cooldown == 0:
+            # Cooldown done — allow the same sign to be recognized again. Without
+            # this, a sign signed twice in a row (e.g. "good good") is dropped
+            # forever by the `winner != st.last_pred` guard below.
+            st.last_pred = None
         return
     # Drop frames that arrive while an inference is still running, and wait until
     # we have a usable window. Dropping is fine — the rolling buffer stays fresh.
     if st.busy or len(st.frames) < _STREAM_MIN_SEQ:
         return
     # Throttle inference cadence so a single CPU isn't pegged by the frame stream.
+    # last_infer is stamped when the PREVIOUS inference finished (in the finally
+    # below), so this enforces a real minimum gap between inferences — stamping it
+    # here (before the await) made the throttle a no-op because `busy` already
+    # serialized inference and the elapsed time always exceeded the interval.
     now = time.monotonic()
     if now - st.last_infer < _STREAM_MIN_INTERVAL:
         return
-    st.last_infer = now
 
     st.busy = True
     try:
@@ -1504,8 +1518,13 @@ async def sign_frame(sid, data):
                     "word": disp,
                     "confidence": float(count) / _STREAM_VOTE_BUFFER,
                 }, to=sid)
+    except Exception as e:
+        # A single bad frame (ragged landmarks, transient model error, dead client)
+        # must not silently kill this client's stream. Log and keep going.
+        print(f"[sign_frame] inference error (sid={sid}, module={module}): {e}")
     finally:
         st.busy = False
+        st.last_infer = time.monotonic()
 
 
 # ═══════════════════════════════════════════════════════════════

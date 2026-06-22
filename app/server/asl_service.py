@@ -10,6 +10,7 @@ SBERT is still loaded once (lazily) and used only to encode the incoming query.
 import os
 import warnings
 import logging
+import threading
 
 # Heavy ML imports are deferred into methods to avoid import-time blocking.
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -222,6 +223,11 @@ class ASLService(SignDB):
             self.interpreter = _build_interpreter()
             self.input_details = self.interpreter.get_input_details()
             self.output_details = self.interpreter.get_output_details()
+            # The TFLite Interpreter is a single shared object and is NOT thread-safe.
+            # Both /api/translate and the Socket.IO streaming path run inference in the
+            # anyio threadpool, so concurrent callers must serialize on this lock or the
+            # resize/allocate/set_tensor/invoke sequence interleaves and corrupts state.
+            self._infer_lock = threading.Lock()
             print(f"[ASLService] TFLite ready (XNNPACK default).")
         except Exception as tf_err:
             print(f"[ERROR] TFLite initialization failed: {tf_err}")
@@ -267,12 +273,17 @@ class ASLService(SignDB):
             expected_dtype = self.input_details[0]["dtype"]
             batch = batch.astype(expected_dtype)
 
-            self.interpreter.resize_tensor_input(self.input_details[0]["index"], batch.shape)
-            self.interpreter.allocate_tensors()
-            self.interpreter.set_tensor(self.input_details[0]["index"], batch)
-            self.interpreter.invoke()
+            # Serialize all access to the shared interpreter (see _infer_lock above).
+            # Copy the output inside the lock — get_tensor returns a view that the next
+            # invoke() would overwrite.
+            with self._infer_lock:
+                self.interpreter.resize_tensor_input(self.input_details[0]["index"], batch.shape)
+                self.interpreter.allocate_tensors()
+                self.interpreter.set_tensor(self.input_details[0]["index"], batch)
+                self.interpreter.invoke()
+                out_arr = np.array(self.interpreter.get_tensor(self.output_details[0]["index"]))
 
-            out_arr = np.squeeze(self.interpreter.get_tensor(self.output_details[0]["index"]))
+            out_arr = np.squeeze(out_arr)
             if out_arr.ndim == 0:
                 out_arr = np.array([out_arr])
 

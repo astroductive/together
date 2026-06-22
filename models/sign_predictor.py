@@ -1,5 +1,6 @@
 import os
 import json
+import threading
 import collections
 import numpy as np
 import torch
@@ -69,6 +70,11 @@ class SignLanguagePredictor:
         # Sliding history buffers
         self.feature_history = collections.deque(maxlen=60)
         self.hand_visible_history = collections.deque(maxlen=15)
+
+        # The model is a single shared object run from the anyio threadpool by both
+        # /api/translate and the streaming path; serialize forward passes so concurrent
+        # callers don't corrupt one another's inference.
+        self._infer_lock = threading.Lock()
         
     def reset(self):
         """Resets prediction history buffers."""
@@ -202,10 +208,10 @@ class SignLanguagePredictor:
                     batch_inputs.append(smoothed_seq)
 
             batch_tensor = torch.tensor(np.array(batch_inputs), dtype=torch.float32).to(self.device)
-            with torch.inference_mode():
+            with self._infer_lock, torch.inference_mode():
                 outputs = self.model(batch_tensor)
                 probs = torch.softmax(outputs, dim=1)
-            
+
             mean_probs = torch.mean(probs, dim=0).cpu().numpy()
             pred_class_idx = np.argmax(mean_probs)
             confidence = mean_probs[pred_class_idx]
@@ -243,7 +249,13 @@ class SignLanguagePredictor:
         lh = frames[:, 468:489, :]
         pose = frames[:, 489:506, :]
         rh = frames[:, 522:543, :]
-        
+
+        # Skip windows with no hand landmarks at all. Without this gate the model
+        # classifies hand-absent frames and can return a confident false positive
+        # (the live add_frame path gates on hand_visible_history; this path didn't).
+        if not np.any(lh) and not np.any(rh):
+            return None, 0.0
+
         # Apply aspect ratio correction and set Z to 0.0
         pose_adj = np.zeros_like(pose)
         pose_adj[:, :, 0] = (pose[:, :, 0] * w) / 720.0
@@ -314,10 +326,10 @@ class SignLanguagePredictor:
             batch_inputs.append(smoothed_seq)
 
         batch_tensor = torch.tensor(np.array(batch_inputs), dtype=torch.float32).to(self.device)
-        with torch.inference_mode():
+        with self._infer_lock, torch.inference_mode():
             outputs = self.model(batch_tensor)
             probs = torch.softmax(outputs, dim=1)
-            
+
         mean_probs = torch.mean(probs, dim=0).cpu().numpy()
         pred_class_idx = np.argmax(mean_probs)
         confidence = mean_probs[pred_class_idx]

@@ -1595,6 +1595,18 @@ html[data-theme="light"] .sb-collapsed .t-sidebar .t-brand--logo::after{backgrou
     }
     streamSocket.on('connect', () => console.log('[Stream] connected', streamSocket.id));
     streamSocket.on('connect_error', (err) => console.warn('[Stream] connect_error:', err && err.message));
+    // On reconnect the server assigns a NEW sid and has no _StreamState for it, so it
+    // silently drops every sign_frame. Clear our active/lang flags so the next holistic
+    // frame re-sends sign_start (rebuilding the server buffer) instead of streaming into
+    // the void. Without this, recognition dies permanently after any transient drop.
+    streamSocket.on('disconnect', (reason) => {
+      console.warn('[Stream] disconnected:', reason);
+      streamActive.vision = false; streamActive.speech = false;
+      streamLang.vision = null; streamLang.speech = null;
+    });
+    streamSocket.on('sign_ready', (d) => {
+      if (d && d.module) console.log('[Stream] ready for', d.module);
+    });
 
     streamSocket.on('sign_conf', (d) => {
       if (!d) return;
@@ -1647,6 +1659,11 @@ html[data-theme="light"] .sb-collapsed .t-sidebar .t-brand--logo::after{backgrou
     if (streamActive[module] && streamSocket && streamSocket.connected) {
       streamSocket.emit('sign_reset', { module });
     }
+  }
+
+  // True only when we can actually stream this module right now.
+  function streaming(module) {
+    return streamActive[module] && streamSocket && streamSocket.connected;
   }
 
   function toggleCamera() { cameraOn ? stopCamera() : startCamera(); }
@@ -1753,7 +1770,10 @@ html[data-theme="light"] .sb-collapsed .t-sidebar .t-brand--logo::after{backgrou
             if (_holisticBusy) return;
             _lastFrameMs = now;
             _holisticBusy = true;
-            if (holistic) await holistic.send({ image: video });
+            // Must clear the guard if send() rejects (WASM abort / transient error),
+            // otherwise the loop early-returns forever and the camera freezes.
+            try { if (holistic) await holistic.send({ image: video }); }
+            catch (e) { console.error("[Camera] Holistic send error:", e); _holisticBusy = false; }
           },
           width: 480, height: 360,
         });
@@ -1973,8 +1993,9 @@ html[data-theme="light"] .sb-collapsed .t-sidebar .t-brand--logo::after{backgrou
       if (!res.ok) { inferenceRunning = false; return; }
       const data = await res.json();
 
-      // Discard result if camera was stopped while request was in flight
-      if (!cameraOn) { inferenceRunning = false; return; }
+      // Discard result if the camera stopped, or if streaming took over while this
+      // HTTP request was in flight (avoids a duplicate detection at the changeover).
+      if (!cameraOn || streaming('vision')) { inferenceRunning = false; return; }
 
       if (data.text && data.confidence > 0) {
         if (window._updateConfWidgets) _updateConfWidgets(data.confidence);
@@ -3775,7 +3796,9 @@ html[data-theme="light"] .sb-collapsed .t-sidebar .t-brand--logo::after{backgrou
           if (_s2spHolisticBusy) return;
           _s2spLastMs = now;
           _s2spHolisticBusy = true;
-          if (s2spHolistic) await s2spHolistic.send({ image: video });
+          // Clear the guard on a rejected send() or the S2SP camera freezes.
+          try { if (s2spHolistic) await s2spHolistic.send({ image: video }); }
+          catch (e) { console.error("[Camera] S2SP holistic send error:", e); _s2spHolisticBusy = false; }
         },
         width: 480, height: 360,
       });
@@ -3907,7 +3930,7 @@ html[data-theme="light"] .sb-collapsed .t-sidebar .t-brand--logo::after{backgrou
       if (!res.ok) { s2spInferRunning = false; return; }
       const data = await res.json();
 
-      if (!s2spCameraOn) { s2spInferRunning = false; return; }
+      if (!s2spCameraOn || streaming('speech')) { s2spInferRunning = false; return; }
 
       if (data.text && data.confidence > 0) {
         if (window._updateConfWidgets) _updateConfWidgets(data.confidence);
@@ -4159,7 +4182,12 @@ function _sparkArea(pts, w, h) {
 }
 
 function _updateConfWidgets(conf) {
-  const pct = Math.round(conf * 100);
+  // Guard against undefined/NaN (e.g. a sign_conf frame without `confidence`): a
+  // single NaN would poison _confHistory and break the ring, sparkline and average
+  // for the rest of the session.
+  const c = Number(conf);
+  if (!isFinite(c)) return;
+  const pct = Math.round(c * 100);
   const circ = 289;
   const offset = circ - (pct / 100) * circ;
   const color = pct >= 80 ? 'var(--ok,#22c55e)' : pct >= 60 ? 'var(--accent)' : '#f59e0b';
@@ -4208,6 +4236,13 @@ window._setDetectState = _setDetectState;
 window._updateConfWidgets = _updateConfWidgets;
 
 function bumpSignCount(n) {
+  // Roll the daily total over at midnight even in a long-lived tab (the load-time
+  // reset alone would keep counting into yesterday's bucket until a reload).
+  const today = new Date().toDateString();
+  if (localStorage.getItem('signs-today-date') !== today) {
+    _signCount = 0;
+    localStorage.setItem('signs-today-date', today);
+  }
   _signCount += (n || 1);
   localStorage.setItem('signs-today-count', String(_signCount));
   const chipSigns = document.getElementById('chip-signs');
