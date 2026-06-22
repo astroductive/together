@@ -1623,7 +1623,7 @@ button.is-busy{opacity:.6;cursor:progress}
     streamSocket.on('sign_conf', (d) => {
       if (!d) return;
       const mod = d.module === 'speech' ? 's2sp' : 'hs';
-      if (window._updateConfWidgets) _updateConfWidgets(d.confidence);
+      if (window._updateConfRing) _updateConfRing(d.confidence);
       if (window._setDetectState) _setDetectState('detecting', 'يرصد', mod);
     });
 
@@ -4225,10 +4225,7 @@ function _sparkArea(pts, w, h) {
   return `${first.split(',')[0]},${h} ${pts} ${last.split(',')[0]},${h}`;
 }
 
-function _updateConfWidgets(conf) {
-  // Guard against undefined/NaN (e.g. a sign_conf frame without `confidence`): a
-  // single NaN would poison _confHistory and break the ring, sparkline and average
-  // for the rest of the session.
+function _updateConfRing(conf) {
   const c = Number(conf);
   if (!isFinite(c)) return;
   const pct = Math.round(c * 100);
@@ -4243,6 +4240,13 @@ function _updateConfWidgets(conf) {
     const el = document.getElementById(id);
     if (el) el.textContent = pct + '%';
   });
+}
+
+function _updateConfWidgets(conf) {
+  const c = Number(conf);
+  if (!isFinite(c)) return;
+  const pct = Math.round(c * 100);
+  _updateConfRing(conf);
   _confHistory.push(pct);
   if (_confHistory.length > 40) _confHistory.shift();
   const pts = _sparkPoints(_confHistory, 200, 44);
@@ -4277,6 +4281,7 @@ function _setDetectState(state, label, moduleId) {
   });
 }
 window._setDetectState = _setDetectState;
+window._updateConfRing = _updateConfRing;
 window._updateConfWidgets = _updateConfWidgets;
 
 function bumpSignCount(n) {

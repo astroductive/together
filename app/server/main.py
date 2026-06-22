@@ -1417,13 +1417,14 @@ _STREAM_MIN_INTERVAL = float(os.environ.get("STREAM_MIN_INTERVAL_S", "0.08"))
 
 
 class _StreamState:
-    __slots__ = ("frames", "votes", "cooldown", "last_pred", "language", "w", "h", "busy", "last_infer")
+    __slots__ = ("frames", "votes", "cooldown", "last_pred", "last_conf", "language", "w", "h", "busy", "last_infer")
 
     def __init__(self, language: str, w: int, h: int):
         self.frames = _deque(maxlen=_STREAM_SEQ_LENGTH)
         self.votes = _deque(maxlen=_STREAM_VOTE_BUFFER)
         self.cooldown = 0
         self.last_pred = None
+        self.last_conf = 0.0
         self.language = language
         self.w = w
         self.h = h
@@ -1524,7 +1525,8 @@ async def sign_frame(sid, data):
             return
 
         # Live confidence for the dashboard ring / sparkline (every inference)
-        await sio.emit("sign_conf", {"module": module, "confidence": float(confidence)}, to=sid)
+        st.last_conf = float(confidence)
+        await sio.emit("sign_conf", {"module": module, "confidence": st.last_conf}, to=sid)
 
         # Majority vote — mirrors Counter(vote_buffer).most_common(1)
         st.votes.append(prediction)
@@ -1540,7 +1542,7 @@ async def sign_frame(sid, data):
                 await sio.emit("sign_detected", {
                     "module": module,
                     "word": disp,
-                    "confidence": float(count) / _STREAM_VOTE_BUFFER,
+                    "confidence": st.last_conf,
                 }, to=sid)
     except Exception as e:
         # A single bad frame (ragged landmarks, transient model error, dead client)
