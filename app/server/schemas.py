@@ -14,6 +14,17 @@ class UserLogin(BaseModel):
     password: str
 
 
+class UserUpdate(BaseModel):
+    """Editable profile fields. All optional — only provided fields are changed.
+
+    To change the password, supply both ``current_password`` and ``new_password``.
+    """
+    full_name: Optional[str] = None
+    role: Optional[str] = None
+    current_password: Optional[str] = None
+    new_password: Optional[str] = None
+
+
 class UserResponse(BaseModel):
     id: int
     full_name: Optional[str]

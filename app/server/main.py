@@ -114,7 +114,7 @@ from auth import (
     rotate_refresh_token,
     verify_password,
 )
-from schemas import UserCreate, UserResponse, Token, TokenRefresh
+from schemas import UserCreate, UserResponse, Token, TokenRefresh, UserUpdate
 from asl_service import ASLService, SignDB, ArabicSignDB
 
 # Offload blocking ML/LLM/network calls off the event loop so concurrent
@@ -597,6 +597,12 @@ async def page_contact(request: Request):
 async def page_demo(request: Request):
     return templates.TemplateResponse(request, "demo.html")
 
+@app.get("/profile", response_class=HTMLResponse)
+async def profile_page(request: Request):
+    # Auth is enforced client-side (requireAuth) like the dashboard; the page
+    # itself is just the shell and fetches /api/auth/me with the bearer token.
+    return templates.TemplateResponse(request, "profile.html")
+
 
 # ═══════════════════════════════════════════════════════════════
 # AUTH API
@@ -791,6 +797,70 @@ async def get_me(
     if not user:
         raise HTTPException(status_code=404, detail="User not found.")
     return user
+
+
+@app.patch("/api/auth/me")
+async def update_me(
+    payload: UserUpdate,
+    current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Update the authenticated user's profile (name, role, password).
+
+    Returns the updated profile plus a freshly minted access token so the
+    client's JWT (which carries full_name/role) reflects the change immediately.
+    """
+    user = db.query(User).filter(User.email == current_user["sub"]).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found.")
+
+    if payload.full_name is not None:
+        user.full_name = payload.full_name.strip() or None
+
+    if payload.role is not None:
+        role = payload.role.strip()
+        if role:
+            user.role = role
+
+    # Password change requires verifying the current password.
+    if payload.new_password:
+        if not payload.current_password:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Enter your current password to set a new one.",
+            )
+        if not verify_password(payload.current_password, user.hashed_password):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Current password is incorrect.",
+            )
+        if len(payload.new_password.strip()) < 8:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="New password must be at least 8 characters long.",
+            )
+        user.hashed_password = get_password_hash(payload.new_password.strip())
+
+    db.commit()
+    db.refresh(user)
+
+    access_token = create_access_token(data={
+        "sub":       user.email,
+        "full_name": user.full_name or "",
+        "role":      user.role,
+        "user_id":   user.id,
+    })
+
+    return {
+        "user": {
+            "id": user.id,
+            "full_name": user.full_name,
+            "email": user.email,
+            "role": user.role,
+        },
+        "access_token": access_token,
+        "token_type": "bearer",
+    }
 
 
 # ═══════════════════════════════════════════════════════════════

@@ -1,0 +1,226 @@
+{% extends "base.html" %}
+{% block title %}Profile{% endblock %}
+{% block main_style %}padding-top: 0;{% endblock %}
+{% block nav %}{% endblock %}
+
+{% block head %}
+<link rel="stylesheet" href="/static/css/theme.css?v=phase6-1">
+<link rel="stylesheet" href="/static/css/ui.css?v=phase6-1">
+<script src="/static/js/theme.js"></script>
+<style>
+  html{background:var(--bg)!important}
+  body{background:transparent}
+  .pf-wrap{min-height:100vh;display:flex;flex-direction:column;align-items:center;padding:40px 20px 64px}
+  .pf-top{width:100%;max-width:640px;display:flex;align-items:center;justify-content:space-between;margin-bottom:28px}
+  .pf-back{display:inline-flex;align-items:center;gap:8px;text-decoration:none;color:var(--muted);font-size:14px;font-weight:600;padding:8px 12px;border-radius:10px;border:1px solid var(--border);background:var(--surface);transition:background .15s,color .15s}
+  .pf-back:hover{background:var(--surface-2);color:var(--text)}
+  .pf-back svg{width:16px;height:16px}
+  .pf-card{width:100%;max-width:640px;background:var(--surface);border:1px solid var(--border);border-radius:18px;padding:32px;box-shadow:var(--shadow,0 10px 30px rgba(0,0,0,.12))}
+  .pf-head{display:flex;align-items:center;gap:18px;padding-bottom:24px;margin-bottom:24px;border-bottom:1px solid var(--border)}
+  .pf-avatar{width:68px;height:68px;border-radius:50%;background:var(--accent);color:#fff;display:grid;place-items:center;font-weight:700;font-size:24px;flex:none}
+  .pf-id .pf-name{font-family:var(--font-display);font-weight:800;font-size:22px;letter-spacing:-.02em;color:var(--text);line-height:1.1}
+  .pf-id .pf-email{font-size:13.5px;color:var(--muted);margin-top:4px}
+  .pf-section-title{font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--faint);margin:26px 0 14px}
+  .pf-field{margin-bottom:16px}
+  .pf-field label{display:block;font-size:13px;font-weight:600;color:var(--text);margin-bottom:7px}
+  .pf-field input,.pf-field select{width:100%;padding:11px 13px;border-radius:11px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:14px;font-family:inherit;transition:border-color .15s,box-shadow .15s}
+  .pf-field input:focus,.pf-field select:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
+  .pf-field input:disabled{opacity:.6;cursor:not-allowed}
+  .pf-hint{font-size:12px;color:var(--muted);margin-top:6px}
+  .pf-row{display:flex;gap:14px;flex-wrap:wrap}
+  .pf-row .pf-field{flex:1;min-width:200px}
+  .pf-actions{display:flex;align-items:center;gap:12px;margin-top:28px;flex-wrap:wrap}
+  .pf-btn{padding:11px 20px;border-radius:11px;font-size:14px;font-weight:650;cursor:pointer;border:1px solid transparent;font-family:inherit;transition:background .15s,opacity .15s}
+  .pf-btn--primary{background:var(--accent);color:#fff}
+  .pf-btn--primary:hover{opacity:.9}
+  .pf-btn--primary:disabled{opacity:.55;cursor:not-allowed}
+  .pf-btn--ghost{background:transparent;color:var(--danger);border-color:var(--border)}
+  .pf-btn--ghost:hover{background:var(--surface-2)}
+  .pf-msg{margin-top:18px;padding:12px 14px;border-radius:11px;font-size:13.5px;font-weight:550;display:none}
+  .pf-msg.is-ok{display:block;background:rgba(31,138,130,.12);color:#1f8a82;border:1px solid rgba(31,138,130,.3)}
+  .pf-msg.is-err{display:block;background:rgba(220,70,70,.1);color:var(--danger);border:1px solid rgba(220,70,70,.3)}
+  .pf-foot{display:flex;justify-content:flex-end;margin-top:30px;padding-top:22px;border-top:1px solid var(--border)}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="t-scope pf-wrap">
+  <div class="pf-top">
+    <a href="/dashboard" class="pf-back" id="pf-back">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
+      Back to dashboard
+    </a>
+    <div class="t-toggle" role="group" aria-label="Color theme">
+      <button type="button" data-theme-set="light" aria-pressed="false" aria-label="Light theme" title="Light">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4 12H2M22 12h-2M5 5l1.4 1.4M17.6 17.6 19 19M19 5l-1.4 1.4M6.4 17.6 5 19"/></svg>
+      </button>
+      <button type="button" data-theme-set="dark" aria-pressed="true" aria-label="Dark theme" title="Dark">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A8 8 0 1 1 11.2 3 6.2 6.2 0 0 0 21 12.8Z"/></svg>
+      </button>
+    </div>
+  </div>
+
+  <div class="pf-card">
+    <div class="pf-head">
+      <div class="pf-avatar" id="pf-avatar">U</div>
+      <div class="pf-id">
+        <div class="pf-name" id="pf-display-name">User</div>
+        <div class="pf-email" id="pf-display-email">—</div>
+      </div>
+    </div>
+
+    <form id="pf-form" novalidate>
+      <div class="pf-section-title">Profile information</div>
+
+      <div class="pf-field">
+        <label for="pf-fullname">Full name</label>
+        <input type="text" id="pf-fullname" name="full_name" autocomplete="name" placeholder="Your name">
+      </div>
+
+      <div class="pf-row">
+        <div class="pf-field">
+          <label for="pf-role">Role</label>
+          <select id="pf-role" name="role">
+            <option value="Speaker">Speaker / Hearing</option>
+            <option value="Deaf / HoH">Deaf / Hard of Hearing</option>
+          </select>
+          <div class="pf-hint">Determines your default dashboard module.</div>
+        </div>
+        <div class="pf-field">
+          <label for="pf-email">Email</label>
+          <input type="email" id="pf-email" name="email" disabled>
+          <div class="pf-hint">Email cannot be changed.</div>
+        </div>
+      </div>
+
+      <div class="pf-section-title">Change password</div>
+
+      <div class="pf-field">
+        <label for="pf-curpass">Current password</label>
+        <input type="password" id="pf-curpass" name="current_password" autocomplete="current-password" placeholder="Leave blank to keep current password">
+      </div>
+      <div class="pf-row">
+        <div class="pf-field">
+          <label for="pf-newpass">New password</label>
+          <input type="password" id="pf-newpass" name="new_password" autocomplete="new-password" placeholder="At least 8 characters">
+        </div>
+        <div class="pf-field">
+          <label for="pf-newpass2">Confirm new password</label>
+          <input type="password" id="pf-newpass2" name="new_password2" autocomplete="new-password" placeholder="Re-enter new password">
+        </div>
+      </div>
+
+      <div class="pf-msg" id="pf-msg" role="status" aria-live="polite"></div>
+
+      <div class="pf-actions">
+        <button type="submit" class="pf-btn pf-btn--primary" id="pf-save">Save changes</button>
+      </div>
+    </form>
+
+    <div class="pf-foot">
+      <button type="button" class="pf-btn pf-btn--ghost" onclick="signOut()">Sign out</button>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  requireAuth();
+
+  const $ = (id) => document.getElementById(id);
+  const msg = $('pf-msg');
+
+  function showMsg(text, ok) {
+    msg.textContent = text;
+    msg.className = 'pf-msg ' + (ok ? 'is-ok' : 'is-err');
+  }
+  function clearMsg() { msg.className = 'pf-msg'; msg.textContent = ''; }
+
+  function initials(name, email) {
+    const base = (name && name.trim()) || (email ? email.split('@')[0] : 'U');
+    const parts = base.trim().split(/\s+/);
+    if (parts.length >= 2) return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+    return base.slice(0, 2).toUpperCase();
+  }
+
+  function fillForm(user) {
+    $('pf-display-name').textContent = (user.full_name && user.full_name.trim()) || (user.email ? user.email.split('@')[0] : 'User');
+    $('pf-display-email').textContent = user.email || '—';
+    $('pf-avatar').textContent = initials(user.full_name, user.email);
+    $('pf-fullname').value = user.full_name || '';
+    $('pf-email').value = user.email || '';
+    // Map free-form role onto the two known options; default to Speaker.
+    const r = (user.role || '').toLowerCase();
+    $('pf-role').value = (r.includes('deaf') || r.includes('hoh') || r.includes('hard of hearing')) ? 'Deaf / HoH' : 'Speaker';
+  }
+
+  // Load fresh profile from the server (source of truth).
+  (async function loadProfile() {
+    try {
+      const res = await authFetch('/api/auth/me');
+      if (res.ok) {
+        fillForm(await res.json());
+      } else {
+        // Fall back to whatever is in the token.
+        const u = getUser() || {};
+        fillForm({ full_name: u.full_name, email: u.sub, role: u.role });
+      }
+    } catch {
+      const u = getUser() || {};
+      fillForm({ full_name: u.full_name, email: u.sub, role: u.role });
+    }
+  })();
+
+  $('pf-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    clearMsg();
+
+    const fullName = $('pf-fullname').value.trim();
+    const role = $('pf-role').value;
+    const curPass = $('pf-curpass').value;
+    const newPass = $('pf-newpass').value;
+    const newPass2 = $('pf-newpass2').value;
+
+    const payload = { full_name: fullName, role: role };
+
+    if (newPass || newPass2 || curPass) {
+      if (!curPass) { showMsg('Enter your current password to change it.', false); return; }
+      if (newPass.length < 8) { showMsg('New password must be at least 8 characters.', false); return; }
+      if (newPass !== newPass2) { showMsg('New passwords do not match.', false); return; }
+      payload.current_password = curPass;
+      payload.new_password = newPass;
+    }
+
+    const btn = $('pf-save');
+    btn.disabled = true;
+    btn.textContent = 'Saving…';
+
+    try {
+      const res = await authFetch('/api/auth/me', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      const data = await res.json().catch(() => ({}));
+
+      if (res.ok) {
+        // Refresh the stored access token so name/role propagate everywhere.
+        if (data.access_token) setToken(data.access_token);
+        if (data.user) fillForm(data.user);
+        $('pf-curpass').value = '';
+        $('pf-newpass').value = '';
+        $('pf-newpass2').value = '';
+        showMsg('Profile updated successfully.', true);
+      } else {
+        showMsg(data.detail || 'Could not update profile. Please try again.', false);
+      }
+    } catch {
+      showMsg('Network error. Please try again.', false);
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'Save changes';
+    }
+  });
+</script>
+{% endblock %}
