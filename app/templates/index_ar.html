@@ -104,8 +104,11 @@ html{background:var(--bg)!important;overflow:hidden}
 body{background:transparent!important;overflow:hidden}
 /* sidebar brand row: logo + collapse toggle together inside the sidebar */
 .t-brand-row{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:2px 6px 20px}
-.t-brand--logo{padding:0;display:flex;align-items:center;min-width:0}
-.t-brand-logo-img{height:30px;width:auto;max-width:100%;display:block;object-fit:contain}
+.t-brand--logo{padding:0;display:flex;align-items:center;min-width:0;gap:10px}
+.t-brand-mark{height:40px;width:40px;flex:none;object-fit:contain;display:block}
+.t-brand-text{display:flex;flex-direction:column;min-width:0}
+.t-brand-name{display:block;font-family:var(--font-display);font-weight:800;font-size:15px;letter-spacing:-.02em;line-height:1.2;color:var(--text)}
+.t-brand-tagline{display:block;font-size:9px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;opacity:.5;color:var(--text);margin-top:2px;white-space:nowrap}
 .logo-on-dark{display:block}.logo-on-light{display:none}
 html[data-theme="light"] .logo-on-dark{display:none}
 html[data-theme="light"] .logo-on-light{display:block}
@@ -293,8 +296,8 @@ html[data-theme="light"] .d-blob{opacity:calc(.38*var(--intensity)+.04)}
 .sb-collapsed .t-sidebar .t-user-role,
 .sb-collapsed .t-sidebar .t-sidebar-sep{opacity:0;width:0;overflow:hidden;pointer-events:none;transition:opacity .12s}
 .sb-collapsed .t-sidebar .t-brand-row{flex-direction:column;gap:10px;padding:2px 6px 18px}
-.sb-collapsed .t-sidebar .logo-on-dark,.sb-collapsed .t-sidebar .logo-on-light{display:none!important}
-.sb-collapsed .t-sidebar .t-brand--logo::after{content:"";display:block;width:38px;height:38px;background:url('/static/img/logo-mark-white.png') center/contain no-repeat}
+.sb-collapsed .t-sidebar .t-brand-mark,.sb-collapsed .t-sidebar .t-brand-text{display:none!important}
+.sb-collapsed .t-sidebar .t-brand--logo::after{content:"";display:block;width:40px;height:40px;background:url('/static/img/logo-mark-white.png') center/contain no-repeat}
 html[data-theme="light"] .sb-collapsed .t-sidebar .t-brand--logo::after{background-image:url('/static/img/logo-mark-dark.png')}
 .sb-collapsed .t-sidebar .t-nav-item{padding:11px 0;justify-content:center}
 .sb-collapsed .t-sidebar nav{display:flex;flex-direction:column;align-items:stretch}
@@ -377,8 +380,12 @@ button.is-busy{opacity:.6;cursor:progress}
   <aside class="t-sidebar" id="sidebar">
     <div class="t-brand-row">
       <a href="/" class="t-brand t-brand--logo" aria-label="Together — home">
-        <img src="/static/img/logo-lockup-white.png" alt="معاً" class="t-brand-logo-img logo-on-dark">
-        <img src="/static/img/logo-lockup-color.png" alt="معاً" class="t-brand-logo-img logo-on-light">
+        <img src="/static/img/logo-mark-white.png" alt="" class="t-brand-mark logo-on-dark">
+        <img src="/static/img/logo-mark-dark.png" alt="" class="t-brand-mark logo-on-light">
+        <span class="t-brand-text">
+          <span class="t-brand-name">Together</span>
+          <span class="t-brand-tagline">Sign Language · One World</span>
+        </span>
       </a>
       <button id="sb-toggle" onclick="toggleSidebar()" aria-label="تبديل الشريط الجانبي" title="طي / توسيع الشريط الجانبي">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg>
@@ -1615,6 +1622,12 @@ button.is-busy{opacity:.6;cursor:progress}
       console.warn('[Stream] disconnected:', reason);
       streamActive.vision = false; streamActive.speech = false;
       streamLang.vision = null; streamLang.speech = null;
+      consecutiveHand = 0; handGapCounter = 0; voteBuffer = []; frameBuffer = [];
+      s2spConsecHand = 0; s2spGapCounter = 0; s2spVoteBuffer = []; s2spFrameBuffer = [];
+      if (window._setDetectState) {
+        _setDetectState('idle', 'Idle', 'hs');
+        _setDetectState('idle', 'Idle', 's2sp');
+      }
     });
     streamSocket.on('sign_ready', (d) => {
       if (d && d.module) console.log('[Stream] ready for', d.module);
@@ -1623,6 +1636,8 @@ button.is-busy{opacity:.6;cursor:progress}
     streamSocket.on('sign_conf', (d) => {
       if (!d) return;
       const mod = d.module === 'speech' ? 's2sp' : 'hs';
+      if (mod === 'hs' && !cameraOn) return;
+      if (mod === 's2sp' && !s2spCameraOn) return;
       if (window._updateConfRing) _updateConfRing(d.confidence);
       if (window._setDetectState) _setDetectState('detecting', 'يرصد', mod);
     });
@@ -1739,11 +1754,11 @@ button.is-busy{opacity:.6;cursor:progress}
         });
 
         holistic.setOptions({
-          modelComplexity: 1,        // full model — better tracking, fewer false signs
+          modelComplexity: 1,
           selfieMode: true,
-          smoothLandmarks: true,     // temporal smoothing kills landmark jitter
-          minDetectionConfidence: 0.6,
-          minTrackingConfidence: 0.6,
+          smoothLandmarks: true,
+          minDetectionConfidence: 0.5,
+          minTrackingConfidence: 0.5,
         });
 
         holistic.onResults(onHolisticResults);
@@ -1861,6 +1876,7 @@ button.is-busy{opacity:.6;cursor:progress}
     glossBuffer = [];
 
     setStatus('Ready', false);
+    if (window._setDetectState) _setDetectState('idle', 'خامل', 'hs');
     renderMobileQuickActions();
   }
 
@@ -1914,6 +1930,11 @@ button.is-busy{opacity:.6;cursor:progress}
 
     // Bail out if camera was stopped mid-callback
     if (!cameraOn) return;
+
+    // Proactive detect state
+    if (handsPresent && streaming('vision') && window._setDetectState) {
+      _setDetectState('detecting', 'يرصد', 'hs');
+    }
 
     // Skip inference during cooldown or before enough hand frames
     if (globalCooldown > 0 || consecutiveHand < MIN_HAND_FRAMES) return;
@@ -3805,11 +3826,11 @@ button.is-busy{opacity:.6;cursor:progress}
         });
 
         s2spHolistic.setOptions({
-          modelComplexity: 1,        // full model — better tracking, fewer false signs
+          modelComplexity: 1,
           selfieMode: true,
-          smoothLandmarks: true,     // temporal smoothing kills landmark jitter
-          minDetectionConfidence: 0.6,
-          minTrackingConfidence: 0.6,
+          smoothLandmarks: true,
+          minDetectionConfidence: 0.5,
+          minTrackingConfidence: 0.5,
         });
         s2spHolistic.onResults(onS2SpHolisticResults);
       }
@@ -3866,6 +3887,7 @@ button.is-busy{opacity:.6;cursor:progress}
     clearTimeout(s2spGlossTimer);
     s2spGlossTimer = null;
     s2spGlossBuf = [];
+    if (window._setDetectState) _setDetectState('idle', 'خامل', 's2sp');
     renderMobileQuickActions();
   }
 
@@ -3913,6 +3935,11 @@ button.is-busy{opacity:.6;cursor:progress}
 
     if (s2spGlobalCooldown > 0) { s2spGlobalCooldown--; }
     if (!s2spCameraOn) return;
+
+    if (handsPresent && streaming('speech') && window._setDetectState) {
+      _setDetectState('detecting', 'يرصد', 's2sp');
+    }
+
     if (s2spGlobalCooldown > 0 || s2spConsecHand < MIN_HAND_FRAMES) return;
 
     const frame = buildLandmarkFrame(results);

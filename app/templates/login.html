@@ -29,10 +29,11 @@
                      linear-gradient(90deg,rgba(255,255,255,.07) 1px,transparent 1px);
     background-size:52px 52px;pointer-events:none}
   .ap-brand-circle{position:absolute;border-radius:50%;border:1px solid rgba(255,255,255,.15);pointer-events:none}
-  .ap-logo-link{display:inline-flex;align-items:center;gap:12px;font-family:var(--font-display);font-weight:800;
-    font-size:22px;color:#fff;text-decoration:none;position:relative}
-  .ap-logo{width:34px;height:34px;border-radius:10px;background:rgba(255,255,255,.2);border:1px solid rgba(255,255,255,.35);
-    display:grid;place-items:center;font-weight:800;font-size:16px;font-family:var(--font-display)}
+  .ap-logo-link{display:inline-flex;align-items:center;gap:13px;text-decoration:none;position:relative;color:#fff}
+  .ap-logo-img{width:46px;height:46px;object-fit:contain;flex:none;display:block}
+  .ap-logo-text-stack{display:flex;flex-direction:column;gap:3px}
+  .ap-logo-wordmark{font-family:var(--font-display);font-weight:800;font-size:22px;line-height:1;letter-spacing:-.03em;color:#fff}
+  .ap-logo-tagline{font-size:10px;font-weight:600;letter-spacing:.09em;text-transform:uppercase;opacity:.72;color:#fff}
   .ap-brand-body{flex:1;display:flex;flex-direction:column;justify-content:center;padding:52px 0;position:relative}
   .ap-brand-h{font-family:var(--font-display);font-size:clamp(44px,4.5vw,68px);font-weight:800;
     letter-spacing:-.04em;line-height:.96;margin-bottom:24px}
@@ -113,8 +114,12 @@
     <div class="ap-brand-grid" aria-hidden="true"></div>
     <div class="ap-brand-circle" style="width:420px;height:420px;bottom:-110px;right:-110px" aria-hidden="true"></div>
     <div class="ap-brand-circle" style="width:240px;height:240px;bottom:-30px;right:-30px" aria-hidden="true"></div>
-    <a href="/" class="ap-logo-link" style="position:relative" aria-label="Together — home">
-      <span class="ap-logo">T</span> Together
+    <a href="/" class="ap-logo-link" aria-label="Together — home">
+      <img src="/static/img/logo-mark-white.png" class="ap-logo-img" alt="Together logo">
+      <span class="ap-logo-text-stack">
+        <span class="ap-logo-wordmark">Together</span>
+        <span class="ap-logo-tagline">Sign Language · One World</span>
+      </span>
     </a>
     <div class="ap-brand-body">
       <h2 class="ap-brand-h">Welcome<br>back.</h2>
