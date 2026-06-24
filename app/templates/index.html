@@ -1028,6 +1028,10 @@ button.is-busy{opacity:.6;cursor:progress}
   let consecutiveHand = 0;    // frames where hands are detected
   let handGapCounter = 0;    // dropout tolerance
   let globalCooldown = 0;    // frames remaining to skip inference
+  // Tracks whether hands are actively visible right now (updated every holistic frame).
+  // Used to suppress sign_conf / sign_detected when hands have gone off-screen.
+  let _hsHandsPresent = false;
+  let _s2spHandsPresent = false;
   let lastPredWord = null;
   let inferenceRunning = false; // prevent overlapping async calls
   let _holisticBusy = false;   // prevent re-entrant holistic.send() calls (WASM abort guard)
@@ -1050,12 +1054,12 @@ button.is-busy{opacity:.6;cursor:progress}
   // positives low while feeling responsive.
   // Accuracy-tuned: more votes + higher agreement = far fewer false detections.
   // Mirrors the server stream constants (_STREAM_VOTE_BUFFER / _STREAM_STABILITY).
-  const VOTE_BUFFER_SIZE = 5;    // need 3 of the last 5 predictions to agree
+  const VOTE_BUFFER_SIZE = 3;    // 2-of-3 fills in ~75ms vs 5-vote ~400ms
   const STABILITY_FRAMES = 3;
-  const GLOBAL_COOLDOWN_FRM = 18;
-  const MIN_HAND_FRAMES = 3;     // hand must be stably present for 3 frames before inferring
-  const MAX_HAND_GAP_FRAMES = 5;
-  const MIN_SEQ_FRAMES = 12;     // a bit more temporal context before the first inference
+  const GLOBAL_COOLDOWN_FRM = 8;   // matches server _STREAM_COOLDOWN (~400ms at 20fps)
+  const MIN_HAND_FRAMES = 1;      // start streaming on the very first hand frame
+  const MAX_HAND_GAP_FRAMES = 3;  // faster gap detection (3 frames ≈ 150ms)
+  const MIN_SEQ_FRAMES = 6;       // matches server _STREAM_MIN_SEQ
   const moduleMap = {
     vision: { panel: 'panel-vision', nav: 'nav-vision', title: 'Sign to Text' },
     speech: { panel: 'panel-speech', nav: 'nav-speech', title: 'Sign to Speech' },
@@ -1669,9 +1673,11 @@ button.is-busy{opacity:.6;cursor:progress}
     streamSocket.on('sign_conf', (d) => {
       if (!d) return;
       const mod = d.module === 'speech' ? 's2sp' : 'hs';
-      // Ignore late-arriving frames after camera is stopped
-      if (mod === 'hs' && !cameraOn) return;
-      if (mod === 's2sp' && !s2spCameraOn) return;
+      // Ignore late-arriving frames after camera is stopped or hands are gone.
+      // Without the handsPresent guard, the server's rolling buffer keeps inferring
+      // for ~3s after hands disappear and sets "Detecting" on an empty frame.
+      if (mod === 'hs' && (!cameraOn || !_hsHandsPresent)) return;
+      if (mod === 's2sp' && (!s2spCameraOn || !_s2spHandsPresent)) return;
       if (window._updateConfRing) _updateConfRing(d.confidence);
       if (window._setDetectState) _setDetectState('detecting', 'Detecting', mod);
     });
@@ -1681,15 +1687,23 @@ button.is-busy{opacity:.6;cursor:progress}
       if (d.module === 'speech') {
         if (s2spCameraOn) {
           if (window._setDetectState) _setDetectState('locked', 'Locked', 's2sp');
-          setTimeout(() => { if (window._setDetectState) _setDetectState('cooldown', 'Cooldown', 's2sp'); }, 200);
-          setTimeout(() => { if (window._setDetectState && s2spCameraOn) _setDetectState('idle', 'Idle', 's2sp'); }, 800);
+          setTimeout(() => { if (window._setDetectState) _setDetectState('cooldown', 'Cooldown', 's2sp'); }, 80);
+          // After server cooldown (~400ms), restore "detecting" if hands still present else "idle"
+          setTimeout(() => {
+            if (!window._setDetectState || !s2spCameraOn) return;
+            _setDetectState(_s2spHandsPresent ? 'detecting' : 'idle', _s2spHandsPresent ? 'Detecting' : 'Idle', 's2sp');
+          }, 420);
           s2spHandleSign(d.word);
         }
       } else {
         if (cameraOn) {
           if (window._setDetectState) _setDetectState('locked', 'Locked', 'hs');
-          setTimeout(() => { if (window._setDetectState) _setDetectState('cooldown', 'Cooldown', 'hs'); }, 200);
-          setTimeout(() => { if (window._setDetectState && cameraOn) _setDetectState('idle', 'Idle', 'hs'); }, 800);
+          setTimeout(() => { if (window._setDetectState) _setDetectState('cooldown', 'Cooldown', 'hs'); }, 80);
+          // After server cooldown (~400ms), restore "detecting" if hands still present else "idle"
+          setTimeout(() => {
+            if (!window._setDetectState || !cameraOn) return;
+            _setDetectState(_hsHandsPresent ? 'detecting' : 'idle', _hsHandsPresent ? 'Detecting' : 'Idle', 'hs');
+          }, 420);
           handleDetectedSign(d.word, d.confidence || 0);
         }
       }
@@ -1943,6 +1957,7 @@ button.is-busy{opacity:.6;cursor:progress}
     }
 
     const handsPresent = !!(results.leftHandLandmarks || results.rightHandLandmarks);
+    _hsHandsPresent = handsPresent;  // expose to sign_conf / sign_detected handlers
 
     if (handsPresent) {
       consecutiveHand++;
@@ -1958,7 +1973,6 @@ button.is-busy{opacity:.6;cursor:progress}
         voteBuffer = [];      // ONLY clear votes on true gap (not just every missed frame)
         lastPredWord = null;  // allow same sign again after silence (mirrors script)
         streamReset('vision'); // flush the server-side buffer too (streaming mode)
-        // (Automatic sentence translation removed: user triggers it via Enter/Button)
       }
     }
 
@@ -1968,11 +1982,14 @@ button.is-busy{opacity:.6;cursor:progress}
     // Bail out if camera was stopped mid-callback
     if (!cameraOn) return;
 
-    // Show "detecting" as soon as hands are present in streaming mode, rather than
-    // waiting for the server round-trip. This eliminates the false "idle" shown
-    // while signing when the skeleton is clearly visible.
-    if (handsPresent && streaming('vision') && window._setDetectState) {
-      _setDetectState('detecting', 'Detecting', 'hs');
+    // Immediately reflect hand presence in the detect pill — don't wait for gap threshold.
+    // This stops "Detecting" from persisting when hands have left the frame.
+    if (window._setDetectState) {
+      if (handsPresent && streaming('vision')) {
+        _setDetectState('detecting', 'Detecting', 'hs');
+      } else if (!handsPresent) {
+        _setDetectState('idle', 'Idle', 'hs');
+      }
     }
 
     // Skip inference during cooldown or before enough hand frames
@@ -2096,8 +2113,11 @@ button.is-busy{opacity:.6;cursor:progress}
             frameBuffer = [];           // sequence.clear() — flush stale frames
             globalCooldown = GLOBAL_COOLDOWN_FRM;
             if (window._setDetectState) _setDetectState('locked', 'Locked', 'hs');
-            setTimeout(() => { if (window._setDetectState) _setDetectState('cooldown', 'Cooldown', 'hs'); }, 200);
-            setTimeout(() => { if (window._setDetectState && cameraOn) _setDetectState('idle', 'Idle', 'hs'); }, GLOBAL_COOLDOWN_FRM * 33 + 200);
+            setTimeout(() => { if (window._setDetectState) _setDetectState('cooldown', 'Cooldown', 'hs'); }, 80);
+            setTimeout(() => {
+              if (!window._setDetectState || !cameraOn) return;
+              _setDetectState(_hsHandsPresent ? 'detecting' : 'idle', _hsHandsPresent ? 'Detecting' : 'Idle', 'hs');
+            }, GLOBAL_COOLDOWN_FRM * 50 + 80);
             handleDetectedSign(winner, count / VOTE_BUFFER_SIZE);
           }
         }
@@ -4043,6 +4063,7 @@ button.is-busy{opacity:.6;cursor:progress}
     }
 
     const handsPresent = !!(results.leftHandLandmarks || results.rightHandLandmarks);
+    _s2spHandsPresent = handsPresent;  // expose to sign_conf / sign_detected handlers
 
     if (handsPresent) {
       s2spConsecHand++;
@@ -4062,9 +4083,13 @@ button.is-busy{opacity:.6;cursor:progress}
     if (s2spGlobalCooldown > 0) { s2spGlobalCooldown--; }
     if (!s2spCameraOn) return;
 
-    // Proactive detect state — show "detecting" as soon as hands are present
-    if (handsPresent && streaming('speech') && window._setDetectState) {
-      _setDetectState('detecting', 'Detecting', 's2sp');
+    // Immediately reflect hand presence in the detect pill
+    if (window._setDetectState) {
+      if (handsPresent && streaming('speech')) {
+        _setDetectState('detecting', 'Detecting', 's2sp');
+      } else if (!handsPresent) {
+        _setDetectState('idle', 'Idle', 's2sp');
+      }
     }
 
     if (s2spGlobalCooldown > 0 || s2spConsecHand < MIN_HAND_FRAMES) return;
@@ -4133,8 +4158,11 @@ button.is-busy{opacity:.6;cursor:progress}
             s2spFrameBuffer = [];      // sequence.clear()
             s2spGlobalCooldown = GLOBAL_COOLDOWN_FRM;
             if (window._setDetectState) _setDetectState('locked', 'Locked', 's2sp');
-            setTimeout(() => { if (window._setDetectState) _setDetectState('cooldown', 'Cooldown', 's2sp'); }, 200);
-            setTimeout(() => { if (window._setDetectState && s2spCameraOn) _setDetectState('idle', 'Idle', 's2sp'); }, GLOBAL_COOLDOWN_FRM * 33 + 200);
+            setTimeout(() => { if (window._setDetectState) _setDetectState('cooldown', 'Cooldown', 's2sp'); }, 80);
+            setTimeout(() => {
+              if (!window._setDetectState || !s2spCameraOn) return;
+              _setDetectState(_s2spHandsPresent ? 'detecting' : 'idle', _s2spHandsPresent ? 'Detecting' : 'Idle', 's2sp');
+            }, GLOBAL_COOLDOWN_FRM * 50 + 80);
             s2spHandleSign(winner);
           }
         }

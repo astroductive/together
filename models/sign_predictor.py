@@ -334,7 +334,9 @@ class SignLanguagePredictor:
         pred_class_idx = np.argmax(mean_probs)
         confidence = mean_probs[pred_class_idx]
         
-        CONFIDENCE_THRESH = 0.65
+        # 0.45 for a 20-class model with mean-ensemble: 45% is well above uniform
+        # random (5%). The 2/3 vote consensus on the server rejects noisy single frames.
+        CONFIDENCE_THRESH = 0.45
         if confidence > CONFIDENCE_THRESH:
             label = self.labels[pred_class_idx]
             return label, confidence

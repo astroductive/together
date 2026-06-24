@@ -306,7 +306,11 @@ class ASLService(SignDB):
             else:
                 conf = top_prob
 
-            CONFIDENCE_THRESH = 0.80
+            # 0.65 is the effective "clearly this sign" threshold for a 250-class
+            # softmax. Votes at 0.65-0.80 are still informative; the 3-vote
+            # consensus filter on the server side rejects noise from a single
+            # low-confidence frame.
+            CONFIDENCE_THRESH = 0.65
             if conf > CONFIDENCE_THRESH:
                 label = self.labels.get(idx, self.labels.get(str(idx), f"class_{idx}"))
                 print(f"[Inference] {label} p={conf:.3f}")

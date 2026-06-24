@@ -999,6 +999,8 @@ button.is-busy{opacity:.6;cursor:progress}
   let handGapCounter = 0;    // dropout tolerance
   let globalCooldown = 0;    // frames remaining to skip inference
   let lastPredWord = null;
+  let _hsHandsPresent = false;
+  let _s2spHandsPresent = false;
   let inferenceRunning = false; // prevent overlapping async calls
   let _holisticBusy = false;   // prevent re-entrant holistic.send() calls (WASM abort guard)
   let _warmingUp = false;      // flag: warmup request in flight, ignore its result
@@ -1017,12 +1019,12 @@ button.is-busy{opacity:.6;cursor:progress}
   // an earlier first inference make recognition feel responsive on a remote server.
   // Accuracy-tuned: more votes + higher agreement = far fewer false detections.
   // Mirrors the server stream constants (_STREAM_VOTE_BUFFER / _STREAM_STABILITY).
-  const VOTE_BUFFER_SIZE = 5;    // need 3 of the last 5 predictions to agree
+  const VOTE_BUFFER_SIZE = 3;
   const STABILITY_FRAMES = 3;
-  const GLOBAL_COOLDOWN_FRM = 18;
-  const MIN_HAND_FRAMES = 3;     // hand must be stably present for 3 frames before inferring
-  const MAX_HAND_GAP_FRAMES = 5;
-  const MIN_SEQ_FRAMES = 12;     // a bit more temporal context before the first inference
+  const GLOBAL_COOLDOWN_FRM = 8;
+  const MIN_HAND_FRAMES = 1;
+  const MAX_HAND_GAP_FRAMES = 3;
+  const MIN_SEQ_FRAMES = 6;
   const moduleMap = {
     vision: { panel: 'panel-vision', nav: 'nav-vision', title: 'Sign to Text' },
     speech: { panel: 'panel-speech', nav: 'nav-speech', title: 'Sign to Speech' },
@@ -1638,8 +1640,8 @@ button.is-busy{opacity:.6;cursor:progress}
     streamSocket.on('sign_conf', (d) => {
       if (!d) return;
       const mod = d.module === 'speech' ? 's2sp' : 'hs';
-      if (mod === 'hs' && !cameraOn) return;
-      if (mod === 's2sp' && !s2spCameraOn) return;
+      if (mod === 'hs' && (!cameraOn || !_hsHandsPresent)) return;
+      if (mod === 's2sp' && (!s2spCameraOn || !_s2spHandsPresent)) return;
       if (window._updateConfRing) _updateConfRing(d.confidence);
       if (window._setDetectState) _setDetectState('detecting', 'يرصد', mod);
     });
@@ -1649,15 +1651,21 @@ button.is-busy{opacity:.6;cursor:progress}
       if (d.module === 'speech') {
         if (s2spCameraOn) {
           if (window._setDetectState) _setDetectState('locked', 'مؤكّد', 's2sp');
-          setTimeout(() => { if (window._setDetectState) _setDetectState('cooldown', 'تأخير', 's2sp'); }, 200);
-          setTimeout(() => { if (window._setDetectState && s2spCameraOn) _setDetectState('idle', 'خامل', 's2sp'); }, 800);
+          setTimeout(() => { if (window._setDetectState) _setDetectState('cooldown', 'تأخير', 's2sp'); }, 80);
+          setTimeout(() => {
+            if (!window._setDetectState || !s2spCameraOn) return;
+            _setDetectState(_s2spHandsPresent ? 'detecting' : 'idle', _s2spHandsPresent ? 'يرصد' : 'خامل', 's2sp');
+          }, 420);
           s2spHandleSign(d.word);
         }
       } else {
         if (cameraOn) {
           if (window._setDetectState) _setDetectState('locked', 'مؤكّد', 'hs');
-          setTimeout(() => { if (window._setDetectState) _setDetectState('cooldown', 'تأخير', 'hs'); }, 200);
-          setTimeout(() => { if (window._setDetectState && cameraOn) _setDetectState('idle', 'خامل', 'hs'); }, 800);
+          setTimeout(() => { if (window._setDetectState) _setDetectState('cooldown', 'تأخير', 'hs'); }, 80);
+          setTimeout(() => {
+            if (!window._setDetectState || !cameraOn) return;
+            _setDetectState(_hsHandsPresent ? 'detecting' : 'idle', _hsHandsPresent ? 'يرصد' : 'خامل', 'hs');
+          }, 420);
           handleDetectedSign(d.word, d.confidence || 0);
         }
       }
@@ -1933,9 +1941,14 @@ button.is-busy{opacity:.6;cursor:progress}
     // Bail out if camera was stopped mid-callback
     if (!cameraOn) return;
 
-    // Proactive detect state
-    if (handsPresent && streaming('vision') && window._setDetectState) {
-      _setDetectState('detecting', 'يرصد', 'hs');
+    // Proactive detect state — immediately reflect hand presence
+    _hsHandsPresent = handsPresent;
+    if (window._setDetectState) {
+      if (handsPresent && streaming('vision')) {
+        _setDetectState('detecting', 'يرصد', 'hs');
+      } else if (!handsPresent) {
+        _setDetectState('idle', 'خامل', 'hs');
+      }
     }
 
     // Skip inference during cooldown or before enough hand frames
@@ -2054,8 +2067,11 @@ button.is-busy{opacity:.6;cursor:progress}
             frameBuffer = [];           // sequence.clear() — flush stale frames
             globalCooldown = GLOBAL_COOLDOWN_FRM;
             if (window._setDetectState) _setDetectState('locked', 'مؤكّد', 'hs');
-            setTimeout(() => { if (window._setDetectState) _setDetectState('cooldown', 'تأخير', 'hs'); }, 200);
-            setTimeout(() => { if (window._setDetectState && cameraOn) _setDetectState('idle', 'خامل', 'hs'); }, GLOBAL_COOLDOWN_FRM * 33 + 200);
+            setTimeout(() => { if (window._setDetectState) _setDetectState('cooldown', 'تأخير', 'hs'); }, 80);
+            setTimeout(() => {
+              if (!window._setDetectState || !cameraOn) return;
+              _setDetectState(_hsHandsPresent ? 'detecting' : 'idle', _hsHandsPresent ? 'يرصد' : 'خامل', 'hs');
+            }, GLOBAL_COOLDOWN_FRM * 50 + 80);
             handleDetectedSign(winner, count / VOTE_BUFFER_SIZE);
           }
         }
@@ -3938,8 +3954,13 @@ button.is-busy{opacity:.6;cursor:progress}
     if (s2spGlobalCooldown > 0) { s2spGlobalCooldown--; }
     if (!s2spCameraOn) return;
 
-    if (handsPresent && streaming('speech') && window._setDetectState) {
-      _setDetectState('detecting', 'يرصد', 's2sp');
+    _s2spHandsPresent = handsPresent;
+    if (window._setDetectState) {
+      if (handsPresent && streaming('speech')) {
+        _setDetectState('detecting', 'يرصد', 's2sp');
+      } else if (!handsPresent) {
+        _setDetectState('idle', 'خامل', 's2sp');
+      }
     }
 
     if (s2spGlobalCooldown > 0 || s2spConsecHand < MIN_HAND_FRAMES) return;
@@ -4008,8 +4029,11 @@ button.is-busy{opacity:.6;cursor:progress}
             s2spFrameBuffer = [];      // sequence.clear()
             s2spGlobalCooldown = GLOBAL_COOLDOWN_FRM;
             if (window._setDetectState) _setDetectState('locked', 'مؤكّد', 's2sp');
-            setTimeout(() => { if (window._setDetectState) _setDetectState('cooldown', 'تأخير', 's2sp'); }, 200);
-            setTimeout(() => { if (window._setDetectState && s2spCameraOn) _setDetectState('idle', 'خامل', 's2sp'); }, GLOBAL_COOLDOWN_FRM * 33 + 200);
+            setTimeout(() => { if (window._setDetectState) _setDetectState('cooldown', 'تأخير', 's2sp'); }, 80);
+            setTimeout(() => {
+              if (!window._setDetectState || !s2spCameraOn) return;
+              _setDetectState(_s2spHandsPresent ? 'detecting' : 'idle', _s2spHandsPresent ? 'يرصد' : 'خامل', 's2sp');
+            }, GLOBAL_COOLDOWN_FRM * 50 + 80);
             s2spHandleSign(winner);
           }
         }

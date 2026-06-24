@@ -1496,17 +1496,15 @@ async def translate_sentence(sid, data):
 from collections import deque as _deque, Counter as _Counter
 
 _STREAM_SEQ_LENGTH = 60
-# Accuracy-tuned: require 3 of the last 5 predictions to agree before accepting a
-# sign. More votes + higher agreement dramatically cuts false detections; the
-# fast 0.08s cadence keeps the larger buffer filling quickly so latency barely moves.
-_STREAM_VOTE_BUFFER = 5        # was 3
-_STREAM_STABILITY = 3          # was 2 — 3/5 agreement
-_STREAM_COOLDOWN = 18          # frames of silence after acceptance (~1.2s)
-_STREAM_MIN_SEQ = 12           # a bit more temporal context before first inference
-# Minimum gap between inferences per stream. 0.08s (~12.5/s) fills the 5-vote
-# buffer in ~0.4s. Render Standard 1 CPU peaks under 20%, so there is ample
-# headroom; lower STREAM_MIN_INTERVAL_S further to trade CPU for responsiveness.
-_STREAM_MIN_INTERVAL = float(os.environ.get("STREAM_MIN_INTERVAL_S", "0.08"))
+# Tuned for fast response on idle hardware: lower buffer/stability fires faster while
+# the 2/3 vote requirement still filters noise adequately. CPU headroom is high.
+_STREAM_VOTE_BUFFER = 3        # was 5 — 2/3 fills in ~75ms vs 5-vote ~400ms
+_STREAM_STABILITY = 2          # was 3 — 2-of-3 agreement
+_STREAM_COOLDOWN = 8           # was 18 — ~400ms between detections (was ~900ms)
+_STREAM_MIN_SEQ = 6            # was 12 — first inference fires after 6 frames (~300ms)
+# 0.025s = 40 inferences/s.  Client sends at 20fps so this never over-runs the
+# frame arrival rate; it just means we never throttle on this machine.
+_STREAM_MIN_INTERVAL = float(os.environ.get("STREAM_MIN_INTERVAL_S", "0.025"))
 
 
 class _StreamState:
