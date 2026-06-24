@@ -109,9 +109,7 @@ body{background:transparent!important;overflow:hidden}
 .t-brand-text{display:flex;flex-direction:column;align-items:center;min-width:0}
 .t-brand-name{display:block;font-family:var(--font-display);font-weight:800;font-size:28px;letter-spacing:-.03em;line-height:1;color:var(--text)}
 .t-brand-tagline{display:block;font-size:10px;font-weight:600;letter-spacing:.14em;text-transform:uppercase;opacity:.55;color:var(--text);margin-top:7px;text-align:center;line-height:1.4;max-width:160px}
-.logo-on-dark{display:block}.logo-on-light{display:none}
-html[data-theme="light"] .logo-on-dark{display:none}
-html[data-theme="light"] .logo-on-light{display:block}
+html[data-theme="light"] .t-brand-mark{filter:invert(1)}
 #sb-toggle{position:absolute;top:8px;inset-inline-end:6px;display:flex;align-items:center;justify-content:center;width:28px;height:28px;flex:none;
   border-radius:8px;border:1px solid var(--border);background:var(--surface-2);color:var(--muted);
   cursor:pointer;transition:background .15s,color .15s}
@@ -380,8 +378,7 @@ button.is-busy{opacity:.6;cursor:progress}
   <aside class="t-sidebar" id="sidebar">
     <div class="t-brand-row">
       <a href="/" class="t-brand t-brand--logo" aria-label="Together — home">
-        <img src="/static/img/logo-mark-white.png" alt="" class="t-brand-mark logo-on-dark">
-        <img src="/static/img/logo-mark-dark.png" alt="" class="t-brand-mark logo-on-light">
+        <img src="/static/img/logo-mark.svg" alt="" class="t-brand-mark">
         <span class="t-brand-text">
           <span class="t-brand-name">Together</span>
           <span class="t-brand-tagline">Sign Language · One World</span>
