@@ -244,15 +244,32 @@ class ASLService(SignDB):
             )
         print("[ASLService] Ready.")
 
+    # Above this confidence we accept a sign. Measured against ground-truth
+    # clips, correct predictions have mean softmax ~0.67 (median 0.75); 0.50
+    # keeps ~72% of correct predictions while the downstream vote consensus
+    # rejects the noise. (0.65 silently dropped 41% of correct predictions.)
+    CONFIDENCE_THRESH = float(os.environ.get("ASL_CONFIDENCE_THRESH", "0.50"))
+    # Variable-length input is supported by the model (signature [-1, 543, 3]);
+    # only cap pathologically long sequences.
+    MAX_FRAMES = 128
+
     def predict_sign(self, landmarks):
         """
-        Sequence inference matching the standalone sign-to-speech.py script.
-        Input: (N, 543, 3) — N can be 1..60, padded/trimmed to SEQUENCE_LENGTH=60.
+        Sequence inference for the GISLR-style 250-class ASL model.
+
+        The model's input signature is (N, 543, 3) — a variable-length sequence
+        of MediaPipe Holistic landmarks in the order face(468) + left_hand(21) +
+        pose(33) + right_hand(21). It was trained with NaN for ABSENT landmarks
+        and masks them internally, so missing parts MUST be NaN, not 0.0 (a 0 is
+        read as a real point at the image origin and destroys the prediction —
+        verified: 3% top-1 with zeros vs 66% with NaN on labelled clips).
+
         Returns (label, confidence) or (None, 0.0).
         """
         import numpy as np
-        SEQUENCE_LENGTH = 60
         try:
+            # JSON null for a missing landmark (sent by the browser) becomes NaN
+            # here automatically via the float cast.
             frames = np.array(landmarks, dtype=np.float32)
             if frames.ndim == 4 and frames.shape[0] == 1:
                 frames = frames[0]
@@ -262,16 +279,16 @@ class ASLService(SignDB):
             if frames.shape[0] < 1:
                 return None, 0.0
 
-            n = frames.shape[0]
-            if n < SEQUENCE_LENGTH:
-                pad = np.repeat(frames[-1:], SEQUENCE_LENGTH - n, axis=0)
-                frames = np.concatenate([frames, pad], axis=0)
-            elif n > SEQUENCE_LENGTH:
-                frames = frames[-SEQUENCE_LENGTH:]
+            # Safety net: any all-zero landmark point is a "missing" marker that
+            # slipped through as 0.0 (a non-browser caller, or a serializer that
+            # coerced null→0). Normalise it to NaN so the model masks it.
+            frames[np.all(frames == 0.0, axis=-1)] = np.nan
 
-            batch = frames[np.newaxis, ...]
-            expected_dtype = self.input_details[0]["dtype"]
-            batch = batch.astype(expected_dtype)
+            # Feed the raw variable-length sequence (N, 543, 3). Do NOT add a
+            # batch dim or pad to a fixed length — both lower accuracy.
+            if frames.shape[0] > self.MAX_FRAMES:
+                frames = frames[-self.MAX_FRAMES:]
+            batch = frames.astype(self.input_details[0]["dtype"])
 
             # Serialize all access to the shared interpreter (see _infer_lock above).
             # Copy the output inside the lock — get_tensor returns a view that the next
@@ -283,35 +300,20 @@ class ASLService(SignDB):
                 self.interpreter.invoke()
                 out_arr = np.array(self.interpreter.get_tensor(self.output_details[0]["index"]))
 
-            out_arr = np.squeeze(out_arr)
+            out_arr = np.squeeze(out_arr).astype(np.float32)
             if out_arr.ndim == 0:
                 out_arr = np.array([out_arr])
 
-            idx = int(np.argmax(out_arr))
-            top_prob = float(out_arr[idx])
+            # The model emits raw LOGITS (not a probability distribution — the
+            # output sums to ~-55 and contains negatives), so apply softmax to
+            # get a usable confidence.
+            shifted = out_arr - np.max(out_arr)
+            probs = np.exp(shifted)
+            probs = probs / probs.sum()
+            idx = int(np.argmax(probs))
+            conf = float(probs[idx])
 
-            # The model output is already a normalized probability distribution
-            # (a softmax layer is baked into the graph), so `out_arr` sums to ~1
-            # and `top_prob` IS the model's confidence. Re-running softmax over a
-            # distribution that already sums to 1 — as the old code did — flattens
-            # the top value across all 250 classes (0.90 → ~0.01-0.08), which is
-            # what produced the absurdly low confidence on the dashboard.
-            # Only fall back to an explicit softmax if the output looks like raw
-            # logits (negative values or a sum far from 1).
-            arr_sum = float(out_arr.sum())
-            if out_arr.min() < 0.0 or not (0.95 <= arr_sum <= 1.05):
-                exp_o = np.exp(out_arr - np.max(out_arr))
-                probs = exp_o / exp_o.sum()
-                conf = float(probs[idx])
-            else:
-                conf = top_prob
-
-            # 0.65 is the effective "clearly this sign" threshold for a 250-class
-            # softmax. Votes at 0.65-0.80 are still informative; the 3-vote
-            # consensus filter on the server side rejects noise from a single
-            # low-confidence frame.
-            CONFIDENCE_THRESH = 0.65
-            if conf > CONFIDENCE_THRESH:
+            if conf > self.CONFIDENCE_THRESH:
                 label = self.labels.get(idx, self.labels.get(str(idx), f"class_{idx}"))
                 print(f"[Inference] {label} p={conf:.3f}")
                 return label, conf
