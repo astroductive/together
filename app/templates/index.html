@@ -1670,20 +1670,47 @@ button.t-nav-item[aria-label="Sign out"]:hover svg{color:var(--danger,#ef4444)}
   // the socket is unavailable.
   // ══════════════════════════════════════════════════════════════
   let streamSocket = null;
+  let _streamGaveUp = false;   // proxy blocks WS+polling → stay on HTTP fallback
+  let _streamErrLogged = false;
   const streamActive = { vision: false, speech: false };
   const streamLang = { vision: null, speech: null };
 
   function ensureStreamSocket() {
+    // Once the realtime socket has proven unreachable (e.g. a proxy that blocks
+    // both the WebSocket upgrade AND Socket.IO long-polling), stop retrying and
+    // let onHolisticResults use the HTTP /api/translate fallback instead.
+    if (_streamGaveUp) return null;
     if (streamSocket) return streamSocket;
     try {
-      streamSocket = io({ auth: { token: getToken() || '' }, transports: ['websocket'] });
+      streamSocket = io({
+        auth: { token: getToken() || '' },
+        transports: ['websocket', 'polling'],  // try WS first, fall back to polling
+        reconnectionAttempts: 4,                // then give up (avoids endless error spam)
+        timeout: 8000,
+      });
     } catch (e) {
       console.warn('[Stream] socket init failed, will use HTTP fallback:', e);
       streamSocket = null;
+      _streamGaveUp = true;
       return null;
     }
-    streamSocket.on('connect', () => console.log('[Stream] connected', streamSocket.id));
-    streamSocket.on('connect_error', (err) => console.warn('[Stream] connect_error:', err && err.message));
+    streamSocket.on('connect', () => { _streamErrLogged = false; console.log('[Stream] connected', streamSocket.id); });
+    streamSocket.on('connect_error', (err) => {
+      if (!_streamErrLogged) {   // log once, not on every retry
+        console.warn('[Stream] realtime socket unavailable — using HTTP fallback:', err && err.message);
+        _streamErrLogged = true;
+      }
+    });
+    // After the bounded reconnection attempts are exhausted, give up permanently
+    // and rely on the HTTP path so the console isn't flooded with transport errors.
+    if (streamSocket.io && streamSocket.io.on) {
+      streamSocket.io.on('reconnect_failed', () => {
+        _streamGaveUp = true;
+        try { streamSocket.close(); } catch (_) {}
+        streamSocket = null;
+        console.warn('[Stream] realtime socket gave up — staying on HTTP fallback for detection.');
+      });
+    }
     // On reconnect the server assigns a NEW sid and has no _StreamState for it, so it
     // silently drops every sign_frame. Clear our active/lang flags so the next holistic
     // frame re-sends sign_start (rebuilding the server buffer) instead of streaming into
@@ -3765,7 +3792,7 @@ button.t-nav-item[aria-label="Sign out"]:hover svg{color:var(--danger,#ef4444)}
       currentMeetingRoom = roomId;
 
       if (!socket) {
-        socket = io({ auth: { token: getToken() || '' }, transports: ['websocket'] });
+        socket = io({ auth: { token: getToken() || '' }, transports: ['websocket', 'polling'], reconnectionAttempts: 5, timeout: 8000 });
         const currentSocket = socket;
 
         socket.on('connect', syncMeetingConnection);

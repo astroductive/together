@@ -1634,20 +1634,42 @@ button.is-busy{opacity:.6;cursor:progress}
   // LIVE STREAMING RECOGNITION (Socket.IO) — see EN dashboard for rationale
   // ══════════════════════════════════════════════════════════════
   let streamSocket = null;
+  let _streamGaveUp = false;   // proxy blocks WS+polling → stay on HTTP fallback
+  let _streamErrLogged = false;
   const streamActive = { vision: false, speech: false };
   const streamLang = { vision: null, speech: null };
 
   function ensureStreamSocket() {
+    if (_streamGaveUp) return null;
     if (streamSocket) return streamSocket;
     try {
-      streamSocket = io({ auth: { token: getToken() || '' }, transports: ['websocket'] });
+      streamSocket = io({
+        auth: { token: getToken() || '' },
+        transports: ['websocket', 'polling'],
+        reconnectionAttempts: 4,
+        timeout: 8000,
+      });
     } catch (e) {
       console.warn('[Stream] socket init failed, HTTP fallback:', e);
       streamSocket = null;
+      _streamGaveUp = true;
       return null;
     }
-    streamSocket.on('connect', () => console.log('[Stream] connected', streamSocket.id));
-    streamSocket.on('connect_error', (err) => console.warn('[Stream] connect_error:', err && err.message));
+    streamSocket.on('connect', () => { _streamErrLogged = false; console.log('[Stream] connected', streamSocket.id); });
+    streamSocket.on('connect_error', (err) => {
+      if (!_streamErrLogged) {
+        console.warn('[Stream] realtime socket unavailable — using HTTP fallback:', err && err.message);
+        _streamErrLogged = true;
+      }
+    });
+    if (streamSocket.io && streamSocket.io.on) {
+      streamSocket.io.on('reconnect_failed', () => {
+        _streamGaveUp = true;
+        try { streamSocket.close(); } catch (_) {}
+        streamSocket = null;
+        console.warn('[Stream] realtime socket gave up — staying on HTTP fallback for detection.');
+      });
+    }
     // On reconnect the server assigns a NEW sid and has no _StreamState for it, so it
     // silently drops every sign_frame. Clear our active/lang flags so the next holistic
     // frame re-sends sign_start (rebuilding the server buffer) instead of streaming into
@@ -3686,7 +3708,7 @@ button.is-busy{opacity:.6;cursor:progress}
       currentMeetingRoom = roomId;
 
       if (!socket) {
-        socket = io({ auth: { token: getToken() || '' }, transports: ['websocket'] });
+        socket = io({ auth: { token: getToken() || '' }, transports: ['websocket', 'polling'], reconnectionAttempts: 5, timeout: 8000 });
         const currentSocket = socket;
 
         socket.on('connect', syncMeetingConnection);
