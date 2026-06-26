@@ -284,12 +284,11 @@
     if (typeof window.handleDetectedSign === 'function' && !window.handleDetectedSign.__dxWrapped) {
       var _origVision = window.handleDetectedSign;
       window.handleDetectedSign = function (word, conf) {
-        try {
-          var thr = getThreshold();
-          // Only filter when a real numeric confidence > 0 is present.
-          if (thr > 0 && typeof conf === 'number' && conf > 0 && conf < thr) return;
-          recordDetection(word, conf, 'vision');
-        } catch (e) {}
+        // NOTE: no client-side confidence gating here. The server already only
+        // emits detections above its own threshold, and raw confidence scales
+        // differ per model (ASL 250-class confidences are inherently low), so a
+        // client filter silently suppressed real predictions. Just log + pass.
+        try { recordDetection(word, conf, 'vision'); } catch (e) {}
         return _origVision.apply(this, arguments);
       };
       window.handleDetectedSign.__dxWrapped = true;
@@ -889,23 +888,8 @@
   function buildSettingsOverlay() {
     if (byId('dx-settings')) return;
 
-    // ── Confidence threshold slider (50%–95%) ──
-    var thr = getThreshold();
-    var initPct = thr > 0 ? Math.round(thr * 100) : 50;
-    if (initPct < 50) initPct = 50; if (initPct > 95) initPct = 95;
-    var range = el('input', { class: 'dx-range', type: 'range', min: '50', max: '95', step: '5', value: String(initPct) });
-    var rangeVal = el('span', { class: 'dx-set-val', text: initPct + '%' });
-    range.addEventListener('input', function () {
-      var pct = parseInt(range.value, 10);
-      rangeVal.textContent = pct + '%';
-      // 50% → treat as off/minimal; store 0.50..0.95.
-      lsSet('together-conf-threshold', (pct / 100).toFixed(2));
-    });
-    var rowThr = el('div', { class: 'dx-set-row' },
-      el('div', { class: 'dx-set-lbl', html: t('Detection confidence threshold', 'حدّ ثقة الكشف') +
-        '<small>' + t('Filter low-confidence signs', 'تصفية الإشارات منخفضة الثقة') + '</small>' }),
-      el('div', { style: { display: 'flex', alignItems: 'center', gap: '8px' } }, range, rangeVal)
-    );
+    // (The confidence-threshold slider was removed: confidence scales differ per
+    // model and a client-side filter silently suppressed real ASL predictions.)
 
     // ── Keyboard shortcuts toggle ──
     var kbdChk = el('input', { type: 'checkbox' });
@@ -962,7 +946,7 @@
         ),
         el('button', { class: 'dx-x', 'aria-label': t('Close', 'إغلاق'), onclick: closeSettings }, '×')
       ),
-      rowThr, rowKbd, rowVbg, rowNotif
+      rowKbd, rowVbg, rowNotif
     );
     var ov = el('div', { id: 'dx-settings', class: 'dx-overlay' }, modal);
     ov.addEventListener('click', function (e) { if (e.target === ov) closeSettings(); });
