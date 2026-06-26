@@ -564,6 +564,10 @@ def _localized_page(request: Request, base_name: str, lang: str | None):
         if os.path.exists(os.path.join(_TEMPLATES_DIR, ar_name)):
             template_name = ar_name
 
+    # Defensive: a missing template should 404 cleanly rather than raise a 500.
+    if not os.path.exists(os.path.join(_TEMPLATES_DIR, template_name)):
+        raise HTTPException(status_code=404, detail="Page not found.")
+
     resp = templates.TemplateResponse(request, template_name)
     if persist:
         resp.set_cookie(
@@ -638,6 +642,18 @@ async def profile_page(request: Request, lang: str | None = None):
     # Auth is enforced client-side (requireAuth) like the dashboard; the page
     # itself is just the shell and fetches /api/auth/me with the bearer token.
     return _localized_page(request, "profile", lang)
+
+@app.get("/dictionary", response_class=HTMLResponse)
+async def dictionary_page(request: Request, lang: str | None = None):
+    return _localized_page(request, "dictionary", lang)
+
+@app.get("/analytics", response_class=HTMLResponse)
+async def analytics_page(request: Request, lang: str | None = None):
+    return _localized_page(request, "analytics", lang)
+
+@app.get("/practice", response_class=HTMLResponse)
+async def practice_page(request: Request, lang: str | None = None):
+    return _localized_page(request, "practice", lang)
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -1431,6 +1447,76 @@ async def get_batch_arabic_sign_landmarks(
             missing.append(w)
 
     return {"found": found, "missing": missing}
+
+
+# ── Vocabulary listing (for Sign Dictionary + Practice pages) ──
+_VOCAB_CACHE = None
+_MODELS_DIR = os.path.join(os.path.dirname(BASE_DIR), "models")
+
+# Lightweight keyword buckets so the dictionary can offer category filters.
+# Best-effort: a word not matched by any bucket falls into "general".
+_VOCAB_CATEGORIES = {
+    "family": {"baby", "father", "mother", "brother", "sister", "grandma", "grandpa",
+               "aunt", "uncle", "child", "boy", "girl", "man", "child", "family"},
+    "animals": {"animal", "alligator", "bird", "bee", "bug", "cat", "cow", "dog",
+                "duck", "elephant", "fish", "frog", "giraffe", "horse", "lion",
+                "monkey", "owl", "penguin", "puppy", "snake", "tiger", "zebra"},
+    "colors": {"black", "blue", "brown", "green", "orange", "red", "white", "yellow"},
+    "food": {"apple", "banana", "carrot", "cereal", "cowboy", "drink", "eat", "food",
+             "grapes", "hungry", "milk", "pizza", "water"},
+    "actions": {"blow", "callonphone", "can", "clean", "close", "cry", "drink", "drop",
+                "eat", "fall", "feed", "find", "finger", "finish", "give", "go", "hate",
+                "have", "hear", "hello", "help", "hide", "jump", "kiss", "listen", "look",
+                "love", "make", "open", "play", "pretend", "read", "ride", "say", "see",
+                "sleep", "stay", "stop", "talk", "think", "thinking", "touch", "wait",
+                "wake", "weus", "yes"},
+    "feelings": {"afraid", "angry", "bad", "cry", "happy", "hate", "hungry", "love",
+                 "mad", "sad", "scared", "sick", "sleepy", "thirsty", "tired", "worry"},
+    "places": {"backyard", "bath", "bed", "bedroom", "house", "kitchen", "mall",
+               "mosque", "outside", "store"},
+}
+
+
+def _categorize_word(w: str) -> str:
+    wl = w.lower()
+    for cat, words in _VOCAB_CATEGORIES.items():
+        if wl in words:
+            return cat
+    return "general"
+
+
+def _load_vocabulary():
+    """Read the ASL (250) + Arabic (20) class maps once and tag each word."""
+    global _VOCAB_CACHE
+    if _VOCAB_CACHE is not None:
+        return _VOCAB_CACHE
+    import json as _json
+
+    def _read(name):
+        path = os.path.join(_MODELS_DIR, name)
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                return sorted(_json.load(f).keys())
+        except Exception:
+            return []
+
+    asl_words = _read("sign_to_prediction_index_map.json")
+    ar_words = _read("class_mapping.json")
+    _VOCAB_CACHE = {
+        "asl": [{"word": w, "category": _categorize_word(w)} for w in asl_words],
+        "arabic": [{"word": w, "category": _categorize_word(w)} for w in ar_words],
+        "counts": {"asl": len(asl_words), "arabic": len(ar_words)},
+    }
+    return _VOCAB_CACHE
+
+
+@app.get("/api/vocabulary")
+async def get_vocabulary(current_user: dict = Depends(get_current_user)):
+    """List the recognized ASL + Arabic sign vocabularies with category tags.
+
+    Used by the Sign Dictionary and Practice Mode pages.
+    """
+    return _load_vocabulary()
 
 
 # ═══════════════════════════════════════════════════════════════

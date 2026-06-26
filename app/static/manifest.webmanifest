@@ -1,0 +1,24 @@
+{
+  "name": "Together — Sign Language AI",
+  "short_name": "Together",
+  "description": "AI-powered sign language translation for the Deaf and hard-of-hearing community. ASL & ArSL, on-device.",
+  "start_url": "/dashboard",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#0a0a0a",
+  "theme_color": "#1f8a82",
+  "lang": "en",
+  "dir": "auto",
+  "categories": ["education", "productivity", "utilities"],
+  "icons": [
+    { "src": "/static/img/logo-mark-color.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/static/img/logo-mark-color.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/static/img/logo-mark-color.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "shortcuts": [
+    { "name": "Dashboard", "url": "/dashboard", "description": "Open the translation dashboard" },
+    { "name": "Sign Dictionary", "url": "/dictionary", "description": "Browse the sign library" },
+    { "name": "Practice", "url": "/practice", "description": "Practice signing with live feedback" }
+  ]
+}
