@@ -334,7 +334,7 @@ a.t-user:hover{border-color:var(--accent);background:var(--accent-soft)}
 /* ══ Stat grid tiles ══ */
 .d-stat-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;padding:14px 28px 0;flex-shrink:0}
 @media(max-width:1280px){.d-stat-grid{grid-template-columns:repeat(2,1fr)}}
-@media(max-width:860px){.d-stat-grid{display:none}}
+@media(max-width:1024px){.d-stat-grid{display:none}}
 .d-stat-tile{background:color-mix(in srgb,var(--surface) 80%,transparent);backdrop-filter:blur(10px);border:1px solid var(--border);border-radius:14px;padding:14px 16px 38px;display:flex;flex-direction:column;gap:3px;position:relative;overflow:hidden;min-width:0}
 .d-stat-lbl{font-size:10.5px;color:var(--faint);font-family:var(--font-mono);letter-spacing:.1em;text-transform:uppercase;font-weight:500}
 .d-stat-val{font-size:26px;font-weight:800;color:var(--text);font-family:var(--font-display);line-height:1.1;font-variant-numeric:tabular-nums;margin-top:2px}
@@ -526,9 +526,7 @@ button.is-busy{opacity:.6;cursor:progress}
               </div>
               <div style="display:flex;align-items:center;gap:8px">
                 <select id="cam-language-select" class="d-lang-sel">
-                  <option value="english">English (ASL)</option>
-                  <option value="arabic">Arabic (ArSL)</option>
-                  <option value="egyptian">Egyptian (EgSL)</option>
+                  <option value="arabic" selected>Arabic (ArSL)</option>
                 </select>
                 <button class="t-btn t-btn--accent" id="cam-btn" onclick="toggleCamera()">تشغيل الكاميرا</button>
               </div>
@@ -610,9 +608,7 @@ button.is-busy{opacity:.6;cursor:progress}
               </div>
               <div style="display:flex;align-items:center;gap:8px">
                 <select id="s2sp-cam-language-select" class="d-lang-sel">
-                  <option value="english">English (ASL)</option>
-                  <option value="arabic">Arabic (ArSL)</option>
-                  <option value="egyptian">Egyptian (EgSL)</option>
+                  <option value="arabic" selected>Arabic (ArSL)</option>
                 </select>
                 <button class="t-btn t-btn--accent" id="s2sp-cam-btn" onclick="toggleS2SpCamera()">تشغيل الكاميرا</button>
               </div>
@@ -4264,13 +4260,13 @@ function toggleSidebar() {
 })();
 
 let _sessionStart = Date.now();
-let _signCount = parseInt(localStorage.getItem('signs-today-count') || '0', 10) || 0;
+let _signCount = parseInt(localStorage.getItem('signs-today-count-ar') || '0', 10) || 0;
 (function(){
   const today = new Date().toDateString();
-  if (localStorage.getItem('signs-today-date') !== today) {
+  if (localStorage.getItem('signs-today-date-ar') !== today) {
     _signCount = 0;
-    localStorage.setItem('signs-today-date', today);
-    localStorage.setItem('signs-today-count', '0');
+    localStorage.setItem('signs-today-date-ar', today);
+    localStorage.setItem('signs-today-count-ar', '0');
   }
 })();
 // ── Rolling confidence history for sparklines ───────────────
@@ -4355,12 +4351,12 @@ function bumpSignCount(n) {
   // Roll the daily total over at midnight even in a long-lived tab (the load-time
   // reset alone would keep counting into yesterday's bucket until a reload).
   const today = new Date().toDateString();
-  if (localStorage.getItem('signs-today-date') !== today) {
+  if (localStorage.getItem('signs-today-date-ar') !== today) {
     _signCount = 0;
-    localStorage.setItem('signs-today-date', today);
+    localStorage.setItem('signs-today-date-ar', today);
   }
-  _signCount += (n || 1);
-  localStorage.setItem('signs-today-count', String(_signCount));
+  if (n) _signCount += n;
+  localStorage.setItem('signs-today-count-ar', String(_signCount));
   const chipSigns = document.getElementById('chip-signs');
   if (chipSigns) chipSigns.textContent = _signCount;
   const usageToday = document.getElementById('usage-signs-today');
@@ -4485,6 +4481,14 @@ function _addReplayBtn(item, logId) {
   });
   obs.observe(el, { childList: true });
 });
+// Handle ?module= deeplink from landing page feature cards
+(function() {
+  const params = new URLSearchParams(window.location.search);
+  const mod = params.get('module');
+  if (mod && ['vision','speech','text2sign','speech2sign','meeting'].includes(mod)) {
+    if (typeof switchModule === 'function') switchModule(null, mod);
+  }
+})();
 </script>
 
 {% endblock %}

@@ -401,6 +401,9 @@ a.t-user:hover{border-color:var(--accent);background:var(--accent-soft)}
 .d-compose-badge[hidden]{display:none}
 @keyframes dComposePulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.3;transform:scale(.55)}}
 button.is-busy{opacity:.6;cursor:progress}
+button.t-nav-item[aria-label="Sign out"]{border:1px solid transparent}
+button.t-nav-item[aria-label="Sign out"]:hover{border-color:var(--danger-border,rgba(239,68,68,.25));background:var(--danger-soft,rgba(239,68,68,.08));color:var(--danger,#ef4444)}
+button.t-nav-item[aria-label="Sign out"]:hover svg{color:var(--danger,#ef4444)}
 </style>
 
 <a href="#main-content" class="t-skip-link">Skip to content</a>
@@ -874,8 +877,11 @@ button.is-busy{opacity:.6;cursor:progress}
               </div>
             </div>
             <div class="t-eyebrow" id="meeting-caption-label">Live captions</div>
-            <div class="d-meet-caption-box">
-              <div class="d-meet-remote-text" id="remote-sentence">No messages yet.</div>
+            <div class="d-meet-caption-box" style="overflow-y:auto;max-height:220px">
+              <div id="meeting-caption-history" style="display:flex;flex-direction:column;gap:6px">
+                <div class="d-meet-remote-text" style="color:var(--faint);font-size:12px">No messages yet.</div>
+              </div>
+              <div id="remote-sentence" style="display:none"></div>
               <div id="remote-sentence-box" style="display:none"></div>
             </div>
             <button class="t-btn t-btn--ghost" id="meeting-speech-out-btn" onclick="toggleMeetingSpeechOut()" style="display:none">🔊 Read captions</button>
@@ -1948,16 +1954,34 @@ button.is-busy{opacity:.6;cursor:progress}
     const ctx = canvas.getContext('2d');
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-    // Draw skeleton overlay (landmarks already in flipped coordinates)
-    if (window.drawConnectors && window.HAND_CONNECTIONS) {
-      if (results.leftHandLandmarks)
-        drawConnectors(ctx, results.leftHandLandmarks, HAND_CONNECTIONS, { color: '#00ffff', lineWidth: 2 });
-      if (results.rightHandLandmarks)
-        drawConnectors(ctx, results.rightHandLandmarks, HAND_CONNECTIONS, { color: '#ff00ff', lineWidth: 2 });
+    // EMA smoothing + grace frames: keep skeleton visible for LM_GRACE_FRAMES after hands leave
+    const rawLh = results.leftHandLandmarks || null;
+    const rawRh = results.rightHandLandmarks || null;
+    const handsPresent = !!(rawLh || rawRh);
+    _hsHandsPresent = handsPresent;
+
+    if (rawLh) { _lhLmSmooth = _emaLandmarks(_lhLmSmooth, rawLh); _lhLastSeen = _lhLmSmooth; }
+    if (rawRh) { _rhLmSmooth = _emaLandmarks(_rhLmSmooth, rawRh); _rhLastSeen = _rhLmSmooth; }
+
+    let lhDraw, rhDraw;
+    if (handsPresent) {
+      _lmGrace = LM_GRACE_FRAMES;
+      lhDraw = _lhLmSmooth;
+      rhDraw = _rhLmSmooth;
+    } else if (_lmGrace > 0) {
+      _lmGrace--;
+      lhDraw = _lhLastSeen;
+      rhDraw = _rhLastSeen;
+    } else {
+      _lhLmSmooth = null; _rhLmSmooth = null;
+      lhDraw = null; rhDraw = null;
     }
 
-    const handsPresent = !!(results.leftHandLandmarks || results.rightHandLandmarks);
-    _hsHandsPresent = handsPresent;  // expose to sign_conf / sign_detected handlers
+    // Draw skeleton overlay
+    if (window.drawConnectors && window.HAND_CONNECTIONS) {
+      if (lhDraw) drawConnectors(ctx, lhDraw, HAND_CONNECTIONS, { color: '#00ffff', lineWidth: 2 });
+      if (rhDraw) drawConnectors(ctx, rhDraw, HAND_CONNECTIONS, { color: '#ff00ff', lineWidth: 2 });
+    }
 
     if (handsPresent) {
       consecutiveHand++;
@@ -2926,6 +2950,19 @@ button.is-busy{opacity:.6;cursor:progress}
     sentence.textContent = payloadText;
     sentence.style.color = '#111111';
 
+    const historyEl = document.getElementById('meeting-caption-history');
+    if (historyEl) {
+      const ph = historyEl.querySelector('.d-meet-remote-text');
+      if (ph && ph.style.color === 'var(--faint)') ph.remove();
+      const msg = document.createElement('div');
+      msg.className = 'd-meet-remote-text';
+      msg.style.cssText = 'font-size:13px;padding:4px 0;border-bottom:1px solid var(--border)';
+      const time = new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});
+      msg.innerHTML = `<span style="color:var(--faint);font-size:10px;font-family:var(--font-mono)">${time}</span> ${text}`;
+      historyEl.appendChild(msg);
+      historyEl.scrollTop = historyEl.scrollHeight;
+    }
+
     const overlay = document.getElementById('meeting-subtitle-overlay');
     if (overlay) {
       overlay.textContent = payloadText;
@@ -3723,6 +3760,8 @@ button.is-busy{opacity:.6;cursor:progress}
     document.getElementById('meeting-room-id').value = currentMeetingRoom;
     document.getElementById('remote-sentence').textContent = 'No messages yet.';
     document.getElementById('remote-sentence').style.color = 'var(--gray-500)';
+    const _histEl = document.getElementById('meeting-caption-history');
+    if (_histEl) { _histEl.innerHTML = '<div class="d-meet-remote-text" style="color:var(--faint);font-size:12px">No messages yet.</div>'; }
     setMeetingUiState(false);
     initMeetingRoleUi();
 
@@ -4679,6 +4718,14 @@ function _addReplayBtn(item, logId) {
   });
   obs.observe(el, { childList: true });
 });
+// Handle ?module= deeplink from landing page feature cards
+(function() {
+  const params = new URLSearchParams(window.location.search);
+  const mod = params.get('module');
+  if (mod && ['vision','speech','text2sign','speech2sign','meeting'].includes(mod)) {
+    if (typeof switchModule === 'function') switchModule(null, mod);
+  }
+})();
 </script>
 
 {% endblock %}

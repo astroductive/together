@@ -112,7 +112,7 @@
   .feat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:22px;margin-top:54px}
   .feat-card{padding:28px;border-radius:var(--radius-lg);background:color-mix(in srgb,var(--surface) 80%,transparent);
     border:1px solid var(--border);backdrop-filter:blur(12px);transition:border-color .2s,transform .2s}
-  .feat-card:hover{border-color:var(--accent);transform:translateY(-3px)}
+  .feat-card:hover{border-color:var(--accent);transform:translateY(-3px);cursor:pointer}
   .feat-icon{width:44px;height:44px;border-radius:var(--radius);background:var(--accent-soft);display:grid;place-items:center;color:var(--accent);margin-bottom:18px}
   .feat-icon svg{width:22px;height:22px}
   .feat-name{font-size:16px;font-weight:700;color:var(--text);margin-bottom:8px}
@@ -362,37 +362,43 @@
   <!-- Features -->
   <section class="lp-section" id="features">
     <p class="sec-eyebrow">( 01 ) — منتجاتنا</p>
-    <h2 class="sec-title">أربعة جسور.<br>منصة واحدة.</h2>
+    <h2 class="sec-title">خمسة جسور.<br>منصة واحدة.</h2>
     <p class="sec-sub">كل اتجاهات التواصل بلغة الإشارة — مغطاة، في الوقت الفعلي، بذكاء اصطناعي على الجهاز لا يغادر متصفحك.</p>
     <div class="feat-grid">
-      <div class="feat-card">
+      <a class="feat-card" href="/dashboard?module=vision" style="text-decoration:none;color:inherit">
         <div class="feat-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg></div>
         <div class="feat-name">HandScript</div>
         <div class="feat-name-ar">يدك تصبح كلمات</div>
         <p class="feat-desc">تعرّف فوري على لغة الإشارة بأكثر من 250 إشارة، يظهر النص أمامك أثناء توقيعك.</p>
         <span class="feat-badge">إشارة → نص</span>
-      </div>
-      <div class="feat-card">
+      </a>
+      <a class="feat-card" href="/dashboard?module=speech" style="text-decoration:none;color:inherit">
         <div class="feat-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2M12 19v4M8 23h8"/></svg></div>
         <div class="feat-name">VoiceBridge</div>
         <div class="feat-name-ar">جسر الصوت</div>
         <p class="feat-desc">تحويل الإشارات إلى كلام طبيعي في الوقت الفعلي. مثالي للتواصل المباشر مع السامعين.</p>
         <span class="feat-badge">إشارة → كلام</span>
-      </div>
-      <div class="feat-card">
+      </a>
+      <a class="feat-card" href="/dashboard?module=text2sign" style="text-decoration:none;color:inherit">
         <div class="feat-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></div>
         <div class="feat-name">SignType</div>
         <div class="feat-name-ar">اكتب فأُشير</div>
         <p class="feat-desc">اكتب أي نص وشاهد أفاتار متحركاً يؤديه بلغة الإشارة الأمريكية أو المصرية بسلاسة.</p>
         <span class="feat-badge">نص → إشارة</span>
-      </div>
-      <div class="feat-card">
+      </a>
+      <a class="feat-card" href="/dashboard?module=speech2sign" style="text-decoration:none;color:inherit">
         <div class="feat-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M4.93 4.93a10 10 0 0 0 0 14.14"/></svg></div>
         <div class="feat-name">TalkSide</div>
         <div class="feat-name-ar">تحدّث فأُشير</div>
         <p class="feat-desc">تحدّث في أي ميكروفون وسيُنشئ النظام ردّاً مرئياً بالإشارة. مثالي لنقاط الوصول.</p>
         <span class="feat-badge">كلام → إشارة</span>
-      </div>
+      </a>
+      <a class="feat-card" href="/dashboard?module=meeting" style="text-decoration:none;color:inherit">
+        <div class="feat-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M15 10l4.553-2.069A1 1 0 0121 8.869v6.262a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg></div>
+        <div class="feat-name">خط التواصل</div>
+        <p class="feat-desc">مكالمات فيديو ثنائية الاتجاه مع ترجمة لغة الإشارة في الوقت الفعلي</p>
+        <span class="feat-badge">اجتماع مباشر</span>
+      </a>
     </div>
   </section>
 
