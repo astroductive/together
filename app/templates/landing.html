@@ -196,6 +196,18 @@
     .hiw-wrap::before{display:none}
     .lp-nav-links{display:none}
   }
+  @media (max-width:680px){
+    .lp-nav{padding-inline:16px;gap:6px}
+    .lp-nav-end{margin-inline-start:auto;gap:8px;flex-wrap:nowrap;overflow-x:auto;
+                -webkit-overflow-scrolling:touch;scrollbar-width:none}
+    .lp-nav-end::-webkit-scrollbar{display:none}
+    .lp-nav-sep{display:none}
+    .lp-nav-brand-tag{display:none}
+  }
+  @media (max-width:420px){
+    .lp-btn-demo{display:none}
+    .lp-nav-brand-name{height:18px}
+  }
 </style>
 {% endblock %}
 

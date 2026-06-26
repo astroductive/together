@@ -215,8 +215,8 @@ html[data-theme="light"] .t-brand-name{filter:none}
 .d-meet-code-val{font-family:var(--font-display);font-size:26px;font-weight:800;letter-spacing:.12em;color:var(--text)}
 .d-meet-stage{display:grid;grid-template-columns:1fr 300px;gap:20px}
 @media(max-width:960px){.d-meet-stage{grid-template-columns:1fr}}
-.d-meet-videos{display:grid;grid-template-columns:1fr 1fr;gap:12px;border-radius:14px;overflow:hidden;border:1px solid var(--border);background:var(--border);min-height:240px}
-.d-meet-vid-wrap{position:relative;background:var(--surface-2);aspect-ratio:4/3}
+.d-meet-videos{display:grid;grid-template-columns:1fr 1fr;gap:12px;border-radius:14px;overflow:hidden;border:1px solid var(--border);background:var(--border);min-height:240px;max-height:min(52vh,460px)}
+.d-meet-vid-wrap{position:relative;background:var(--surface-2);aspect-ratio:4/3;max-height:min(52vh,460px);overflow:hidden}
 .d-meet-vid-wrap video{width:100%;height:100%;object-fit:cover}
 .d-meet-vid-lbl{position:absolute;top:10px;inset-inline-start:10px;background:rgba(0,0,0,.55);color:#fff;padding:3px 8px;border-radius:6px;font-size:11px;font-weight:700;z-index:5}
 .d-meet-ph{width:100%;height:100%;display:flex;align-items:center;justify-content:center;color:var(--faint);font-size:13px;text-transform:uppercase;letter-spacing:.04em}
@@ -404,6 +404,28 @@ button.is-busy{opacity:.6;cursor:progress}
 button.t-nav-item[aria-label="Sign out"]{border:1px solid transparent}
 button.t-nav-item[aria-label="Sign out"]:hover{border-color:var(--danger-border,rgba(239,68,68,.25));background:var(--danger-soft,rgba(239,68,68,.08));color:var(--danger,#ef4444)}
 button.t-nav-item[aria-label="Sign out"]:hover svg{color:var(--danger,#ef4444)}
+/* ════ MOBILE OPTIMIZATION (consolidated) ════ */
+@media (max-width:860px){
+  .d-panel.active{padding-bottom:calc(64px + env(safe-area-inset-bottom,0px))}
+  .d-col,.d-meet{padding-bottom:calc(64px + env(safe-area-inset-bottom,0px))}
+  .d-meet{padding-left:16px;padding-right:16px;padding-top:18px}
+  .d-stat-grid{padding-left:16px;padding-right:16px}
+  .d-mobile-picker,.d-mobile-qa{padding-left:16px;padding-right:16px}
+  .t-topbar{padding:14px 16px}
+  .t-tbar{gap:8px}
+  .d-vp{margin-left:16px;margin-right:16px;width:auto;max-height:min(60vh,420px)}
+}
+@media (max-width:600px){
+  .d-meet-videos{grid-template-columns:1fr}
+  #meeting-composer .t-input{min-width:0;flex:1 1 140px}
+}
+@media (max-width:480px){
+  .t-title{font-size:19px}
+  .d-meet-title{font-size:21px}
+  .d-box{margin-left:14px;margin-right:14px}
+  .d-t2s-row{margin-left:14px;margin-right:14px}
+  .d-meet-code-val{font-size:21px;letter-spacing:.08em;word-break:break-all}
+}
 </style>
 
 <a href="#main-content" class="t-skip-link">Skip to content</a>
@@ -877,6 +899,12 @@ button.t-nav-item[aria-label="Sign out"]:hover svg{color:var(--danger,#ef4444)}
               </div>
             </div>
             <div class="t-eyebrow" id="meeting-caption-label">Live captions</div>
+            <div id="meeting-compose-bar" style="display:none;gap:6px;align-items:center;margin-bottom:8px">
+              <span id="meeting-gloss-preview" style="flex:1;font-family:var(--font-mono);font-size:12px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">No signs buffered</span>
+              <span id="meeting-compose-badge" class="d-compose-badge" hidden>Composing…</span>
+              <button id="meeting-compose-btn" class="t-btn t-btn--accent" onclick="composeMeetingSentence()" disabled>Compose</button>
+              <button id="meeting-compose-clear" class="t-btn t-btn--ghost" onclick="clearMeetingGloss()">Clear</button>
+            </div>
             <div class="d-meet-caption-box" style="overflow-y:auto;max-height:220px">
               <div id="meeting-caption-history" style="display:flex;flex-direction:column;gap:6px">
                 <div class="d-meet-remote-text" style="color:var(--faint);font-size:12px">No messages yet.</div>
@@ -1820,9 +1848,18 @@ button.t-nav-item[aria-label="Sign out"]:hover svg{color:var(--danger,#ef4444)}
 
       if (inMeeting && meetingCamStream && stream === meetingCamStream) {
         console.log("[Camera] Reusing meeting stream frame loop...");
+        // In a meeting, MediaPipe runs on the SAME thread that composites the
+        // local + remote <video> elements. Running Holistic at full RAF rate
+        // starves the compositor and makes BOTH feeds choppy. Throttle inference
+        // hard while in a meeting so the video stays smooth.
+        let _mLastFrameMs = 0;
+        const _MEET_FRAME_INTERVAL = 1000 / 10; // 10fps inference in-meeting
         const runFrame = async () => {
           if (!cameraOn || !inMeeting) return;
-          if (video.readyState >= 2 && holistic && !_holisticBusy) {
+          const now = performance.now();
+          if (now - _mLastFrameMs >= _MEET_FRAME_INTERVAL &&
+              video.readyState >= 2 && holistic && !_holisticBusy) {
+            _mLastFrameMs = now;
             _holisticBusy = true;
             try {
               await holistic.send({ image: video });
@@ -2207,14 +2244,20 @@ button.t-nav-item[aria-label="Sign out"]:hover svg{color:var(--danger,#ef4444)}
     if (typeof bumpSignCount === 'function') bumpSignCount(1);
 
     // Broadcast to Live Meeting room if connected
-    if (inMeeting && socket) {
+    // In a meeting, the Signer buffers detected words and composes a sentence on
+    // demand (Gemini) — we do NOT spam the recipient with raw gloss words.
+    if (inMeeting && socket && isDeafHohUser) {
+      if (!Array.isArray(window.__meetGlossBuf)) window.__meetGlossBuf = [];
+      window.__meetGlossBuf.push(word);
+      const preview = document.getElementById('meeting-gloss-preview');
+      if (preview) preview.textContent = window.__meetGlossBuf.join(' ') || 'No signs buffered';
+      const cbtn = document.getElementById('meeting-compose-btn');
+      if (cbtn) cbtn.disabled = window.__meetGlossBuf.length === 0;
+    } else if (inMeeting && socket) {
       const roomId = currentMeetingRoom || document.getElementById('meeting-room-id').value.trim() || 'general';
       renderMeetingSentence(word, userRole, true);
       socket.emit('translate_sentence', {
-        text: word,
-        room: roomId,
-        mode: 'sign_word',
-        senderRole: userRole,
+        text: word, room: roomId, mode: 'sign_word', senderRole: userRole,
       });
     }
   }
@@ -2873,9 +2916,21 @@ button.t-nav-item[aria-label="Sign out"]:hover svg{color:var(--danger,#ef4444)}
           }
           remoteVideo.srcObject.addTrack(event.track);
         }
-        remoteVideo.style.display = 'block';
-        const placeholder = document.getElementById('meeting-video-placeholder');
-        if (placeholder) placeholder.style.display = 'none';
+        // Only reveal the remote <video> when it actually carries a video track —
+        // an audio-only track must not hide the avatar/placeholder.
+        const hasVideo = remoteVideo.srcObject &&
+          remoteVideo.srcObject.getVideoTracks &&
+          remoteVideo.srcObject.getVideoTracks().length > 0;
+        if (hasVideo) {
+          remoteVideo.style.display = 'block';
+          const placeholder = document.getElementById('meeting-video-placeholder');
+          if (placeholder) placeholder.style.display = 'none';
+          // A real remote camera stream must NOT be hidden behind the speaker
+          // avatar overlay (absolute, z-index:5). Hide the avatar corner so the
+          // peer's video is visible; the avatar is only for the no-video case.
+          const corner = document.getElementById('meeting-avatar-corner');
+          if (corner) corner.classList.remove('visible');
+        }
       }
     };
 
@@ -2956,9 +3011,21 @@ button.t-nav-item[aria-label="Sign out"]:hover svg{color:var(--danger,#ef4444)}
       if (ph && ph.style.color === 'var(--faint)') ph.remove();
       const msg = document.createElement('div');
       msg.className = 'd-meet-remote-text';
-      msg.style.cssText = 'font-size:13px;padding:4px 0;border-bottom:1px solid var(--border)';
+      msg.style.cssText = 'font-size:13px;padding:4px 0;border-bottom:1px solid var(--border);display:flex;gap:6px;align-items:flex-start';
       const time = new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});
-      msg.innerHTML = `<span style="color:var(--faint);font-size:10px;font-family:var(--font-mono)">${time}</span> ${text}`;
+      const txtSpan = document.createElement('span');
+      txtSpan.style.flex = '1';
+      txtSpan.innerHTML = `<span style="color:var(--faint);font-size:10px;font-family:var(--font-mono)">${time}</span> <span class="d-hist-text"></span>`;
+      txtSpan.querySelector('.d-hist-text').textContent = payloadText || text;
+      msg.appendChild(txtSpan);
+      if (localEcho) {
+        const editBtn = document.createElement('button');
+        editBtn.textContent = '✎';
+        editBtn.className = 't-btn t-btn--ghost';
+        editBtn.style.cssText = 'padding:0 6px;font-size:11px';
+        editBtn.onclick = () => editMeetingHistory(msg);
+        msg.appendChild(editBtn);
+      }
       historyEl.appendChild(msg);
       historyEl.scrollTop = historyEl.scrollHeight;
     }
@@ -2973,6 +3040,15 @@ button.t-nav-item[aria-label="Sign out"]:hover svg{color:var(--danger,#ef4444)}
 
     const flags = getMeetingRoleFlags(senderRole);
     if (isDeafHohUser && flags.isSpeaker) {
+      // The Deaf user should SEE THE SIGN, not read text. Promote the avatar
+      // corner above the peer video while it plays.
+      const corner = document.getElementById('meeting-avatar-corner');
+      const remoteVideo = document.getElementById('remote_video');
+      if (corner) {
+        corner.classList.add('visible');
+        corner.style.zIndex = '20';
+        if (remoteVideo) remoteVideo.style.opacity = '0.25';
+      }
       playMeetingAvatarFromText(payloadText);
     }
 
@@ -2983,6 +3059,79 @@ button.t-nav-item[aria-label="Sign out"]:hover svg{color:var(--danger,#ef4444)}
       window.speechSynthesis.speak(utt);
     }
   }
+
+  async function composeMeetingSentence() {
+    if (!inMeeting || !socket || !socket.connected) { setStatus('Join meeting first', false); return; }
+    const buf = Array.isArray(window.__meetGlossBuf) ? window.__meetGlossBuf : [];
+    if (buf.length === 0) return;
+    const gloss = [...buf];
+    window.__meetGlossBuf = [];
+    const badge = document.getElementById('meeting-compose-badge');
+    const btn = document.getElementById('meeting-compose-btn');
+    if (badge) badge.hidden = false;
+    if (btn) btn.disabled = true;
+    try {
+      const res = await authFetch('/api/translate/sentence', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ gloss, language: forcedLang === 'ar' ? 'arabic' : 'english' }),
+      });
+      const data = res.ok ? await res.json() : {};
+      const sentence = (data.sentence || gloss.join(' ')).trim();
+      const roomId = currentMeetingRoom || 'general';
+      renderMeetingSentence(sentence, userRole, true);
+      socket.emit('translate_sentence', {
+        text: sentence, room: roomId, mode: 'sign_sentence', senderRole: userRole,
+      });
+      setStatus('Sentence sent', true);
+    } catch (err) {
+      console.error('[meeting compose]', err);
+      setStatus('Compose failed', false);
+      window.__meetGlossBuf = gloss;
+    } finally {
+      if (badge) badge.hidden = true;
+      const preview = document.getElementById('meeting-gloss-preview');
+      const remain = Array.isArray(window.__meetGlossBuf) ? window.__meetGlossBuf : [];
+      if (preview) preview.textContent = remain.join(' ') || 'No signs buffered';
+      if (btn) btn.disabled = remain.length === 0;
+    }
+  }
+  window.composeMeetingSentence = composeMeetingSentence;
+
+  function clearMeetingGloss() {
+    window.__meetGlossBuf = [];
+    const preview = document.getElementById('meeting-gloss-preview');
+    if (preview) preview.textContent = 'No signs buffered';
+    const btn = document.getElementById('meeting-compose-btn');
+    if (btn) btn.disabled = true;
+  }
+  window.clearMeetingGloss = clearMeetingGloss;
+
+  function editMeetingHistory(rowEl) {
+    const span = rowEl.querySelector('.d-hist-text');
+    if (!span) return;
+    const current = span.textContent;
+    const input = document.createElement('input');
+    input.className = 't-input';
+    input.value = current;
+    input.style.cssText = 'flex:1;font-size:13px';
+    const save = () => {
+      const corrected = (input.value || '').trim();
+      if (corrected && corrected !== current && socket && inMeeting) {
+        socket.emit('translate_sentence', {
+          text: corrected, room: currentMeetingRoom || 'general',
+          mode: 'correction', senderRole: userRole,
+        });
+        span.textContent = corrected;
+      }
+      if (input.parentNode) input.replaceWith(span);
+    };
+    input.onkeydown = (e) => { if (e.key === 'Enter') save(); if (e.key === 'Escape') { if (input.parentNode) input.replaceWith(span); } };
+    input.onblur = save;
+    span.replaceWith(input);
+    input.focus();
+  }
+  window.editMeetingHistory = editMeetingHistory;
 
   function setMeetingUiState(connected) {
     const pill = document.getElementById('meeting-status-pill');
@@ -3092,6 +3241,8 @@ button.t-nav-item[aria-label="Sign out"]:hover svg{color:var(--danger,#ef4444)}
         if (signBtn) signBtn.style.display = 'none';
         if (composer) composer.style.display = 'none';
         if (speechBtn) speechBtn.style.display = 'none';
+        const composeBar = document.getElementById('meeting-compose-bar');
+        if (composeBar) composeBar.style.display = 'flex';
       } else {
         if (camBtn) camBtn.style.display = 'inline-flex';
         if (micBtn) micBtn.style.display = 'inline-flex';
@@ -3102,15 +3253,25 @@ button.t-nav-item[aria-label="Sign out"]:hover svg{color:var(--danger,#ef4444)}
           speechBtn.classList.toggle('on', meetingSpeechOutOn);
           speechBtn.textContent = meetingSpeechOutOn ? '🔊 Read captions' : '🔇 Captions only';
         }
+        const composeBar = document.getElementById('meeting-compose-bar');
+        if (composeBar) composeBar.style.display = 'none';
 
         const corner = document.getElementById('meeting-avatar-corner');
         const canvas = document.getElementById('meeting-avatar-canvas');
+        const remoteVid = document.getElementById('remote_video');
+        const remoteHasVideo = remoteVid && remoteVid.style.display === 'block';
         if (corner && canvas) {
-          corner.classList.add('visible');
-          const ctx = canvas.getContext('2d');
-          canvas.width = 440;
-          canvas.height = 320;
-          drawAuraAvatar(ctx, null, canvas.width, canvas.height);
+          // Show the speaker avatar only as a fallback when the peer is NOT
+          // sending a real camera stream — otherwise it covers their video.
+          if (remoteHasVideo) {
+            corner.classList.remove('visible');
+          } else {
+            corner.classList.add('visible');
+            const ctx = canvas.getContext('2d');
+            canvas.width = 440;
+            canvas.height = 320;
+            drawAuraAvatar(ctx, null, canvas.width, canvas.height);
+          }
         }
       }
 
@@ -3133,6 +3294,8 @@ button.t-nav-item[aria-label="Sign out"]:hover svg{color:var(--danger,#ef4444)}
       if (signBtn) signBtn.style.display = 'none';
       if (composer) composer.style.display = 'none';
       if (speechBtn) speechBtn.style.display = 'none';
+      const composeBar = document.getElementById('meeting-compose-bar');
+      if (composeBar) composeBar.style.display = 'none';
     }
   }
 
@@ -3163,7 +3326,10 @@ button.t-nav-item[aria-label="Sign out"]:hover svg{color:var(--danger,#ef4444)}
       if (!res.ok) return;
 
       const data = await res.json();
-      if (!data.found || data.found.length === 0) return;
+      if (!data.found || data.found.length === 0) {
+        setStatus(`No sign clip for "${text}"`, false);
+        return;
+      }
 
       for (const item of data.found) {
         const lms = item.landmarks || [];
@@ -3179,6 +3345,8 @@ button.t-nav-item[aria-label="Sign out"]:hover svg{color:var(--danger,#ef4444)}
       // no-op
     } finally {
       meetingAvatarPlaying = false;
+      const _rv = document.getElementById('remote_video');
+      if (_rv) _rv.style.opacity = '1';
     }
   }
 
@@ -3914,24 +4082,51 @@ button.t-nav-item[aria-label="Sign out"]:hover svg{color:var(--danger,#ef4444)}
             }
           }
         };
+        // Transient errors (no-speech, aborted, audio-capture hiccup) must NOT
+        // kill the mic — only permission / unsupported errors are fatal.
+        const FATAL_MIC_ERRORS = new Set(['not-allowed', 'service-not-allowed', 'bad-grammar', 'language-not-supported']);
         meetingMicRec.onerror = (e) => {
-          console.error('[Meeting Mic] SpeechRecognition error:', e.error);
-          try { meetingMicRec.stop(); } catch(_) {}
-          meetingMicRec = null;
+          console.warn('[Meeting Mic] SpeechRecognition error:', e.error);
+          if (FATAL_MIC_ERRORS.has(e.error)) {
+            meetingMicOn = false;
+            try { meetingMicRec.abort(); } catch(_) {}
+            meetingMicRec = null;
+            btn.textContent = '🔇 Mic Off';
+            btn.style.background = 'rgba(255,255,255,0.1)';
+            btn.style.color = 'rgba(255,255,255,0.5)';
+            setStatus('Mic blocked: ' + (e.error || 'unknown'), false);
+            renderMobileQuickActions();
+          } else {
+            setStatus('Listening…', true);
+          }
+        };
+        meetingMicRec.onspeechstart = () => { btn.textContent = '🎙️ Hearing you…'; };
+        meetingMicRec.onspeechend   = () => { if (meetingMicOn) btn.textContent = '🎙️ Mic On'; };
+        meetingMicRec.onend = () => {
+          if (meetingMicOn && meetingMicRec) {
+            try { meetingMicRec.start(); }
+            catch(err) {
+              if (String(err && err.name) !== 'InvalidStateError') {
+                meetingMicOn = false;
+                btn.textContent = '🔇 Mic Off';
+                btn.style.background = 'rgba(255,255,255,0.1)';
+                btn.style.color = 'rgba(255,255,255,0.5)';
+                renderMobileQuickActions();
+              }
+            }
+          }
+        };
+        try {
+          meetingMicRec.start();
+        } catch (err) {
           meetingMicOn = false;
+          meetingMicRec = null;
           btn.textContent = '🔇 Mic Off';
           btn.style.background = 'rgba(255,255,255,0.1)';
           btn.style.color = 'rgba(255,255,255,0.5)';
-          setStatus('Mic error: ' + (e.error || 'unknown'), false);
+          setStatus('Mic busy — press again', false);
           renderMobileQuickActions();
-        };
-        meetingMicRec.onend = () => {
-          if (meetingMicOn) {
-            // Recognition stopped but flag says it should be on — restart
-            try { meetingMicRec.start(); } catch(_) { meetingMicOn = false; btn.textContent = '🔇 Mic Off'; btn.style.background='rgba(255,255,255,0.1)';btn.style.color='rgba(255,255,255,0.5)'; renderMobileQuickActions(); }
-          }
-        };
-        meetingMicRec.start();
+        }
       } else {
         meetingMicOn = false;
         btn.textContent = '🔇 Mic Off';

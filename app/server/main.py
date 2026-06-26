@@ -533,75 +533,111 @@ async def health(warm: bool = False):
 # PAGE ROUTES
 # ═══════════════════════════════════════════════════════════════
 
+# ── UI language resolution ────────────────────────────────────
+# Language precedence: explicit ?lang= query param → 'lang' cookie → 'en'.
+# When an explicit, valid ?lang= is supplied we persist it as a long-lived
+# cookie so subsequent param-less navigation (plain links like /about) stays
+# in the chosen language. Each localized route picks `<name>_ar.html` when the
+# language is Arabic and that template exists, else falls back to the English
+# template — so missing _ar variants degrade gracefully instead of 500ing.
+SUPPORTED_LANGS = ("en", "ar")
+LANG_COOKIE = "lang"
+_TEMPLATES_DIR = os.path.join(BASE_DIR, "templates")
+
+
+def _localized_page(request: Request, base_name: str, lang: str | None):
+    """Render base_name (en) or its _ar.html sibling based on resolved language.
+
+    base_name is given without extension, e.g. 'about' or 'products/handscript'.
+    Falls back to the English template if the Arabic variant is missing.
+    """
+    chosen = (lang or "").strip().lower()
+    persist = chosen in SUPPORTED_LANGS
+    if not persist:
+        chosen = (request.cookies.get(LANG_COOKIE) or "en").strip().lower()
+        if chosen not in SUPPORTED_LANGS:
+            chosen = "en"
+
+    template_name = f"{base_name}.html"
+    if chosen == "ar":
+        ar_name = f"{base_name}_ar.html"
+        if os.path.exists(os.path.join(_TEMPLATES_DIR, ar_name)):
+            template_name = ar_name
+
+    resp = templates.TemplateResponse(request, template_name)
+    if persist:
+        resp.set_cookie(
+            LANG_COOKIE, chosen,
+            max_age=60 * 60 * 24 * 365, samesite="lax", path="/",
+        )
+    return resp
+
+
 @app.get("/", response_class=HTMLResponse)
-async def home(request: Request, lang: str = "en"):
-    if lang == "ar":
-        return templates.TemplateResponse(request, "landing_ar.html")
-    return templates.TemplateResponse(request, "landing.html")
+async def home(request: Request, lang: str | None = None):
+    return _localized_page(request, "landing", lang)
 
 @app.get("/dashboard", response_class=HTMLResponse)
-async def dashboard_page(request: Request, lang: str = "en"):
-    if lang == "ar":
-        return templates.TemplateResponse(request, "index_ar.html")
-    return templates.TemplateResponse(request, "index.html")
+async def dashboard_page(request: Request, lang: str | None = None):
+    return _localized_page(request, "index", lang)
 
 @app.get("/login", response_class=HTMLResponse)
-async def login_page(request: Request):
-    return templates.TemplateResponse(request, "login.html")
+async def login_page(request: Request, lang: str | None = None):
+    return _localized_page(request, "login", lang)
 
 @app.get("/signup", response_class=HTMLResponse)
-async def signup_page(request: Request):
-    return templates.TemplateResponse(request, "signup.html")
+async def signup_page(request: Request, lang: str | None = None):
+    return _localized_page(request, "signup", lang)
 
 @app.get("/products/handscript", response_class=HTMLResponse)
-async def page_handscript(request: Request):
-    return templates.TemplateResponse(request, "products/handscript.html")
+async def page_handscript(request: Request, lang: str | None = None):
+    return _localized_page(request, "products/handscript", lang)
 
 @app.get("/products/voicebridge", response_class=HTMLResponse)
-async def page_voicebridge(request: Request):
-    return templates.TemplateResponse(request, "products/voicebridge.html")
+async def page_voicebridge(request: Request, lang: str | None = None):
+    return _localized_page(request, "products/voicebridge", lang)
 
 @app.get("/products/signtype", response_class=HTMLResponse)
-async def page_signtype(request: Request):
-    return templates.TemplateResponse(request, "products/signtype.html")
+async def page_signtype(request: Request, lang: str | None = None):
+    return _localized_page(request, "products/signtype", lang)
 
 @app.get("/products/talkside", response_class=HTMLResponse)
-async def page_talkside(request: Request):
-    return templates.TemplateResponse(request, "products/talkside.html")
+async def page_talkside(request: Request, lang: str | None = None):
+    return _localized_page(request, "products/talkside", lang)
 
 @app.get("/languages/asl", response_class=HTMLResponse)
-async def page_asl(request: Request):
-    return templates.TemplateResponse(request, "languages/asl.html")
+async def page_asl(request: Request, lang: str | None = None):
+    return _localized_page(request, "languages/asl", lang)
 
 @app.get("/languages/arsl", response_class=HTMLResponse)
-async def page_arsl(request: Request):
-    return templates.TemplateResponse(request, "languages/arsl.html")
+async def page_arsl(request: Request, lang: str | None = None):
+    return _localized_page(request, "languages/arsl", lang)
 
 @app.get("/resources", response_class=HTMLResponse)
-async def page_resources(request: Request):
-    return templates.TemplateResponse(request, "resources.html")
+async def page_resources(request: Request, lang: str | None = None):
+    return _localized_page(request, "resources", lang)
 
 @app.get("/about", response_class=HTMLResponse)
-async def page_about(request: Request):
-    return templates.TemplateResponse(request, "about.html")
+async def page_about(request: Request, lang: str | None = None):
+    return _localized_page(request, "about", lang)
 
 @app.get("/partnership", response_class=HTMLResponse)
-async def page_partnership(request: Request):
-    return templates.TemplateResponse(request, "partnership.html")
+async def page_partnership(request: Request, lang: str | None = None):
+    return _localized_page(request, "partnership", lang)
 
 @app.get("/contact", response_class=HTMLResponse)
-async def page_contact(request: Request):
-    return templates.TemplateResponse(request, "contact.html")
+async def page_contact(request: Request, lang: str | None = None):
+    return _localized_page(request, "contact", lang)
 
 @app.get("/demo", response_class=HTMLResponse)
-async def page_demo(request: Request):
-    return templates.TemplateResponse(request, "demo.html")
+async def page_demo(request: Request, lang: str | None = None):
+    return _localized_page(request, "demo", lang)
 
 @app.get("/profile", response_class=HTMLResponse)
-async def profile_page(request: Request):
+async def profile_page(request: Request, lang: str | None = None):
     # Auth is enforced client-side (requireAuth) like the dashboard; the page
     # itself is just the shell and fetches /api/auth/me with the bearer token.
-    return templates.TemplateResponse(request, "profile.html")
+    return _localized_page(request, "profile", lang)
 
 
 # ═══════════════════════════════════════════════════════════════
