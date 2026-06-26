@@ -1,0 +1,64 @@
+{% extends "_inner_base_ar.html" %}
+{% block title %}VoiceBridge — من الإشارة إلى الصوت{% endblock %}
+{% block content %}
+<canvas id="sf-canvas" aria-hidden="true"></canvas>
+<div class="pg-hero">
+  <span class="pg-badge">الإشارة ← الصوت</span>
+  <h1 class="pg-h1">إشارات<br><em>تتحدّث نيابةً عنك.</em></h1>
+  <p class="pg-lead">يحوّل VoiceBridge لغة الإشارة الأمريكية ASL مباشرةً إلى كلامٍ منطوقٍ طبيعي، لتتواصل مع الأشخاص السامعين وجهاً لوجه، دون أن تفصل بينكما شاشة هاتف.</p>
+</div>
+
+<div class="pg-section">
+  <h2>الأداء في لمحة</h2>
+  <div class="spec-grid">
+    <div class="spec-card"><div class="spec-val">&lt;80ms</div><div class="spec-key">سلسلة المعالجة من الطرف إلى الطرف</div></div>
+    <div class="spec-card"><div class="spec-val">12</div><div class="spec-key">نمط صوتي متاح</div></div>
+    <div class="spec-card"><div class="spec-val">92%</div><div class="spec-key">دقة التعرّف</div></div>
+    <div class="spec-card"><div class="spec-val">دون اتصال</div><div class="spec-key">يعمل من دون إنترنت</div></div>
+  </div>
+</div>
+
+<div class="pg-section">
+  <h2>كيف يعمل</h2>
+  <p>يربط VoiceBridge مخرجات التعرّف من HandScript مباشرةً بواجهة تخليق الكلام Web Speech Synthesis API. فبمجرد أن يُصدر HandScript تنبؤاً موثوقاً (يتجاوز عتبة الثقة القابلة للضبط)، يضع VoiceBridge الكلمة أو العبارة في قائمة انتظار النطق. ويعتمد التخليق على أصوات تحويل النص إلى كلام المدمجة في المتصفح، فلا يُجرى أي طلب إلى واجهة برمجية خارجية، مما يحافظ على إمكانية العمل دون اتصال.</p>
+  <p>يمنع تأخيرٌ زمني قائم على الفونيمات مدته 200ms الإشاراتِ الجزئية من إطلاق نطقٍ مبكّر. وتُكتشف حدود الجمل بأسلوب استدلالي عبر فجوات التوقّف بين الإشارات التي تتجاوز مدتها 600ms، وعندها يُفرَّغ النص المخزّن مؤقتاً كعبارةٍ كاملة بنبرةٍ طبيعية.</p>
+</div>
+
+<div class="pg-section">
+  <h2>حالات الاستخدام</h2>
+  <div class="uc-grid">
+    <div class="uc-card">
+      <div class="uc-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 3h18M3 9h18M3 15h14"/></svg></div>
+      <div class="uc-title">الصيدليات والرعاية الصحية</div>
+      <p class="uc-desc">اطلب دواءً، أو صف أعراضك، أو تابِع نتائجك، بأسلوبٍ صوتيٍّ يحرّر يديك ويغنيك عن الورق.</p>
+    </div>
+    <div class="uc-card">
+      <div class="uc-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg></div>
+      <div class="uc-title">السفر والخدمات العامة</div>
+      <p class="uc-desc">تنقّل في المطارات ومحطات القطار والدوائر الحكومية بثقة. يتحدّث VoiceBridge بإشاراتك إلى الموظفين.</p>
+    </div>
+    <div class="uc-card">
+      <div class="uc-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M20 7H4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2z"/><path d="M12 12v.01"/></svg></div>
+      <div class="uc-title">خدمة العملاء</div>
+      <p class="uc-desc">تصبح منافذ البيع بالتجزئة والبنوك ومحلات الطعام المزوّدة بجهاز لوحي يشغّل VoiceBridge في متناول العملاء الصُمّ على الفور.</p>
+    </div>
+    <div class="uc-card">
+      <div class="uc-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2M9 9h.01M15 9h.01"/></svg></div>
+      <div class="uc-title">المناسبات الاجتماعية وغير الرسمية</div>
+      <p class="uc-desc">موائد العشاء والحفلات والأحاديث العابرة في الممرات، يعيد VoiceBridge للمحادثات العفوية طبيعيّتها.</p>
+    </div>
+  </div>
+</div>
+
+<div class="pg-section">
+  <h2>تخصيص الصوت</h2>
+  <p>يتيح VoiceBridge مجموعة الأصوات الكاملة في واجهة Web Speech API، وهي تشمل على معظم المنصات اثني عشر صوتاً أو أكثر من الأصوات الطبيعية المتنوّعة بين الجنسين واللهجات المختلفة. ويُحفظ الصوت المختار وسرعة النطق في localStorage. كما تتيح لوحة صوت مخصّصة ضمن إعدادات لوحة التحكم للمستخدمين تجربة كل خيار سماعياً.</p>
+</div>
+
+<div class="cta-strip">
+  <h3>اختبر VoiceBridge</h3>
+  <p>بدّل إلى وضع "من الإشارة إلى الصوت" في لوحة التحكم الإنجليزية. يعمل على Chrome وEdge وSafari.</p>
+  <a href="/dashboard?lang=ar">افتح لوحة التحكم</a>
+  <a href="/demo?lang=ar" class="sec">احجز عرضاً توضيحياً</a>
+</div>
+{% endblock %}

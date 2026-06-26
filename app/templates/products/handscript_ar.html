@@ -1,0 +1,65 @@
+{% extends "_inner_base_ar.html" %}
+{% block title %}HandScript — من الإشارة إلى النص{% endblock %}
+{% block content %}
+<canvas id="sf-canvas" aria-hidden="true"></canvas>
+<div class="pg-hero">
+  <span class="pg-badge">من الإشارة إلى النص</span>
+  <h1 class="pg-h1">يداك<br><em>تتحوّلان إلى كلمات.</em></h1>
+  <p class="pg-lead">يحوّل HandScript لغة الإشارة الأمريكية المباشرة إلى نص في الوقت الفعلي — مدعومًا بنموذج TFLite يضمّ 250 فئة ويعمل بالكامل داخل متصفّحك.</p>
+</div>
+
+<div class="pg-section">
+  <h2>الأداء في لمحة</h2>
+  <div class="spec-grid">
+    <div class="spec-card"><div class="spec-val">250</div><div class="spec-key">فئة من إشارات ASL</div></div>
+    <div class="spec-card"><div class="spec-val">&lt;50ms</div><div class="spec-key">زمن استجابة الاستدلال</div></div>
+    <div class="spec-card"><div class="spec-val">92%</div><div class="spec-key">دقة التصنيف الأول</div></div>
+    <div class="spec-card"><div class="spec-val">100%</div><div class="spec-key">على الجهاز — دون أي رفع</div></div>
+  </div>
+</div>
+
+<div class="pg-section">
+  <h2>كيف يعمل</h2>
+  <p>عندما تفتح معاً وتسمح بالوصول إلى الكاميرا، يرسم MediaPipe Holistic 21 نقطة دالّة لليد، و33 نقطة رئيسية للجسم، و468 نقطة دالّة للوجه — كلّها محليًا وفي الوقت الفعلي. تغذّي هذه النقاط نموذج TFLite الذي يصنّف الإشارة الحالية ضمن واحدة من 250 مفردة في معجم ASL. تتدفّق التنبّؤات إلى منطقة النص ما إن تستقرّ نوافذ الثقة المتتالية فوق العتبة المحدّدة.</p>
+  <p>دُرِّب النموذج على مجموعة بيانات ضخمة تضمّ عددًا كبيرًا من مؤدّي الإشارة، مع تنويعات معزّزة في الإضاءة وزاوية اليد وسرعة الأداء. وجرى ضغطه بعد التدريب باستخدام تكميم النطاق الديناميكي int8 لنشره عبر WebAssembly دون أي فقدان في الدقة.</p>
+</div>
+
+<div class="pg-section">
+  <h2>حالات الاستخدام</h2>
+  <div class="uc-grid">
+    <div class="uc-card">
+      <div class="uc-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></div>
+      <div class="uc-title">اجتماعات العمل</div>
+      <p class="uc-desc">يؤدّي المهنيون الصُّمّ الإشارات بينما يقرأ زملاؤهم التسميات التوضيحية المباشرة. لا حاجة إلى جدولة مترجم للمحادثات العفوية.</p>
+    </div>
+    <div class="uc-card">
+      <div class="uc-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg></div>
+      <div class="uc-title">التعليم</div>
+      <p class="uc-desc">يتدرّب الطلاب على المفردات مع تلقّي ملاحظات فورية. ويتحقّق المعلّمون من صحّة الأداء دون مقاطعة سير الحصّة.</p>
+    </div>
+    <div class="uc-card">
+      <div class="uc-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg></div>
+      <div class="uc-title">الرعاية الصحية</div>
+      <p class="uc-desc">يتواصل المرضى مع موظّفي الاستقبال. وتُرفَق نصوص HandScript مباشرةً بملاحظات الاستشارة.</p>
+    </div>
+    <div class="uc-card">
+      <div class="uc-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg></div>
+      <div class="uc-title">صناعة المحتوى</div>
+      <p class="uc-desc">يُنتج مؤدّو الإشارة محتوى لوسائل التواصل الاجتماعي مزوّدًا بتسميات توضيحية تلقائية، دون الحاجة إلى أدوات تفريغ نصّي في مرحلة ما بعد الإنتاج.</p>
+    </div>
+  </div>
+</div>
+
+<div class="pg-section">
+  <h2>البنية التقنية</h2>
+  <p>يعمل HandScript عبر مسار من ثلاث مراحل: <strong>استخراج النقاط الدالّة</strong> بواسطة MediaPipe Holistic (بواجهة WebGL الخلفية)، و<strong>التنعيم الزمني</strong> عبر نافذة متتالية من 15 إطارًا، و<strong>استدلال TFLite</strong> باستخدام بيئة تشغيل WebAssembly. النموذج هجين مدمج من نوع CNN-LSTM: تستخرج بنية MobileNetV3-Small الأساسية السمات المكانية لكل إطار، وتنمذج طبقتان من LSTM الديناميكيات الزمنية عبر النافذة.</p>
+  <p>يبلغ حجم النموذج كاملًا 4.2 ميغابايت (مكمّم بـ int8) ويُحمَّل في أقل من 800 مللي ثانية على حاسوب محمول متوسّط الفئة. ولا يتطلّب وحدة معالجة رسومية — فالاستدلال على المعالج المركزي سريع بما يكفي لمعالجة تدفّقات إدخال بمعدّل 30 إطارًا في الثانية.</p>
+</div>
+
+<div class="cta-strip">
+  <h3>جرّب HandScript الآن</h3>
+  <p>افتح لوحة التحكّم واختر «من الإشارة إلى النص». لا حاجة إلى حساب لتجربة العرض التوضيحي.</p>
+  <a href="/dashboard?lang=ar">افتح لوحة التحكّم</a>
+  <a href="/demo?lang=ar" class="sec">احجز عرضًا توضيحيًا</a>
+</div>
+{% endblock %}

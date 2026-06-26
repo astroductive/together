@@ -1,0 +1,97 @@
+{% extends "_inner_base_ar.html" %}
+{% block title %}المصادر — معاً{% endblock %}
+{% block content %}
+<canvas id="sf-canvas" aria-hidden="true"></canvas>
+<div class="pg-hero">
+  <span class="pg-badge">المصادر</span>
+  <h1 class="pg-h1">أبحاث،<br><em>مجموعات بيانات واكتشافات.</em></h1>
+  <p class="pg-lead">كل ما يشغّل معاً — مجموعات بيانات مفتوحة، وبنى نماذج، ودراسات حالة، والأبحاث التي ألهمتنا.</p>
+</div>
+
+<div class="pg-section">
+  <h2>مجموعات البيانات المستخدمة</h2>
+  <div class="uc-grid">
+    <div class="uc-card">
+      <div class="uc-title">WLASL</div>
+      <p class="uc-desc">لغة الإشارة الأمريكية على مستوى الكلمة — أكثر من 2000 فئة، وأكثر من 21 ألف مقطع فيديو، و119 شخصاً يؤدون الإشارات. استُخدمت كمجموعة البيانات الأساسية للتدريب المسبق لـ ASL. <em>Li et al.، 2020.</em></p>
+    </div>
+    <div class="uc-card">
+      <div class="uc-title">MS-ASL</div>
+      <p class="uc-desc">مجموعة بيانات لغة الإشارة الأمريكية من Microsoft — 1000 فئة، و25 ألف مقطع. استُخدمت لتوسيع المفردات والتعلّم بالنقل. <em>Joze &amp; Koller، 2019.</em></p>
+    </div>
+    <div class="uc-card">
+      <div class="uc-title">ArSL-2018</div>
+      <p class="uc-desc">مجموعة بيانات عامة للغة الإشارة العربية المصرية — 32 فئة، و54,049 صورة، و40 شخصاً يؤدون الإشارات. الأساس للتعرّف على التهجئة الإصبعية في ArSL. <em>Latif et al.، 2018.</em></p>
+    </div>
+    <div class="uc-card">
+      <div class="uc-title">Together Internal</div>
+      <p class="uc-desc">أكثر من 3,000 مقطع خاص يغطي 20 إشارة من ArSL، و12 شخصاً يؤدون إشارات ASL. جُمعت وفق بروتوكول معادل لمعايير لجان أخلاقيات البحث وبموافقة كاملة. متاحة لشركاء البحث.</p>
+    </div>
+  </div>
+</div>
+
+<div class="pg-section">
+  <h2>معاملات النموذج</h2>
+  <div class="spec-grid">
+    <div class="spec-card"><div class="spec-val">4.2MB</div><div class="spec-key">نموذج ASL بصيغة TFLite (int8)</div></div>
+    <div class="spec-card"><div class="spec-val">CNN-LSTM</div><div class="spec-key">بنية ASL</div></div>
+    <div class="spec-card"><div class="spec-val">2.8MB</div><div class="spec-key">نموذج ArSL بصيغة ONNX</div></div>
+    <div class="spec-card"><div class="spec-val">CNN-GRU</div><div class="spec-key">بنية ArSL</div></div>
+    <div class="spec-card"><div class="spec-val">15 إطاراً</div><div class="spec-key">النافذة الزمنية لـ ASL</div></div>
+    <div class="spec-card"><div class="spec-val">20 إطاراً</div><div class="spec-key">النافذة الزمنية لـ ArSL</div></div>
+  </div>
+</div>
+
+<div class="pg-section">
+  <h2>أبرز الأوراق البحثية</h2>
+  <div class="uc-grid">
+    <div class="uc-card">
+      <div class="uc-title">MediaPipe Holistic</div>
+      <p class="uc-desc">Lugaresi et al.، "MediaPipe: A Framework for Building Perception Pipelines." <em>CVPR Workshop، 2020.</em> مستخرج المعالم الأساسي المستخدم في خط معالجة معاً اللحظي.</p>
+    </div>
+    <div class="uc-card">
+      <div class="uc-title">التعرّف على لغة الإشارة عبر نقاط المفاصل الهيكلية</div>
+      <p class="uc-desc">Jiang et al.، "Skeleton-Aware Multi-Modal Sign Language Recognition." <em>CVPR 2021.</em> ألهمت اعتماد نهج المعالم أولاً بدلاً من إدخال صور RGB الخام.</p>
+    </div>
+    <div class="uc-card">
+      <div class="uc-title">الاستدلال الفعّال على الجهاز</div>
+      <p class="uc-desc">David et al.، "TensorFlow Lite Micro: Embedded Machine Learning on TinyML Systems." <em>MLSys 2021.</em> الأساس لاستراتيجية النشر عبر WASM-TFLite.</p>
+    </div>
+    <div class="uc-card">
+      <div class="uc-title">مسح شامل للتعرّف على لغة الإشارة العربية</div>
+      <p class="uc-desc">Adaloglou et al.، "A Comprehensive Study on Deep Learning-Based Methods for Sign Language Recognition." <em>IEEE TNNLS، 2022.</em> وجّه اختيار بنية CNN-GRU لـ ArSL.</p>
+    </div>
+  </div>
+</div>
+
+<div class="pg-section">
+  <h2>دراسات الحالة</h2>
+  <div class="uc-grid">
+    <div class="uc-card">
+      <div class="uc-title">جامعة القاهرة — تجربة رائدة 2025</div>
+      <p class="uc-desc">جرى النشر في 3 فصول دراسية تضم طلاباً صُمّاً. خفّض التعرّف على ArSL الاعتماد على المترجمين البشريين بنسبة 40% في جلسات السؤال والجواب المنظّمة.</p>
+    </div>
+    <div class="uc-card">
+      <div class="uc-title">عيادة صحية في سان فرانسيسكو — تجربة رائدة 2025</div>
+      <p class="uc-desc">استُخدم HandScript في الاستقبال لتسجيل بيانات المرضى. أفاد 87% من المرضى الصُّم بشعورهم براحة أكبر دون انتظار جلسة ترجمة عن بُعد بالفيديو.</p>
+    </div>
+    <div class="uc-card">
+      <div class="uc-title">النسخة التجريبية المفتوحة من معاً — 2025</div>
+      <p class="uc-desc">1,200 مستخدم عبر 34 دولة خلال أول 60 يوماً. متوسط مدة الجلسة: 18 دقيقة. الميزة الأكثر استخداماً: التحويل من إشارة إلى نص (61%)، يليها الاجتماع المباشر (24%).</p>
+    </div>
+  </div>
+</div>
+
+<div class="pg-section">
+  <h2>أبحاث وأخبار خارجية</h2>
+  <p>يتقدّم مجال التعرّف على لغة الإشارة بوتيرة متسارعة. ومن أبرز التطورات الحديثة مجموعات بيانات واسعة النطاق ومتعددة اللغات للغة الإشارة (OpenASL وHow2Sign)، وبنى قائمة على المحوّلات (SignBERT وSPOTER)، والدفع المتنامي نحو توحيد مجموعات بيانات لغة الإشارة عبر الدول الناطقة بالعربية بتنسيق من مجموعة عمل إتاحة الوصول التابعة لجامعة الدول العربية.</p>
+  <p>تسهم معاً في هذه المنظومة عبر إتاحة أدوات التوسيم الداخلية لدينا كمصدر مفتوح ونشر نتائج القياس المرجعية على تقسيمات الاختبار المعيارية. ونتعاون مع برنامج إتاحة التكنولوجيا في جامعة غالوديت والاتحاد العربي للصُّم.</p>
+</div>
+
+<div class="cta-strip">
+  <h3>تعاون معنا في مجال البحث</h3>
+  <p>نرحّب بأشكال التعاون في جمع البيانات وتحسين النماذج والتجارب الميدانية.</p>
+  <a href="/partnership?lang=ar">استفسار عن الشراكة</a>
+  <a href="/contact?lang=ar" class="sec">تواصل مع فريق البحث</a>
+</div>
+{% endblock %}

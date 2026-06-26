@@ -1,0 +1,89 @@
+{% extends "_inner_base_ar.html" %}
+{% block title %}احجز عرضاً توضيحياً — Together{% endblock %}
+{% block content %}
+<canvas id="sf-canvas" aria-hidden="true"></canvas>
+<div class="pg-hero">
+  <span class="pg-badge">احجز عرضاً توضيحياً</span>
+  <h1 class="pg-h1">اكتشف معاً<br><em>في 30 دقيقة.</em></h1>
+  <p class="pg-lead">سنأخذك في جولة مباشرة عبر كل ميزة، ونجيب عن أسئلتك التقنية، ونصمم العرض ليناسب حالة استخدامك — سواء في قطاع الشركات أو التعليم أو الرعاية الصحية أو البحث العلمي.</p>
+</div>
+
+<div class="pg-section" style="display:grid;grid-template-columns:1.2fr 1fr;gap:48px;align-items:start;max-width:900px">
+  <div>
+    <h2>اطلب عرضاً توضيحياً</h2>
+    <form style="display:flex;flex-direction:column;gap:16px;margin-top:24px" onsubmit="handleDemo(event)">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+        <div>
+          <label style="display:block;font-size:13px;font-weight:700;color:var(--muted);margin-bottom:6px">الاسم الأول</label>
+          <input type="text" placeholder="الاسم الأول" required style="width:100%;padding:11px 14px;border-radius:var(--radius);border:1px solid var(--border);background:color-mix(in srgb,var(--surface) 90%,transparent);color:var(--text);font-size:14px;font-family:var(--font-sans);backdrop-filter:blur(8px)">
+        </div>
+        <div>
+          <label style="display:block;font-size:13px;font-weight:700;color:var(--muted);margin-bottom:6px">اسم العائلة</label>
+          <input type="text" placeholder="اسم العائلة" required style="width:100%;padding:11px 14px;border-radius:var(--radius);border:1px solid var(--border);background:color-mix(in srgb,var(--surface) 90%,transparent);color:var(--text);font-size:14px;font-family:var(--font-sans);backdrop-filter:blur(8px)">
+        </div>
+      </div>
+      <div>
+        <label style="display:block;font-size:13px;font-weight:700;color:var(--muted);margin-bottom:6px">البريد الإلكتروني المهني</label>
+        <input type="email" placeholder="you@organization.com" required style="width:100%;padding:11px 14px;border-radius:var(--radius);border:1px solid var(--border);background:color-mix(in srgb,var(--surface) 90%,transparent);color:var(--text);font-size:14px;font-family:var(--font-sans);backdrop-filter:blur(8px)">
+      </div>
+      <div>
+        <label style="display:block;font-size:13px;font-weight:700;color:var(--muted);margin-bottom:6px">المؤسسة</label>
+        <input type="text" placeholder="اسم مؤسستك" required style="width:100%;padding:11px 14px;border-radius:var(--radius);border:1px solid var(--border);background:color-mix(in srgb,var(--surface) 90%,transparent);color:var(--text);font-size:14px;font-family:var(--font-sans);backdrop-filter:blur(8px)">
+      </div>
+      <div>
+        <label style="display:block;font-size:13px;font-weight:700;color:var(--muted);margin-bottom:6px">حالة الاستخدام</label>
+        <select style="width:100%;padding:11px 14px;border-radius:var(--radius);border:1px solid var(--border);background:color-mix(in srgb,var(--surface) 90%,transparent);color:var(--text);font-size:14px;font-family:var(--font-sans)">
+          <option>الشركات / إتاحة الوصول في بيئة العمل</option>
+          <option>مؤسسة تعليمية</option>
+          <option>الرعاية الصحية / المجال السريري</option>
+          <option>تعاون بحثي</option>
+          <option>منظمة غير حكومية / مناصرة</option>
+          <option>الجهات الحكومية / الخدمات العامة</option>
+          <option>أخرى</option>
+        </select>
+      </div>
+      <div>
+        <label style="display:block;font-size:13px;font-weight:700;color:var(--muted);margin-bottom:6px">الموعد المفضّل</label>
+        <input type="date" style="width:100%;padding:11px 14px;border-radius:var(--radius);border:1px solid var(--border);background:color-mix(in srgb,var(--surface) 90%,transparent);color:var(--text);font-size:14px;font-family:var(--font-sans);backdrop-filter:blur(8px)">
+      </div>
+      <div>
+        <label style="display:block;font-size:13px;font-weight:700;color:var(--muted);margin-bottom:6px">هل هناك شيء محدد تودّ رؤيته؟</label>
+        <textarea rows="3" placeholder="مثال: التعرّف على لغة الإشارة العربية ArSL، التسميات التوضيحية المباشرة للاجتماعات، تكامل واجهة البرمجة API..." style="width:100%;padding:11px 14px;border-radius:var(--radius);border:1px solid var(--border);background:color-mix(in srgb,var(--surface) 90%,transparent);color:var(--text);font-size:14px;font-family:var(--font-sans);resize:vertical;backdrop-filter:blur(8px)"></textarea>
+      </div>
+      <div id="demo-success" style="display:none;padding:12px 16px;border-radius:var(--radius);background:var(--accent-soft);border:1px solid var(--accent);color:var(--accent);font-size:13px;font-weight:600">تم استلام طلبك! سنرسل لك دعوة تقويم خلال يوم عمل واحد.</div>
+      <button type="submit" style="padding:13px 24px;border-radius:var(--radius-full);background:var(--accent);color:#fff;font-weight:700;font-size:15px;border:none;cursor:pointer;font-family:var(--font-sans)">احجز عرضي التوضيحي</button>
+    </form>
+  </div>
+
+  <div>
+    <h2>ماذا تتوقّع</h2>
+    <div style="margin-top:24px;display:flex;flex-direction:column;gap:20px">
+      <div style="display:flex;gap:14px;align-items:flex-start">
+        <div style="width:32px;height:32px;border-radius:50%;background:var(--accent);color:#fff;display:grid;place-items:center;font-family:var(--font-display);font-weight:800;font-size:13px;flex-shrink:0">1</div>
+        <div><div style="font-size:14px;font-weight:700;color:var(--text);margin-bottom:4px">جلسة مباشرة مدتها 30 دقيقة</div><p style="font-size:13px;color:var(--muted);line-height:1.6;margin:0">يشارك أحد أعضاء فريق معاً شاشته ويستعرض التعرّف على لغة الإشارة الأمريكية ASL والعربية ArSL، والتسميات التوضيحية المباشرة للاجتماعات، ومجموعة المنتجات بالكامل.</p></div>
+      </div>
+      <div style="display:flex;gap:14px;align-items:flex-start">
+        <div style="width:32px;height:32px;border-radius:50%;background:var(--accent);color:#fff;display:grid;place-items:center;font-family:var(--font-display);font-weight:800;font-size:13px;flex-shrink:0">2</div>
+        <div><div style="font-size:14px;font-weight:700;color:var(--text);margin-bottom:4px">إجابات على أسئلتك</div><p style="font-size:13px;color:var(--muted);line-height:1.6;margin:0">البنية التقنية، وسياسة الخصوصية، والامتثال (GDPR وHIPAA)، وخيارات التكامل — اسأل عن أي شيء.</p></div>
+      </div>
+      <div style="display:flex;gap:14px;align-items:flex-start">
+        <div style="width:32px;height:32px;border-radius:50%;background:var(--accent);color:#fff;display:grid;place-items:center;font-family:var(--font-display);font-weight:800;font-size:13px;flex-shrink:0">3</div>
+        <div><div style="font-size:14px;font-weight:700;color:var(--text);margin-bottom:4px">عرض تجريبي مخصّص</div><p style="font-size:13px;color:var(--muted);line-height:1.6;margin:0">إذا كان هناك توافق، فسنتواصل معك بخطة تجريبية مصممة خصيصاً لك — تشمل الجدول الزمني والنطاق والتسعير وهيكل الدعم.</p></div>
+      </div>
+    </div>
+
+    <div style="margin-top:32px;padding:20px 22px;border-radius:var(--radius-lg);border:1px solid var(--border);background:color-mix(in srgb,var(--surface) 82%,transparent);backdrop-filter:blur(12px)">
+      <div style="font-size:12px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--accent);margin-bottom:10px">الأسئلة الشائعة حول العرض التوضيحي</div>
+      <p style="font-size:13px;color:var(--muted);line-height:1.7;margin:0"><strong style="color:var(--text)">هل العرض التوضيحي مجاني؟</strong> نعم، دائماً.<br><strong style="color:var(--text)">هل أحتاج إلى تثبيت أي شيء؟</strong> لا. نشغّل العرض داخل تبويب المتصفح.<br><strong style="color:var(--text)">من ينبغي أن يحضر؟</strong> صاحب القرار إلى جانب أي مختص تقني معني.<br><strong style="color:var(--text)">هل يُعرض المحتوى بالعربية (ArSL)؟</strong> نعم — نقدّم العرض على كل من لوحتي التحكم العربية والإنجليزية.</p>
+    </div>
+  </div>
+</div>
+
+<script>
+function handleDemo(e){
+  e.preventDefault();
+  document.getElementById('demo-success').style.display='block';
+  e.target.querySelector('button[type=submit]').disabled=true;
+}
+</script>
+{% endblock %}

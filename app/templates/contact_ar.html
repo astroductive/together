@@ -1,0 +1,78 @@
+{% extends "_inner_base_ar.html" %}
+{% block title %}تواصل معنا — معاً{% endblock %}
+{% block content %}
+<canvas id="sf-canvas" aria-hidden="true"></canvas>
+<div class="pg-hero">
+  <span class="pg-badge">تواصل</span>
+  <h1 class="pg-h1">لنتحدث.<br><em>نحن نُصغي إليك.</em></h1>
+  <p class="pg-lead">سواء كان لديك سؤال، أو فكرة لشراكة، أو خلل تريد الإبلاغ عنه، أو حتى رغبة في إلقاء التحية — يسعدنا أن نسمع منك.</p>
+</div>
+
+<div class="pg-section" style="display:grid;grid-template-columns:1.2fr 1fr;gap:48px;align-items:start;max-width:900px">
+  <div>
+    <h2>أرسل لنا رسالة</h2>
+    <form style="display:flex;flex-direction:column;gap:18px;margin-top:24px" onsubmit="handleContact(event)">
+      <div>
+        <label style="display:block;font-size:13px;font-weight:700;color:var(--muted);margin-bottom:6px" for="c-name">الاسم الكامل</label>
+        <input id="c-name" type="text" placeholder="اسمك" required style="width:100%;padding:11px 14px;border-radius:var(--radius);border:1px solid var(--border);background:color-mix(in srgb,var(--surface) 90%,transparent);color:var(--text);font-family:var(--font-sans);font-size:14px;backdrop-filter:blur(8px)">
+      </div>
+      <div>
+        <label style="display:block;font-size:13px;font-weight:700;color:var(--muted);margin-bottom:6px" for="c-email">البريد الإلكتروني</label>
+        <input id="c-email" type="email" placeholder="you@example.com" required style="width:100%;padding:11px 14px;border-radius:var(--radius);border:1px solid var(--border);background:color-mix(in srgb,var(--surface) 90%,transparent);color:var(--text);font-family:var(--font-sans);font-size:14px;backdrop-filter:blur(8px)">
+      </div>
+      <div>
+        <label style="display:block;font-size:13px;font-weight:700;color:var(--muted);margin-bottom:6px" for="c-subject">الموضوع</label>
+        <select id="c-subject" style="width:100%;padding:11px 14px;border-radius:var(--radius);border:1px solid var(--border);background:color-mix(in srgb,var(--surface) 90%,transparent);color:var(--text);font-family:var(--font-sans);font-size:14px">
+          <option>استفسار عام</option>
+          <option>شراكة</option>
+          <option>تعاون بحثي</option>
+          <option>الإبلاغ عن خلل</option>
+          <option>الصحافة والإعلام</option>
+          <option>أخرى</option>
+        </select>
+      </div>
+      <div>
+        <label style="display:block;font-size:13px;font-weight:700;color:var(--muted);margin-bottom:6px" for="c-message">الرسالة</label>
+        <textarea id="c-message" rows="5" placeholder="أخبرنا كيف يمكننا مساعدتك..." required style="width:100%;padding:11px 14px;border-radius:var(--radius);border:1px solid var(--border);background:color-mix(in srgb,var(--surface) 90%,transparent);color:var(--text);font-family:var(--font-sans);font-size:14px;resize:vertical;backdrop-filter:blur(8px)"></textarea>
+      </div>
+      <div id="c-success" style="display:none;padding:12px 16px;border-radius:var(--radius);background:var(--accent-soft);border:1px solid var(--accent);color:var(--accent);font-size:13px;font-weight:600">تم إرسال الرسالة! سنرد عليك خلال يومَي عمل.</div>
+      <button type="submit" style="padding:12px 24px;border-radius:var(--radius-full);background:var(--accent);color:#fff;font-weight:700;font-size:14px;border:none;cursor:pointer;transition:opacity .18s;font-family:var(--font-sans)">إرسال الرسالة</button>
+    </form>
+  </div>
+  <div>
+    <h2>تواصل معنا مباشرةً</h2>
+    <div style="margin-top:24px;display:flex;flex-direction:column;gap:20px">
+      <div>
+        <div style="font-size:12px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--accent);margin-bottom:6px">البريد الإلكتروني</div>
+        <div style="font-size:15px;color:var(--text)">hello@together.app</div>
+        <div style="font-size:13px;color:var(--muted);margin-top:2px">الاستفسارات العامة والدعم</div>
+      </div>
+      <div>
+        <div style="font-size:12px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--accent);margin-bottom:6px">الشراكات</div>
+        <div style="font-size:15px;color:var(--text)">partnerships@together.app</div>
+        <div style="font-size:13px;color:var(--muted);margin-top:2px">للمؤسسات والقطاع التعليمي والبحثي</div>
+      </div>
+      <div>
+        <div style="font-size:12px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--accent);margin-bottom:6px">الصحافة والإعلام</div>
+        <div style="font-size:15px;color:var(--text)">press@together.app</div>
+      </div>
+      <div>
+        <div style="font-size:12px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--accent);margin-bottom:6px">المكتب</div>
+        <div style="font-size:14px;color:var(--muted);line-height:1.7">Together Technologies<br>123 Innovation Drive, Suite 400<br>San Francisco, CA 94107<br>United States</div>
+      </div>
+      <div>
+        <div style="font-size:12px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--accent);margin-bottom:6px">وقت الاستجابة</div>
+        <div style="font-size:14px;color:var(--muted)">نسعى للرد على جميع الاستفسارات خلال يومَي عمل، وعلى نقاشات الشراكة خلال ثلاثة أيام عمل.</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+function handleContact(e){
+  e.preventDefault();
+  document.getElementById('c-success').style.display='block';
+  e.target.querySelector('button[type=submit]').disabled=true;
+}
+</script>
+{% endblock %}
