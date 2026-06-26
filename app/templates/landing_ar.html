@@ -373,7 +373,7 @@
         <div class="feat-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg></div>
         <div class="feat-name">HandScript</div>
         <div class="feat-name-ar">يدك تصبح كلمات</div>
-        <p class="feat-desc">تعرّف فوري على لغة الإشارة بأكثر من 250 إشارة، يظهر النص أمامك أثناء توقيعك.</p>
+        <p class="feat-desc">تعرّف فوري على لغة الإشارة العربية المصرية بنموذج CNN-GRU، يظهر النص أمامك أثناء توقيعك.</p>
         <span class="feat-badge">إشارة → نص</span>
       </a>
       <a class="feat-card" href="/dashboard?module=speech" style="text-decoration:none;color:inherit">
@@ -387,7 +387,7 @@
         <div class="feat-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></div>
         <div class="feat-name">SignType</div>
         <div class="feat-name-ar">اكتب فأُشير</div>
-        <p class="feat-desc">اكتب أي نص وشاهد أفاتار متحركاً يؤديه بلغة الإشارة الأمريكية أو المصرية بسلاسة.</p>
+        <p class="feat-desc">اكتب أي نص وشاهد أفاتار متحركاً يؤديه بلغة الإشارة العربية المصرية بسلاسة.</p>
         <span class="feat-badge">نص → إشارة</span>
       </a>
       <a class="feat-card" href="/dashboard?module=speech2sign" style="text-decoration:none;color:inherit">
@@ -411,11 +411,11 @@
     <div class="stats-panel">
       <div class="stats-panel-head">
         <div class="stats-panel-eyebrow">( 02 ) — By the numbers</div>
-        <h2 class="stats-panel-title">دقيق في<br>كلتا اللغتين.</h2>
+        <h2 class="stats-panel-title">مصمَّم للغة<br>الإشارة العربية.</h2>
       </div>
       <div class="stats-band">
-        <div class="stat-cell"><div class="stat-num">250</div><div class="stat-label">فئة إشارة أمريكية</div></div>
-        <div class="stat-cell"><div class="stat-num">20</div><div class="stat-label">فئة إشارة عربية</div></div>
+        <div class="stat-cell"><div class="stat-num">20</div><div class="stat-label">فئة إشارة عربية مصرية</div></div>
+        <div class="stat-cell"><div class="stat-num">89%</div><div class="stat-label">دقة التعرّف على الإشارة العربية</div></div>
         <div class="stat-cell"><div class="stat-num">&lt;50ms</div><div class="stat-label">متوسط وقت الاستجابة</div></div>
         <div class="stat-cell"><div class="stat-num">100%</div><div class="stat-label">خصوصية كاملة على الجهاز</div></div>
       </div>
@@ -489,7 +489,7 @@
     <div class="faq-list">
       <details class="faq-item">
         <summary class="faq-q">هل يحتاج معاً إلى اتصال بالإنترنت؟</summary>
-        <p class="faq-a">تعمل نماذج الذكاء الاصطناعي بالكامل في متصفحك باستخدام TFLite (للإشارة الأمريكية) وPyTorch (للإشارة العربية). بعد تحميلها، يعمل التعرّف على الإشارات دون اتصال تماماً. الجلسات المباشرة تحتاج اتصالاً لإشارات WebRTC فقط.</p>
+        <p class="faq-a">تعمل نماذج الذكاء الاصطناعي بالكامل في متصفحك باستخدام PyTorch (للإشارة العربية المصرية) وTFLite (للإشارة الأمريكية). بعد تحميلها، يعمل التعرّف على الإشارات دون اتصال تماماً. الجلسات المباشرة تحتاج اتصالاً لإشارات WebRTC فقط.</p>
       </details>
       <details class="faq-item">
         <summary class="faq-q">هل يُرسَل بثّ الكاميرا إلى خوادمكم؟</summary>
@@ -497,11 +497,11 @@
       </details>
       <details class="faq-item">
         <summary class="faq-q">ما لغات الإشارة المدعومة؟</summary>
-        <p class="faq-a">حالياً لغة الإشارة الأمريكية (ASL) بـ 250 فئة، ولغة الإشارة العربية المصرية (ArSL) بـ 20 فئة. نُدرّب نماذج جديدة للإشارة الخليجية والبريطانية.</p>
+        <p class="faq-a">لغة الإشارة العربية المصرية (ArSL) بـ 20 فئة، ولغة الإشارة الأمريكية (ASL) بـ 250 فئة. نُدرّب نماذج جديدة للإشارة الخليجية والبريطانية.</p>
       </details>
       <details class="faq-item">
         <summary class="faq-q">ما مدى دقة التعرّف؟</summary>
-        <p class="faq-a">في إضاءة جيدة وإطار مناسب، تتجاوز دقة الإشارة الأمريكية 92% عبر 250 فئة، وتصل العربية إلى 89% على 20 فئة. تتحسّن الدقة مع خلفية محايدة وإضاءة كافية.</p>
+        <p class="faq-a">في إضاءة جيدة وإطار مناسب، تصل دقة الإشارة العربية المصرية إلى 89% على 20 فئة، وتتجاوز الأمريكية 92% عبر 250 فئة. تتحسّن الدقة مع خلفية محايدة وإضاءة كافية.</p>
       </details>
       <details class="faq-item">
         <summary class="faq-q">هل يمكنني استخدام معاً في مكالمة فيديو؟</summary>
