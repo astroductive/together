@@ -1,0 +1,380 @@
+{% extends "base.html" %}
+{% block title %}تحليلات الجلسة{% endblock %}
+{% block main_style %}padding-top: 0;{% endblock %}
+{% block nav %}{% endblock %}
+
+{% block head %}
+<script>document.documentElement.setAttribute('dir','rtl');document.documentElement.setAttribute('lang','ar');</script>
+<link rel="stylesheet" href="/static/css/theme.css?v=phase6-1">
+<link rel="stylesheet" href="/static/css/ui.css?v=phase6-1">
+<script src="/static/js/theme.js"></script>
+<style>
+  html{background:var(--bg)!important}
+  body{background:transparent}
+  .an-wrap{min-height:100vh;display:flex;flex-direction:column;align-items:center;padding:40px 20px 64px}
+  .an-top{width:100%;max-width:980px;display:flex;align-items:center;justify-content:space-between;margin-bottom:26px}
+  .an-back{display:inline-flex;align-items:center;gap:8px;text-decoration:none;color:var(--muted);font-size:14px;font-weight:600;padding:8px 12px;border-radius:10px;border:1px solid var(--border);background:var(--surface);transition:background .15s,color .15s}
+  .an-back:hover{background:var(--surface-2);color:var(--text)}
+  .an-back svg{width:16px;height:16px}
+  .an-main{width:100%;max-width:980px}
+  .an-header{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-bottom:24px}
+  .an-title{font-family:var(--font-display);font-weight:800;font-size:28px;letter-spacing:-.02em;color:var(--text);line-height:1.05}
+  .an-sub{font-size:13.5px;color:var(--muted);margin-top:6px}
+  .an-tools{display:flex;gap:10px;flex-wrap:wrap}
+  .an-tbtn{display:inline-flex;align-items:center;gap:7px;padding:9px 14px;border-radius:11px;font-size:13px;font-weight:650;cursor:pointer;border:1px solid var(--border);background:var(--surface);color:var(--text);font-family:inherit;transition:background .15s,border-color .15s}
+  .an-tbtn:hover{background:var(--surface-2);border-color:var(--accent)}
+  .an-tbtn svg{width:15px;height:15px}
+  .an-tbtn--primary{background:var(--accent);color:#fff;border-color:transparent}
+  .an-tbtn--primary:hover{background:var(--accent);opacity:.9}
+
+  .an-card{background:var(--surface);border:1px solid var(--border);border-radius:18px;padding:24px;box-shadow:var(--shadow,0 10px 30px rgba(0,0,0,.12));margin-bottom:20px}
+  .an-card-title{font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--faint);margin:0 0 18px}
+
+  /* KPI */
+  .an-kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:20px}
+  .an-kpi{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:20px;box-shadow:var(--shadow,0 10px 30px rgba(0,0,0,.12))}
+  .an-kpi-label{font-size:11.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--faint)}
+  .an-kpi-val{font-family:var(--font-display);font-weight:800;font-size:34px;letter-spacing:-.02em;color:var(--text);line-height:1.1;margin-top:8px;font-variant-numeric:tabular-nums;font-feature-settings:"tnum" 1}
+  .an-kpi-unit{font-size:13px;font-weight:600;color:var(--muted);margin-left:5px}
+  @media (max-width:780px){.an-kpis{grid-template-columns:repeat(2,1fr)}}
+  @media (max-width:440px){.an-kpis{grid-template-columns:1fr}}
+
+  /* charts grid */
+  .an-grid{display:grid;grid-template-columns:1fr 1fr;gap:20px}
+  @media (max-width:780px){.an-grid{grid-template-columns:1fr}}
+
+  /* confidence trend */
+  .an-trend-svg{width:100%;height:auto;display:block}
+  .an-trend-meta{display:flex;justify-content:space-between;font-size:11.5px;color:var(--muted);margin-top:8px;font-variant-numeric:tabular-nums}
+
+  /* horizontal bars */
+  .an-bars{display:flex;flex-direction:column;gap:11px}
+  .an-bar-row{display:grid;grid-template-columns:96px 1fr 40px;align-items:center;gap:12px}
+  .an-bar-label{font-size:13px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .an-bar-track{height:14px;background:var(--surface-2);border-radius:var(--radius-full,999px);overflow:hidden;border:1px solid var(--border)}
+  .an-bar-fill{height:100%;background:var(--accent);border-radius:var(--radius-full,999px);min-width:3px;transition:width .5s ease}
+  .an-bar-val{font-size:12.5px;font-weight:650;color:var(--muted);text-align:right;font-variant-numeric:tabular-nums}
+
+  /* breakdown (lang / module) */
+  .an-break{display:flex;flex-direction:column;gap:16px}
+  .an-break-row .an-break-head{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:7px}
+  .an-break-name{font-size:13.5px;font-weight:650;color:var(--text)}
+  .an-break-count{font-size:12px;font-weight:600;color:var(--muted);font-variant-numeric:tabular-nums}
+  .an-break-track{height:18px;background:var(--surface-2);border:1px solid var(--border);border-radius:var(--radius-full,999px);overflow:hidden;display:flex}
+  .an-seg{height:100%;display:flex;align-items:center;justify-content:center;font-size:10.5px;font-weight:700;color:#fff;white-space:nowrap;overflow:hidden}
+  .an-seg.a{background:var(--accent)}
+  .an-seg.b{background:var(--accent-sand,#c9925b)}
+  .an-legend{display:flex;gap:18px;margin-top:12px;font-size:12px;color:var(--muted)}
+  .an-legend span{display:inline-flex;align-items:center;gap:6px}
+  .an-dot{width:10px;height:10px;border-radius:3px;flex:none}
+  .an-dot.a{background:var(--accent)}
+  .an-dot.b{background:var(--accent-sand,#c9925b)}
+
+  .an-empty-sub{font-size:13px;color:var(--muted);margin-top:6px;text-align:center}
+  .an-muted{font-size:12.5px;color:var(--muted)}
+
+  /* empty state */
+  .an-empty{width:100%;max-width:560px;margin:40px auto 0;background:var(--surface);border:1px solid var(--border);border-radius:18px;padding:44px 36px;text-align:center;box-shadow:var(--shadow,0 10px 30px rgba(0,0,0,.12))}
+  .an-empty-ico{width:64px;height:64px;border-radius:50%;background:var(--accent-soft);color:var(--accent);display:grid;place-items:center;margin:0 auto 20px}
+  .an-empty-ico svg{width:30px;height:30px}
+  .an-empty-h{font-family:var(--font-display);font-weight:800;font-size:21px;color:var(--text);letter-spacing:-.01em}
+  .an-empty-p{font-size:14px;color:var(--muted);margin:12px 0 24px;line-height:1.55}
+  .an-empty-btn{display:inline-flex;align-items:center;gap:8px;padding:12px 22px;border-radius:12px;background:var(--accent);color:#fff;text-decoration:none;font-size:14px;font-weight:650;transition:opacity .15s}
+  .an-empty-btn:hover{opacity:.9}
+
+  /* print */
+  @media print{
+    html,body{background:#fff!important}
+    .an-top,.an-tools,.an-back{display:none!important}
+    .an-wrap{padding:0}
+    .an-card,.an-kpi,.an-empty{box-shadow:none;break-inside:avoid}
+    .an-header{margin-bottom:18px}
+    .an-grid{grid-template-columns:1fr 1fr}
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="t-scope an-wrap" dir="rtl">
+  <div class="an-top">
+    <a href="/dashboard?lang=ar" class="an-back">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
+      العودة إلى لوحة التحكم
+    </a>
+    <div class="t-toggle" role="group" aria-label="سمة الألوان">
+      <button type="button" data-theme-set="light" aria-pressed="false" aria-label="السمة الفاتحة" title="فاتح">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4 12H2M22 12h-2M5 5l1.4 1.4M17.6 17.6 19 19M19 5l-1.4 1.4M6.4 17.6 5 19"/></svg>
+      </button>
+      <button type="button" data-theme-set="dark" aria-pressed="true" aria-label="السمة الداكنة" title="داكن">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A8 8 0 1 1 11.2 3 6.2 6.2 0 0 0 21 12.8Z"/></svg>
+      </button>
+    </div>
+  </div>
+
+  <div class="an-main">
+    <div class="an-header">
+      <div>
+        <div class="an-title">تحليلات الجلسة</div>
+        <div class="an-sub" id="an-sub">نشاط اكتشاف الإشارات الخاص بك، مُخزَّن على هذا الجهاز.</div>
+      </div>
+      <div class="an-tools" id="an-tools" hidden>
+        <button type="button" class="an-tbtn" id="an-csv">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
+          تصدير CSV
+        </button>
+        <button type="button" class="an-tbtn an-tbtn--primary" id="an-print">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9V2h12v7M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2M6 14h12v8H6z"/></svg>
+          طباعة / حفظ كملف PDF
+        </button>
+      </div>
+    </div>
+
+    <!-- Empty state -->
+    <div class="an-empty" id="an-empty" hidden>
+      <div class="an-empty-ico">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M18 17V9M13 17V5M8 17v-3"/></svg>
+      </div>
+      <div class="an-empty-h">لا يوجد نشاط بعد</div>
+      <div class="an-empty-p">تُملأ تحليلاتك تلقائياً أثناء اكتشاف الإشارات في لوحة التحكم. ابدأ جلسة، وستظهر هنا اكتشافاتك واتجاهات الثقة والإشارات الأكثر استخداماً.</div>
+      <a href="/dashboard?lang=ar" class="an-empty-btn">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+        الانتقال إلى لوحة التحكم
+      </a>
+    </div>
+
+    <!-- Report -->
+    <div id="an-report" hidden>
+      <div class="an-kpis">
+        <div class="an-kpi"><div class="an-kpi-label">إجمالي الاكتشافات</div><div class="an-kpi-val" id="kpi-total">0</div></div>
+        <div class="an-kpi"><div class="an-kpi-label">الإشارات الفريدة</div><div class="an-kpi-val" id="kpi-unique">0</div></div>
+        <div class="an-kpi"><div class="an-kpi-label">متوسط الثقة</div><div class="an-kpi-val" id="kpi-conf">0<span class="an-kpi-unit">%</span></div></div>
+        <div class="an-kpi"><div class="an-kpi-label">سرعة الإشارة</div><div class="an-kpi-val" id="kpi-speed">0<span class="an-kpi-unit">/دقيقة</span></div></div>
+      </div>
+
+      <div class="an-card">
+        <div class="an-card-title">اتجاه الثقة</div>
+        <svg class="an-trend-svg" id="an-trend" viewBox="0 0 920 240" preserveAspectRatio="none" role="img" aria-label="اتجاه الثقة عبر الاكتشافات الأخيرة"></svg>
+        <div class="an-trend-meta"><span id="trend-from">—</span><span id="trend-to">الأحدث</span></div>
+      </div>
+
+      <div class="an-grid">
+        <div class="an-card">
+          <div class="an-card-title">الإشارات الأكثر اكتشافاً</div>
+          <div class="an-bars" id="an-topsigns"></div>
+        </div>
+        <div class="an-card">
+          <div class="an-card-title">حسب اللغة والوحدة</div>
+          <div class="an-break">
+            <div class="an-break-row">
+              <div class="an-break-head"><span class="an-break-name">اللغة</span><span class="an-break-count" id="lang-count">—</span></div>
+              <div class="an-break-track" id="lang-track"></div>
+              <div class="an-legend"><span><i class="an-dot a"></i>ASL (en)</span><span><i class="an-dot b"></i>ArSL (ar)</span></div>
+            </div>
+            <div class="an-break-row">
+              <div class="an-break-head"><span class="an-break-name">الوحدة</span><span class="an-break-count" id="mod-count">—</span></div>
+              <div class="an-break-track" id="mod-track"></div>
+              <div class="an-legend"><span><i class="an-dot a"></i>الرؤية</span><span><i class="an-dot b"></i>الكلام</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  requireAuth();
+
+  const $ = (id) => document.getElementById(id);
+
+  // ---- Load + parse the detection log defensively ----
+  function readLog() {
+    let raw;
+    try { raw = JSON.parse(localStorage.getItem('together-analytics') || '[]'); }
+    catch { return []; }
+    if (!Array.isArray(raw)) return [];
+    // Keep only well-formed events; coerce types.
+    return raw
+      .map(e => (e && typeof e === 'object') ? {
+        w: String(e.w == null ? '' : e.w),
+        c: Math.max(0, Math.min(100, Number(e.c) || 0)),
+        t: Number(e.t) || 0,
+        lang: (e.lang === 'ar') ? 'ar' : 'en',
+        mod: (e.mod === 'speech') ? 'speech' : 'vision',
+      } : null)
+      .filter(e => e && e.w && e.t > 0)
+      .sort((a, b) => a.t - b.t);
+  }
+
+  const log = readLog();
+
+  if (!log.length) {
+    $('an-empty').hidden = false;
+    $('an-sub').textContent = 'لم يُسجَّل أي اكتشاف على هذا الجهاز بعد.';
+  } else {
+    $('an-report').hidden = false;
+    $('an-tools').hidden = false;
+    render(log);
+  }
+
+  // ---- Helpers ----
+  const pad = (n) => String(n).padStart(2, '0');
+  function fmtDate(ms) {
+    const d = new Date(ms);
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  }
+  function isoOf(ms) { try { return new Date(ms).toISOString(); } catch { return ''; } }
+
+  // ---- Signing speed: split into active sessions on gaps > 5 min ----
+  function signingSpeed(events) {
+    const GAP = 5 * 60 * 1000;
+    let activeMs = 0;
+    let segStart = events[0].t, segEnd = events[0].t;
+    for (let i = 1; i < events.length; i++) {
+      if (events[i].t - segEnd > GAP) {
+        activeMs += (segEnd - segStart);
+        segStart = events[i].t;
+      }
+      segEnd = events[i].t;
+    }
+    activeMs += (segEnd - segStart);
+    const minutes = activeMs / 60000;
+    if (minutes <= 0) return 0; // single event or all within same instant
+    return events.length / minutes;
+  }
+
+  // ---- Main render ----
+  function render(events) {
+    const total = events.length;
+    const unique = new Set(events.map(e => e.w)).size;
+    const avgConf = Math.round(events.reduce((s, e) => s + e.c, 0) / total);
+    const speed = signingSpeed(events);
+
+    $('kpi-total').textContent = total.toLocaleString();
+    $('kpi-unique').textContent = unique.toLocaleString();
+    $('kpi-conf').firstChild.textContent = String(avgConf);
+    $('kpi-speed').firstChild.textContent = speed >= 10 ? speed.toFixed(0) : speed.toFixed(1);
+
+    $('an-sub').textContent = `${total.toLocaleString()} اكتشاف من ${fmtDate(events[0].t)} إلى ${fmtDate(events[events.length - 1].t)}.`;
+
+    drawTrend(events);
+    drawTopSigns(events);
+    drawBreakdowns(events);
+  }
+
+  // ---- Confidence trend (inline SVG polyline + area) ----
+  function drawTrend(events) {
+    const svg = $('an-trend');
+    const W = 920, H = 240, padX = 8, padTop = 14, padBot = 20;
+    const recent = events.slice(-100);
+    const n = recent.length;
+    const innerW = W - padX * 2;
+    const innerH = H - padTop - padBot;
+
+    const xAt = (i) => padX + (n <= 1 ? innerW / 2 : (i / (n - 1)) * innerW);
+    const yAt = (c) => padTop + (1 - (c / 100)) * innerH;
+
+    // Gridlines at 0/25/50/75/100
+    let grid = '';
+    [0, 25, 50, 75, 100].forEach(v => {
+      const y = yAt(v).toFixed(1);
+      grid += `<line x1="${padX}" y1="${y}" x2="${W - padX}" y2="${y}" stroke="var(--border)" stroke-width="1" opacity=".7"/>`;
+      grid += `<text x="${padX + 2}" y="${(yAt(v) - 4).toFixed(1)}" font-size="10" fill="var(--faint)">${v}%</text>`;
+    });
+
+    const pts = recent.map((e, i) => `${xAt(i).toFixed(1)},${yAt(e.c).toFixed(1)}`);
+    const line = pts.join(' ');
+    const baseY = (H - padBot).toFixed(1);
+    const firstX = xAt(0).toFixed(1);
+    const lastX = xAt(n - 1).toFixed(1);
+    const area = `${firstX},${baseY} ${line} ${lastX},${baseY}`;
+
+    svg.innerHTML = `
+      <defs>
+        <linearGradient id="an-fill" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="var(--accent)" stop-opacity="0.28"/>
+          <stop offset="100%" stop-color="var(--accent)" stop-opacity="0"/>
+        </linearGradient>
+      </defs>
+      ${grid}
+      <polygon points="${area}" fill="url(#an-fill)" stroke="none"/>
+      <polyline points="${line}" fill="none" stroke="var(--accent)" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
+      ${n <= 60 ? recent.map((e, i) => `<circle cx="${xAt(i).toFixed(1)}" cy="${yAt(e.c).toFixed(1)}" r="2.4" fill="var(--accent)"/>`).join('') : ''}
+    `;
+
+    $('trend-from').textContent = `${recent.length} من الأحدث · من ${fmtDate(recent[0].t)}`;
+  }
+
+  // ---- Most-detected signs (top 12 horizontal bars) ----
+  function drawTopSigns(events) {
+    const counts = {};
+    events.forEach(e => { counts[e.w] = (counts[e.w] || 0) + 1; });
+    const top = Object.entries(counts).sort((a, b) => b[1] - a[1]).slice(0, 12);
+    const max = top.length ? top[0][1] : 1;
+    const wrap = $('an-topsigns');
+    wrap.innerHTML = top.map(([word, cnt]) => {
+      const pct = Math.max(3, (cnt / max) * 100).toFixed(1);
+      return `<div class="an-bar-row">
+        <div class="an-bar-label" title="${esc(word)}">${esc(word)}</div>
+        <div class="an-bar-track"><div class="an-bar-fill" style="width:${pct}%"></div></div>
+        <div class="an-bar-val">${cnt}</div>
+      </div>`;
+    }).join('');
+  }
+
+  // ---- By language & module (stacked segment bars) ----
+  function drawBreakdowns(events) {
+    const lang = { en: 0, ar: 0 };
+    const mod = { vision: 0, speech: 0 };
+    events.forEach(e => { lang[e.lang]++; mod[e.mod]++; });
+    const total = events.length;
+
+    fillSeg('lang-track', lang.en, lang.ar, total, 'ASL', 'ArSL');
+    fillSeg('mod-track', mod.vision, mod.speech, total, 'الرؤية', 'الكلام');
+    $('lang-count').textContent = `${lang.en} ASL · ${lang.ar} ArSL`;
+    $('mod-count').textContent = `${mod.vision} رؤية · ${mod.speech} كلام`;
+  }
+
+  function fillSeg(id, a, b, total, la, lb) {
+    const track = $(id);
+    const pa = total ? (a / total) * 100 : 0;
+    const pb = total ? (b / total) * 100 : 0;
+    let html = '';
+    if (a > 0) html += `<div class="an-seg a" style="width:${pa.toFixed(2)}%" title="${la}: ${a}">${pa >= 12 ? Math.round(pa) + '%' : ''}</div>`;
+    if (b > 0) html += `<div class="an-seg b" style="width:${pb.toFixed(2)}%" title="${lb}: ${b}">${pb >= 12 ? Math.round(pb) + '%' : ''}</div>`;
+    track.innerHTML = html;
+  }
+
+  function esc(s) {
+    return String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  }
+
+  // ---- Export CSV ----
+  function exportCSV() {
+    const header = ['word', 'confidence', 'timestamp_iso', 'language', 'module'];
+    const esc = (v) => {
+      const s = String(v == null ? '' : v);
+      return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+    };
+    const rows = log.map(e => [e.w, e.c, isoOf(e.t), e.lang, e.mod].map(esc).join(','));
+    const csv = [header.join(','), ...rows].join('\r\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    const stamp = new Date().toISOString().slice(0, 10);
+    a.href = url;
+    a.download = `together-analytics-${stamp}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+
+  if (log.length) {
+    $('an-csv').addEventListener('click', exportCSV);
+    $('an-print').addEventListener('click', () => window.print());
+  }
+</script>
+{% endblock %}

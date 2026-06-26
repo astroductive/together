@@ -1,0 +1,353 @@
+{% extends "base.html" %}
+{% block title %}قاموس الإشارات{% endblock %}
+{% block main_style %}padding-top: 0;{% endblock %}
+{% block nav %}{% endblock %}
+
+{% block head %}
+<script>document.documentElement.setAttribute('dir','rtl');document.documentElement.setAttribute('lang','ar');</script>
+<link rel="stylesheet" href="/static/css/theme.css?v=phase6-1">
+<link rel="stylesheet" href="/static/css/ui.css?v=phase6-1">
+<script src="/static/js/theme.js"></script>
+<style>
+  html{background:var(--bg)!important}
+  body{background:transparent}
+
+  .dc-wrap{min-height:100vh;display:flex;flex-direction:column;align-items:center;padding:40px 20px 72px}
+  .dc-inner{width:100%;max-width:1040px}
+
+  .dc-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:30px}
+  .dc-back{display:inline-flex;align-items:center;gap:8px;text-decoration:none;color:var(--muted);font-size:14px;font-weight:600;padding:8px 12px;border-radius:10px;border:1px solid var(--border);background:var(--surface);transition:background .15s,color .15s}
+  .dc-back:hover{background:var(--surface-2);color:var(--text)}
+  .dc-back svg{width:16px;height:16px}
+
+  .dc-header{margin-bottom:24px}
+  .dc-title{font-family:var(--font-display);font-weight:800;font-size:30px;letter-spacing:-.02em;color:var(--text);line-height:1.1}
+  .dc-sub{font-size:14px;color:var(--muted);margin-top:7px}
+  .dc-sub b{color:var(--text);font-weight:700}
+
+  /* Controls */
+  .dc-controls{display:flex;flex-wrap:wrap;gap:12px;align-items:center;margin-bottom:22px}
+  .dc-search{position:relative;flex:1;min-width:220px}
+  .dc-search svg{position:absolute;left:13px;top:50%;transform:translateY(-50%);width:17px;height:17px;color:var(--faint);pointer-events:none}
+  .dc-search input{width:100%;padding:11px 14px 11px 38px;border-radius:11px;border:1px solid var(--border);background:var(--surface);color:var(--text);font-size:14px;font-family:inherit;transition:border-color .15s,box-shadow .15s}
+  .dc-search input:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
+  .dc-select{padding:11px 13px;border-radius:11px;border:1px solid var(--border);background:var(--surface);color:var(--text);font-size:14px;font-family:inherit;cursor:pointer;min-width:140px;transition:border-color .15s,box-shadow .15s}
+  .dc-select:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
+
+  .dc-count{font-size:13px;color:var(--muted);margin-bottom:14px;min-height:18px}
+  .dc-count b{color:var(--text);font-weight:700}
+
+  /* Grid */
+  .dc-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:14px}
+  .dc-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:16px 16px 14px;box-shadow:var(--shadow);cursor:pointer;display:flex;flex-direction:column;gap:10px;text-align:left;font-family:inherit;transition:transform .12s,border-color .15s,box-shadow .15s}
+  .dc-card:hover{transform:translateY(-2px);border-color:var(--accent);box-shadow:0 10px 26px var(--accent-soft)}
+  .dc-card:focus-visible{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
+  .dc-word{font-family:var(--font-display);font-weight:700;font-size:17px;color:var(--text);letter-spacing:-.01em;text-transform:capitalize;line-height:1.2;word-break:break-word}
+  .dc-meta{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:auto}
+  .dc-chip{display:inline-block;font-size:10.5px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;padding:3px 8px;border-radius:var(--radius-full);background:var(--accent-soft);color:var(--accent);white-space:nowrap}
+  .dc-chip--lang{background:var(--surface-2);color:var(--muted)}
+  .dc-play{display:inline-flex;align-items:center;gap:4px;font-size:12px;font-weight:650;color:var(--accent);white-space:nowrap}
+
+  .dc-empty{text-align:center;padding:60px 20px;color:var(--muted);font-size:15px}
+  .dc-empty svg{width:40px;height:40px;color:var(--faint);margin-bottom:12px}
+
+  /* Modal */
+  .dc-overlay{position:fixed;inset:0;background:var(--scrim,rgba(0,0,0,.55));backdrop-filter:blur(4px);display:none;align-items:center;justify-content:center;padding:20px;z-index:1000}
+  .dc-overlay.is-open{display:flex}
+  .dc-modal{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-xl,22px);box-shadow:var(--shadow-lg);width:100%;max-width:440px;padding:24px;display:flex;flex-direction:column;align-items:center;gap:16px}
+  .dc-modal-head{width:100%;display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
+  .dc-modal-word{font-family:var(--font-display);font-weight:800;font-size:24px;color:var(--text);letter-spacing:-.02em;text-transform:capitalize;line-height:1.15}
+  .dc-modal-cat{font-size:12px;color:var(--muted);margin-top:4px;text-transform:uppercase;letter-spacing:.05em;font-weight:600}
+  .dc-x{flex:none;width:34px;height:34px;border-radius:50%;border:1px solid var(--border);background:var(--surface-2);color:var(--muted);display:grid;place-items:center;cursor:pointer;font-size:18px;line-height:1;transition:color .15s,background .15s}
+  .dc-x:hover{color:var(--text);background:var(--border)}
+  .dc-canvas-wrap{width:360px;max-width:100%;aspect-ratio:1/1;border-radius:var(--radius-lg);overflow:hidden;background:#0b0b10;border:1px solid var(--border);display:grid;place-items:center}
+  .dc-canvas-wrap canvas{width:100%;height:100%;display:block}
+  .dc-noanim{text-align:center;color:var(--muted);font-size:14px;padding:0 16px}
+  .dc-actions{display:flex;gap:10px;flex-wrap:wrap;justify-content:center;width:100%}
+  .dc-vid{font-size:12.5px;color:var(--accent);text-decoration:none;font-weight:650;display:inline-flex;align-items:center;gap:5px}
+  .dc-vid:hover{text-decoration:underline}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="t-scope dc-wrap" dir="rtl">
+  <div class="dc-inner">
+    <div class="dc-top">
+      <a href="/dashboard?lang=ar" class="dc-back">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
+        العودة إلى لوحة التحكم
+      </a>
+      <div class="t-toggle" role="group" aria-label="سمة الألوان">
+        <button type="button" data-theme-set="light" aria-pressed="false" aria-label="السمة الفاتحة" title="فاتح">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4 12H2M22 12h-2M5 5l1.4 1.4M17.6 17.6 19 19M19 5l-1.4 1.4M6.4 17.6 5 19"/></svg>
+        </button>
+        <button type="button" data-theme-set="dark" aria-pressed="true" aria-label="السمة الداكنة" title="داكن">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A8 8 0 1 1 11.2 3 6.2 6.2 0 0 0 21 12.8Z"/></svg>
+        </button>
+      </div>
+    </div>
+
+    <header class="dc-header">
+      <h1 class="dc-title">قاموس الإشارات</h1>
+      <p class="dc-sub" id="dc-subtitle">جارٍ تحميل مكتبة الإشارات…</p>
+    </header>
+
+    <div class="dc-controls">
+      <div class="dc-search">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
+        <input type="search" id="dc-search" placeholder="ابحث عن الإشارات…" autocomplete="off" aria-label="ابحث عن الإشارات">
+      </div>
+      <select class="dc-select" id="dc-lang" aria-label="تصفية حسب اللغة">
+        <option value="all">كل اللغات</option>
+        <option value="asl">ASL</option>
+        <option value="arabic">ArSL</option>
+      </select>
+      <select class="dc-select" id="dc-cat" aria-label="تصفية حسب الفئة">
+        <option value="all">كل الفئات</option>
+      </select>
+    </div>
+
+    <div class="dc-count" id="dc-count"></div>
+
+    <div class="dc-grid" id="dc-grid" role="list"></div>
+
+    <div class="dc-empty" id="dc-empty" style="display:none">
+      <div id="dc-empty-text">لم يتم العثور على أي إشارات.</div>
+    </div>
+  </div>
+</div>
+
+<!-- Detail modal -->
+<div class="t-scope dc-overlay" id="dc-overlay" role="dialog" aria-modal="true" aria-labelledby="dc-modal-word">
+  <div class="dc-modal">
+    <div class="dc-modal-head">
+      <div>
+        <div class="dc-modal-word" id="dc-modal-word">إشارة</div>
+        <div class="dc-modal-cat" id="dc-modal-cat"></div>
+      </div>
+      <button type="button" class="dc-x" id="dc-close" aria-label="إغلاق">&times;</button>
+    </div>
+    <div class="dc-canvas-wrap">
+      <canvas id="dc-canvas" width="360" height="360"></canvas>
+    </div>
+    <div class="dc-noanim" id="dc-noanim" style="display:none">لا يتوفر رسم متحرك لهذه الإشارة بعد.</div>
+    <div class="dc-actions">
+      <button type="button" class="t-btn t-btn--soft" id="dc-replay" style="display:none">▶ إعادة التشغيل</button>
+      <a class="dc-vid" id="dc-video" href="#" target="_blank" rel="noopener" style="display:none">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+        مشاهدة الفيديو
+      </a>
+      <button type="button" class="t-btn t-btn--ghost" id="dc-close-2">إغلاق</button>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="/static/js/app.js"></script>
+<script src="/static/js/landmark-player.js"></script>
+<script>
+  requireAuth();
+
+  const $ = (id) => document.getElementById(id);
+  const grid = $('dc-grid');
+  const emptyEl = $('dc-empty');
+  const emptyText = $('dc-empty-text');
+  const countEl = $('dc-count');
+  const subtitle = $('dc-subtitle');
+
+  // Full vocabulary, flattened to { word, category, lang }.
+  let ALL = [];
+  let counts = { asl: 0, arabic: 0 };
+
+  const cap = (s) => (s || '').charAt(0).toUpperCase() + (s || '').slice(1);
+  const langLabel = (l) => (l === 'arabic' ? 'ArSL' : 'ASL');
+
+  // ── Load vocabulary ─────────────────────────────────────────────
+  (async function load() {
+    try {
+      const res = await authFetch('/api/vocabulary');
+      if (!res.ok) throw new Error('vocab ' + res.status);
+      const data = await res.json();
+      counts = data.counts || {
+        asl: (data.asl || []).length,
+        arabic: (data.arabic || []).length,
+      };
+      ALL = []
+        .concat((data.asl || []).map((w) => ({ word: w.word, category: w.category || 'general', lang: 'asl' })))
+        .concat((data.arabic || []).map((w) => ({ word: w.word, category: w.category || 'general', lang: 'arabic' })));
+
+      subtitle.innerHTML = '<b>' + counts.asl + '</b> إشارة ASL · <b>' + counts.arabic + '</b> إشارة ArSL';
+      buildCategoryFilter();
+      render();
+    } catch (err) {
+      subtitle.textContent = 'تعذّر تحميل مكتبة الإشارات.';
+      grid.style.display = 'none';
+      emptyEl.style.display = 'block';
+      emptyText.textContent = 'حدث خطأ ما أثناء تحميل مكتبة الإشارات. يرجى تحديث الصفحة للمحاولة مرة أخرى.';
+    }
+  })();
+
+  function buildCategoryFilter() {
+    const sel = $('dc-cat');
+    const cats = Array.from(new Set(ALL.map((s) => s.category))).sort();
+    for (const c of cats) {
+      const opt = document.createElement('option');
+      opt.value = c;
+      opt.textContent = cap(c);
+      sel.appendChild(opt);
+    }
+  }
+
+  // ── Filtering + render ──────────────────────────────────────────
+  function currentFilter() {
+    return {
+      q: $('dc-search').value.trim().toLowerCase(),
+      lang: $('dc-lang').value,
+      cat: $('dc-cat').value,
+    };
+  }
+
+  function render() {
+    const f = currentFilter();
+    const items = ALL.filter((s) =>
+      (f.lang === 'all' || s.lang === f.lang) &&
+      (f.cat === 'all' || s.category === f.cat) &&
+      (!f.q || s.word.toLowerCase().includes(f.q))
+    );
+
+    countEl.innerHTML = 'عرض <b>' + items.length + '</b> من ' + ALL.length + ' إشارة';
+
+    grid.innerHTML = '';
+    if (!items.length) {
+      grid.style.display = 'none';
+      emptyEl.style.display = 'block';
+      emptyText.textContent = f.q
+        ? 'لا توجد إشارات تطابق “' + $('dc-search').value.trim() + '”.'
+        : 'لا توجد إشارات في هذا العرض.';
+      return;
+    }
+    grid.style.display = 'grid';
+    emptyEl.style.display = 'none';
+
+    const frag = document.createDocumentFragment();
+    for (const s of items) {
+      const card = document.createElement('button');
+      card.type = 'button';
+      card.className = 'dc-card';
+      card.setAttribute('role', 'listitem');
+      card.innerHTML =
+        '<div class="dc-word"></div>' +
+        '<div class="dc-meta">' +
+          '<span class="dc-chip"></span>' +
+          '<span class="dc-play">▶ تشغيل</span>' +
+        '</div>';
+      card.querySelector('.dc-word').textContent = cap(s.word);
+      card.querySelector('.dc-chip').textContent = s.category;
+      card.title = cap(s.word) + ' · ' + langLabel(s.lang);
+      card.addEventListener('click', () => openSign(s));
+      frag.appendChild(card);
+    }
+    grid.appendChild(frag);
+  }
+
+  $('dc-search').addEventListener('input', render);
+  $('dc-lang').addEventListener('change', render);
+  $('dc-cat').addEventListener('change', render);
+
+  // ── Detail modal + player ───────────────────────────────────────
+  const overlay = $('dc-overlay');
+  const canvas = $('dc-canvas');
+  const ctx = canvas.getContext('2d');
+  const noanim = $('dc-noanim');
+  const replayBtn = $('dc-replay');
+  const videoLink = $('dc-video');
+
+  // Shared playback signal: setting .stop=true breaks any active loop.
+  let signal = { stop: true };
+  let activeSign = null;
+  let activeData = null;
+
+  function drawIdle() {
+    if (window.drawAuraAvatar) {
+      window.drawAuraAvatar(ctx, null, canvas.width, canvas.height);
+    } else {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+    }
+  }
+
+  function stopPlayback() {
+    signal.stop = true;
+  }
+
+  async function play() {
+    if (!activeData || !activeData.landmarks || !activeData.landmarks.length) return;
+    stopPlayback();              // halt any prior loop
+    await SignPlayer.sleep(20);  // let the running loop observe the stop
+    signal = { stop: false };    // fresh signal for this run
+    const mySignal = signal;
+    try {
+      await SignPlayer.playLandmarkSequence(
+        [{ word: activeData.word || activeSign.word, landmarks: activeData.landmarks, frame_count: activeData.frame_count }],
+        canvas, ctx,
+        { loop: true, signal: mySignal }
+      );
+    } catch (_) { /* ignore — closing mid-frame is fine */ }
+  }
+
+  async function openSign(sign) {
+    activeSign = sign;
+    activeData = null;
+    $('dc-modal-word').textContent = cap(sign.word);
+    $('dc-modal-cat').textContent = cap(sign.category) + ' · ' + langLabel(sign.lang);
+    noanim.style.display = 'none';
+    replayBtn.style.display = 'none';
+    videoLink.style.display = 'none';
+    overlay.classList.add('is-open');
+    document.body.style.overflow = 'hidden';
+
+    drawIdle();
+
+    let data = null;
+    try {
+      data = await SignPlayer.fetchSignLandmarks(sign.word);
+    } catch (_) {
+      data = null;
+    }
+
+    // The modal may have been closed/changed while we awaited the fetch.
+    if (activeSign !== sign || !overlay.classList.contains('is-open')) return;
+
+    if (data && data.video_url) {
+      videoLink.href = data.video_url;
+      videoLink.style.display = 'inline-flex';
+    }
+
+    if (!data || !data.landmarks || !data.landmarks.length) {
+      noanim.style.display = 'block';
+      drawIdle();
+      return;
+    }
+
+    activeData = data;
+    replayBtn.style.display = 'inline-flex';
+    play();
+  }
+
+  function closeModal() {
+    stopPlayback();
+    overlay.classList.remove('is-open');
+    document.body.style.overflow = '';
+    activeSign = null;
+    activeData = null;
+  }
+
+  replayBtn.addEventListener('click', play);
+  $('dc-close').addEventListener('click', closeModal);
+  $('dc-close-2').addEventListener('click', closeModal);
+  overlay.addEventListener('click', (e) => { if (e.target === overlay) closeModal(); });
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && overlay.classList.contains('is-open')) closeModal();
+  });
+</script>
+{% endblock %}
