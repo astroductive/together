@@ -1676,7 +1676,7 @@ button.t-nav-item[aria-label="Sign out"]:hover svg{color:var(--danger,#ef4444)}
   function ensureStreamSocket() {
     if (streamSocket) return streamSocket;
     try {
-      streamSocket = io({ auth: { token: getToken() || '' } });
+      streamSocket = io({ auth: { token: getToken() || '' }, transports: ['websocket'] });
     } catch (e) {
       console.warn('[Stream] socket init failed, will use HTTP fallback:', e);
       streamSocket = null;
@@ -3765,7 +3765,7 @@ button.t-nav-item[aria-label="Sign out"]:hover svg{color:var(--danger,#ef4444)}
       currentMeetingRoom = roomId;
 
       if (!socket) {
-        socket = io({ auth: { token: getToken() || '' } });
+        socket = io({ auth: { token: getToken() || '' }, transports: ['websocket'] });
         const currentSocket = socket;
 
         socket.on('connect', syncMeetingConnection);

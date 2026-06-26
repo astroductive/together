@@ -1640,7 +1640,7 @@ button.is-busy{opacity:.6;cursor:progress}
   function ensureStreamSocket() {
     if (streamSocket) return streamSocket;
     try {
-      streamSocket = io({ auth: { token: getToken() || '' } });
+      streamSocket = io({ auth: { token: getToken() || '' }, transports: ['websocket'] });
     } catch (e) {
       console.warn('[Stream] socket init failed, HTTP fallback:', e);
       streamSocket = null;
@@ -3686,7 +3686,7 @@ button.is-busy{opacity:.6;cursor:progress}
       currentMeetingRoom = roomId;
 
       if (!socket) {
-        socket = io({ auth: { token: getToken() || '' } });
+        socket = io({ auth: { token: getToken() || '' }, transports: ['websocket'] });
         const currentSocket = socket;
 
         socket.on('connect', syncMeetingConnection);
