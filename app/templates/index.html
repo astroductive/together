@@ -356,8 +356,8 @@ a.t-user:hover{border-color:var(--accent);background:var(--accent-soft)}
 /* ══ Stat grid tiles ══ */
 .d-stat-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;padding:14px 28px 0;flex-shrink:0}
 @media(max-width:1280px){.d-stat-grid{grid-template-columns:repeat(2,1fr)}}
-@media(max-width:860px){.d-stat-grid{display:none}}
-.d-stat-tile{background:color-mix(in srgb,var(--surface) 80%,transparent);backdrop-filter:blur(10px);border:1px solid var(--border);border-radius:14px;padding:14px 16px 38px;display:flex;flex-direction:column;gap:3px;position:relative;overflow:hidden;min-width:0}
+@media(max-width:1024px){.d-stat-grid{display:none}}
+.d-stat-tile{background:color-mix(in srgb,var(--surface) 80%,transparent);backdrop-filter:blur(10px);border:1px solid var(--border);border-radius:14px;padding:10px 14px 36px;display:flex;flex-direction:column;gap:3px;position:relative;overflow:hidden;min-width:0}
 .d-stat-lbl{font-size:10.5px;color:var(--faint);font-family:var(--font-mono);letter-spacing:.1em;text-transform:uppercase;font-weight:500}
 .d-stat-val{font-size:26px;font-weight:800;color:var(--text);font-family:var(--font-display);line-height:1.1;font-variant-numeric:tabular-nums;margin-top:2px}
 .d-stat-sub{font-size:11px;color:var(--muted);margin-top:2px}
@@ -406,7 +406,7 @@ button.is-busy{opacity:.6;cursor:progress}
 <a href="#main-content" class="t-skip-link">Skip to content</a>
 <div id="debug-overlay"></div>
 
-<div class="t-scope t-app" id="app" style="height:100vh;overflow:hidden">
+<div class="t-scope t-app" id="app" style="height:100vh;overflow:hidden"><script>if(localStorage.getItem('sb-collapsed')==='1')document.currentScript.parentElement.classList.add('sb-collapsed')</script>
   <!-- ── Sidebar ── -->
   <aside class="t-sidebar" id="sidebar">
     <div class="t-brand-row">
@@ -504,7 +504,7 @@ button.is-busy{opacity:.6;cursor:progress}
       <div class="d-stat-tile">
         <div class="d-stat-lbl">Avg. Confidence</div>
         <div class="d-stat-val" id="tile-conf">—</div>
-        <div class="d-stat-sub">last 20 detections</div>
+        <div class="d-stat-sub" id="tile-conf-sub">no detections yet</div>
         <svg class="d-stat-spark" id="spark-conf" viewBox="0 0 120 38" preserveAspectRatio="none">
           <polygon class="d-stat-spark-area" id="spark-conf-area" points="0,38 0,38 120,38"/>
           <polyline id="spark-conf-pts" points="0,38"/>
@@ -621,7 +621,7 @@ button.is-busy{opacity:.6;cursor:progress}
               <div class="d-usage-row"><span class="d-usage-lbl">Avg. confidence</span><span class="d-usage-val" id="usage-confidence">—</span></div>
             </div>
             <div class="d-usage-bar-wrap">
-              <div class="d-usage-bar-lbl">Session progress</div>
+              <div class="d-usage-bar-lbl" id="usage-progress-lbl">Session progress</div>
               <div class="d-usage-bar-track"><div class="d-usage-bar-fill" id="usage-progress-bar" style="width:0%"></div></div>
             </div>
           </div>
@@ -2179,6 +2179,7 @@ button.is-busy{opacity:.6;cursor:progress}
     }
 
     // Count every accepted sign toward the cross-dashboard topbar counter
+    _uniqueSigns.add((word || '').toLowerCase());
     if (typeof bumpSignCount === 'function') bumpSignCount(1);
 
     // Broadcast to Live Meeting room if connected
@@ -3874,12 +3875,22 @@ button.is-busy{opacity:.6;cursor:progress}
             }
           }
         };
-        meetingMicRec.onerror = () => {
+        meetingMicRec.onerror = (e) => {
+          console.error('[Meeting Mic] SpeechRecognition error:', e.error);
+          try { meetingMicRec.stop(); } catch(_) {}
+          meetingMicRec = null;
+          meetingMicOn = false;
           btn.textContent = '🔇 Mic Off';
           btn.style.background = 'rgba(255,255,255,0.1)';
           btn.style.color = 'rgba(255,255,255,0.5)';
-          meetingMicOn = false;
+          setStatus('Mic error: ' + (e.error || 'unknown'), false);
           renderMobileQuickActions();
+        };
+        meetingMicRec.onend = () => {
+          if (meetingMicOn) {
+            // Recognition stopped but flag says it should be on — restart
+            try { meetingMicRec.start(); } catch(_) { meetingMicOn = false; btn.textContent = '🔇 Mic Off'; btn.style.background='rgba(255,255,255,0.1)';btn.style.color='rgba(255,255,255,0.5)'; renderMobileQuickActions(); }
+          }
         };
         meetingMicRec.start();
       } else {
@@ -4390,11 +4401,6 @@ function toggleSidebar() {
   const collapsed = app.classList.toggle('sb-collapsed');
   localStorage.setItem('sb-collapsed', collapsed ? '1' : '0');
 }
-(function() {
-  if (localStorage.getItem('sb-collapsed') === '1') {
-    document.getElementById('app').classList.add('sb-collapsed');
-  }
-})();
 
 /* Topbar stats — uptime clock & sign counter */
 let _sessionStart = Date.now();
@@ -4412,8 +4418,24 @@ let _signCount = parseInt(localStorage.getItem('signs-today-count') || '0', 10) 
    are detected/translated so the topbar chip reflects activity across all dashboards. */
 // ── Rolling confidence history for sparklines ───────────────
 const _confHistory = [];   // {conf, t} — last 40 detections
+const _uniqueSigns = new Set(); // vocabulary coverage tracker
 const _signsSparkPts = []; // running count per 5-sign bucket for sparkline
 let _signsSparkBucket = 0;
+// MediaPipe landmark smoothing — grace frames + EMA
+let _lhLmSmooth = null, _rhLmSmooth = null;
+let _lhLastSeen = null, _rhLastSeen = null;
+let _lmGrace = 0;
+const LM_GRACE_FRAMES = 3;
+const LM_ALPHA = 0.65; // EMA weight for previous frame
+
+function _emaLandmarks(prev, curr) {
+  if (!prev || prev.length !== curr.length) return curr;
+  return curr.map((pt, i) => ({
+    x: LM_ALPHA * prev[i].x + (1 - LM_ALPHA) * pt.x,
+    y: LM_ALPHA * prev[i].y + (1 - LM_ALPHA) * pt.y,
+    z: LM_ALPHA * prev[i].z + (1 - LM_ALPHA) * pt.z,
+  }));
+}
 
 function _sparkPoints(arr, w, h) {
   if (arr.length < 2) return '';
@@ -4474,6 +4496,8 @@ function _updateConfWidgets(conf) {
   const avg = Math.round(_confHistory.slice(-20).reduce((a,b)=>a+b,0) / Math.min(_confHistory.length,20));
   const tileConf = document.getElementById('tile-conf');
   if (tileConf) tileConf.textContent = avg + '%';
+  const tileConfSub = document.getElementById('tile-conf-sub');
+  if (tileConfSub) tileConfSub.textContent = `avg of ${_confHistory.length} detection${_confHistory.length !== 1 ? 's' : ''}`;
   const usageConf = document.getElementById('usage-confidence');
   if (usageConf) usageConf.textContent = avg + '%';
 }
@@ -4507,14 +4531,27 @@ function bumpSignCount(n) {
     _signCount = 0;
     localStorage.setItem('signs-today-date', today);
   }
-  _signCount += (n || 1);
+  if (n) _signCount += n;
   localStorage.setItem('signs-today-count', String(_signCount));
   const chipSigns = document.getElementById('chip-signs');
   if (chipSigns) chipSigns.textContent = _signCount;
   const usageToday = document.getElementById('usage-signs-today');
   if (usageToday) usageToday.textContent = _signCount;
   const bar = document.getElementById('usage-progress-bar');
-  if (bar) bar.style.width = Math.min(_signCount * 2, 100) + '%';
+  if (bar) {
+    const langSel = document.getElementById('cam-language-select');
+    const lang = langSel ? langSel.value : 'english';
+    const totalClasses = (lang === 'arabic' || lang === 'egyptian') ? 20 : 250;
+    const coverage = _uniqueSigns.size > 0 ? Math.round(_uniqueSigns.size / totalClasses * 100) : 0;
+    bar.style.width = Math.min(coverage, 100) + '%';
+  }
+  const progressLbl = document.getElementById('usage-progress-lbl');
+  if (progressLbl && _uniqueSigns.size > 0) {
+    const langSel2 = document.getElementById('cam-language-select');
+    const lang2 = langSel2 ? langSel2.value : 'english';
+    const total2 = (lang2 === 'arabic' || lang2 === 'egyptian') ? 20 : 250;
+    progressLbl.textContent = `Vocabulary: ${_uniqueSigns.size}/${total2} signs`;
+  }
   // Tile
   const tileSigns = document.getElementById('tile-signs');
   if (tileSigns) tileSigns.textContent = _signCount;
