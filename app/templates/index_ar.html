@@ -204,7 +204,7 @@ html[data-theme="light"] .t-brand-name{filter:none}
 .d-meet-code-val{font-family:var(--font-display);font-size:26px;font-weight:800;letter-spacing:.12em;color:var(--text)}
 .d-meet-stage{display:grid;grid-template-columns:1fr 300px;gap:20px}
 @media(max-width:960px){.d-meet-stage{grid-template-columns:1fr}}
-.d-meet-videos{display:grid;grid-template-columns:1fr 1fr;gap:12px;border-radius:14px;overflow:hidden;border:1px solid var(--border);background:var(--border);min-height:240px;max-height:min(52vh,460px)}
+.d-meet-videos{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;border-radius:14px;overflow:hidden;border:1px solid var(--border);background:var(--border);min-height:240px;max-height:min(52vh,460px)}
 .d-meet-vid-wrap{position:relative;background:var(--surface-2);aspect-ratio:4/3;max-height:min(52vh,460px);overflow:hidden}
 .d-meet-vid-wrap video{width:100%;height:100%;object-fit:cover}
 .d-meet-vid-lbl{position:absolute;top:10px;inset-inline-start:10px;background:rgba(0,0,0,.55);color:#fff;padding:3px 8px;border-radius:6px;font-size:11px;font-weight:700;z-index:5}
@@ -822,23 +822,23 @@ button.is-busy{opacity:.6;cursor:progress}
               <div style="font-size:12px;color:var(--faint)" id="meeting-stage-label">بانتظار الانضمام</div>
             </div>
             <div style="position:relative">
-              <div class="d-meet-videos">
+              <div class="d-meet-videos" id="meeting-remote-tiles">
                 <div class="d-meet-vid-wrap">
                   <video id="meeting-local-video" autoplay playsinline muted style="width:100%;height:100%;object-fit:cover;display:none"></video>
                   <div id="local-video-placeholder" class="d-meet-ph">الكاميرا مغلقة</div>
-                  <div class="d-meet-vid-lbl">أنت</div>
-                </div>
-                <div class="d-meet-vid-wrap">
                   <div class="meeting-avatar-corner" id="meeting-avatar-corner" style="position:absolute;inset:0;z-index:5">
                     <div class="d-meet-vid-lbl" style="z-index:10">أفاتار المتحدث</div>
                     <canvas id="meeting-avatar-canvas" style="width:100%;height:100%;object-fit:cover"></canvas>
                   </div>
+                  <div class="d-meet-vid-lbl">أنت</div>
+                </div>
+                <div class="d-meet-vid-wrap" id="meeting-peer-placeholder-tile">
                   <video id="remote_video" autoplay playsinline style="width:100%;height:100%;object-fit:cover;display:none"></video>
-                  <div id="meeting-video-placeholder" class="d-meet-ph">بانتظار الطرف الآخر…</div>
-                  <div class="d-meet-vid-lbl" id="remote-video-label">الطرف الآخر</div>
+                  <div id="meeting-video-placeholder" class="d-meet-ph">بانتظار المشارك…</div>
+                  <div class="d-meet-vid-lbl" id="remote-video-label">مشارك</div>
                 </div>
               </div>
-              <div class="d-meet-subtitle" id="meeting-subtitle-overlay">بانتظار الطرف الآخر…</div>
+              <div class="d-meet-subtitle" id="meeting-subtitle-overlay">بانتظار المشارك…</div>
             </div>
             <div class="d-meet-controls">
               <button class="t-btn t-btn--ghost" id="meeting-cam-btn" onclick="toggleMeetingCamera()">📷 إيقاف الكاميرا</button>
@@ -1070,9 +1070,10 @@ button.is-busy{opacity:.6;cursor:progress}
   let meetingSignInputOn = false;
   let meetingSpeechOutOn = true;
   let meetingAvatarPlaying = false;
-  let peerConnection = null;
-  let iceCandidateBuffer = [];
-  let peerSocketId = null;
+  // ── WebRTC mesh state (up to 6 participants) ──
+  // remoteSid -> { pc, iceBuffer:[], makingOffer, name, role }
+  const peers = {};
+  function peerCount() { return Object.keys(peers).length; }
   let currentModule = 'vision';
   // ═══════════════════════════════════════════════════════════
   // AUTH GUARD + USER INFO
@@ -2788,25 +2789,16 @@ button.is-busy{opacity:.6;cursor:progress}
   // Socket.IO room join/leave + translate broadcast
   // ═══════════════════════════════════════════════════════════
 
-  function initWebRtc(targetSid, isCaller) {
-    // Idempotent: duplicate presence events (presence_announced + presence_reply
-    // + the new_peer re-announce) must NOT tear down a live connection to the
-    // same peer — doing so was dropping the call mid-negotiation and leaving the
-    // remote video blank.
-    if (peerConnection && peerSocketId === targetSid &&
-        peerConnection.signalingState !== 'closed') {
-      console.log("[WebRTC] Connection to", targetSid, "already active — skipping re-init");
-      return;
-    }
-    iceCandidateBuffer = [];
-    if (peerConnection) {
-      console.log("[WebRTC] Closing existing PeerConnection before re-initializing");
-      try { peerConnection.close(); } catch(_) {}
-      peerConnection = null;
-    }
-
-    peerSocketId = targetSid;
-    console.log(`[WebRTC] Initializing PeerConnection for ${targetSid}, isCaller = ${isCaller}`);
+  // ── WebRTC mesh: per-peer connection management ──
+  // Newcomer is the deterministic OFFERER to every peer already in the room
+  // (driven by room_peers). Existing peers, on new_peer, create the connection
+  // and WAIT for the newcomer's offer. This removes glare without sid-compare.
+  function createPeer(remoteSid, isOfferer) {
+    if (!remoteSid || remoteSid === (socket && socket.id)) return null;
+    let entry = peers[remoteSid];
+    // Idempotent: a live connection to the same peer must not be torn down by a
+    // duplicate room_peers/new_peer/offer event.
+    if (entry && entry.pc && entry.pc.signalingState !== 'closed') return entry;
 
     const config = {
       iceServers: [
@@ -2814,81 +2806,202 @@ button.is-busy{opacity:.6;cursor:progress}
         { urls: 'stun:stun1.l.google.com:19302' }
       ]
     };
+    const pc = new RTCPeerConnection(config);
+    entry = peers[remoteSid] = { pc, iceBuffer: [], makingOffer: false };
 
-    peerConnection = new RTCPeerConnection(config);
-
-    peerConnection.onicecandidate = (event) => {
-      if (event.candidate && socket && socket.connected) {
+    pc.onicecandidate = (e) => {
+      if (e.candidate && socket && socket.connected) {
         socket.emit('webrtc_ice_candidate', {
-          candidate: event.candidate,
-          room: currentMeetingRoom
+          candidate: e.candidate,
+          room: currentMeetingRoom,
+          target_sid: remoteSid
         });
       }
     };
 
-    peerConnection.ontrack = (event) => {
-      console.log("[WebRTC] Received remote stream/track");
-      const remoteVideo = document.getElementById('remote_video');
-      if (remoteVideo) {
-        if (event.streams && event.streams[0]) {
-          remoteVideo.srcObject = event.streams[0];
-        } else {
-          if (!remoteVideo.srcObject) {
-            remoteVideo.srcObject = new MediaStream();
-          }
-          remoteVideo.srcObject.addTrack(event.track);
-        }
-        // Only reveal the remote <video> when it actually carries a video track —
-        // an audio-only track must not hide the avatar/placeholder.
-        const hasVideo = remoteVideo.srcObject &&
-          remoteVideo.srcObject.getVideoTracks &&
-          remoteVideo.srcObject.getVideoTracks().length > 0;
-        if (hasVideo) {
-          remoteVideo.style.display = 'block';
-          const placeholder = document.getElementById('meeting-video-placeholder');
-          if (placeholder) placeholder.style.display = 'none';
-          // A real remote camera stream must NOT be hidden behind the speaker
-          // avatar overlay (absolute, z-index:5). Hide the avatar corner so the
-          // peer's video is visible; the avatar is only for the no-video case.
-          const corner = document.getElementById('meeting-avatar-corner');
-          if (corner) corner.classList.remove('visible');
-        }
-      }
+    pc.ontrack = (e) => { attachRemoteTrack(remoteSid, e); };
+
+    pc.onconnectionstatechange = () => {
+      const st = pc.connectionState;
+      // A transient 'disconnected' may recover; only tear down on failed/closed.
+      if (st === 'failed' || st === 'closed') removePeer(remoteSid);
     };
 
+    // Add local camera tracks if we have them.
     if (meetingCamStream) {
-      console.log("[WebRTC] Adding local camera tracks to PeerConnection");
-      meetingCamStream.getTracks().forEach(track => {
-        peerConnection.addTrack(track, meetingCamStream);
+      meetingCamStream.getTracks().forEach(t => {
+        try { pc.addTrack(t, meetingCamStream); } catch (_) {}
       });
     }
 
     let offerCreated = false;
-    const makeOffer = async () => {
-      // Only the designated caller offers, and only once — guard against glare
-      // from onnegotiationneeded and the startup timer firing together.
-      if (!isCaller || offerCreated) return;
-      if (peerConnection.signalingState !== 'stable') return;
-      offerCreated = true;
-      try {
-        console.log("[WebRTC] Creating offer...");
-        const offer = await peerConnection.createOffer();
-        await peerConnection.setLocalDescription(offer);
-        socket.emit('webrtc_offer', {
-          sdp: offer,
-          room: currentMeetingRoom
-        });
-      } catch (err) {
-        offerCreated = false;
-        console.error("[WebRTC] Offer creation failed:", err);
+    const sendOffer = async () => {
+      const offer = await pc.createOffer();
+      await pc.setLocalDescription(offer);
+      if (socket && socket.connected) {
+        socket.emit('webrtc_offer', { sdp: offer, room: currentMeetingRoom, target_sid: remoteSid });
       }
+      entry.negotiated = true;
     };
+    const makeOffer = async () => {
+      // Initial offer: only the designated offerer, only once (glare guard).
+      if (!isOfferer || offerCreated) return;
+      if (pc.signalingState !== 'stable') return;
+      offerCreated = true;
+      try { await sendOffer(); } catch (err) { offerCreated = false; console.error('[WebRTC] offer failed', err); }
+    };
+    // Renegotiation for track changes AFTER the initial handshake (e.g. a peer
+    // toggles their camera mid-call). Gated on entry.negotiated so the proven
+    // initial offer/answer path above is never affected; re-entrancy guarded.
+    pc.onnegotiationneeded = async () => {
+      if (!entry.negotiated) { makeOffer(); return; }
+      if (pc.signalingState !== 'stable' || entry.makingOffer) return;
+      entry.makingOffer = true;
+      try { await sendOffer(); } catch (err) { console.error('[WebRTC] renegotiate failed', err); }
+      finally { entry.makingOffer = false; }
+    };
+    if (isOfferer) setTimeout(makeOffer, 100);
 
-    peerConnection.onnegotiationneeded = makeOffer;
+    updateParticipantsUI();
+    return entry;
+  }
 
-    if (isCaller) {
-      setTimeout(makeOffer, 100);
+  function removePeer(remoteSid) {
+    const entry = peers[remoteSid];
+    if (entry) {
+      try { entry.pc.close(); } catch (_) {}
+      delete peers[remoteSid];
     }
+    removeRemoteTile(remoteSid);
+    updateParticipantsUI();
+  }
+
+  async function drainIce(entry) {
+    if (!entry) return;
+    while (entry.iceBuffer.length) {
+      try {
+        await entry.pc.addIceCandidate(new RTCIceCandidate(entry.iceBuffer.shift()));
+      } catch (e) {
+        console.error('[WebRTC] drain ice', e);
+      }
+    }
+  }
+
+  // ── Dynamic remote-video grid helpers ──
+  function safeSidId(sid) {
+    return String(sid || '').replace(/[^A-Za-z0-9_-]/g, '_');
+  }
+
+  function getOrCreateRemoteTile(sid) {
+    const tileId = 'remote-tile-' + safeSidId(sid);
+    const videoId = 'remote-video-' + safeSidId(sid);
+    let video = document.getElementById(videoId);
+    if (video) return video;
+
+    const container = document.getElementById('meeting-remote-tiles');
+    if (!container) return null;
+
+    const entry = peers[sid] || {};
+    const labelText = (entry && entry.name)
+      ? entry.name
+      : (forcedLang === 'ar' ? 'مشارك' : 'Peer');
+
+    const wrap = document.createElement('div');
+    wrap.className = 'd-meet-vid-wrap';
+    wrap.id = tileId;
+
+    video = document.createElement('video');
+    video.id = videoId;
+    video.autoplay = true;
+    video.playsInline = true;
+    video.setAttribute('playsinline', '');
+    video.style.cssText = 'width:100%;height:100%;object-fit:cover';
+
+    const lbl = document.createElement('div');
+    lbl.className = 'd-meet-vid-lbl';
+    lbl.id = 'remote-label-' + safeSidId(sid);
+    lbl.textContent = labelText;
+
+    wrap.appendChild(video);
+    wrap.appendChild(lbl);
+    container.appendChild(wrap);
+
+    // Hide the global "Waiting for peer…" placeholder tile once a real tile exists.
+    const phTile = document.getElementById('meeting-peer-placeholder-tile');
+    if (phTile) phTile.style.display = 'none';
+
+    return video;
+  }
+
+  function removeRemoteTile(sid) {
+    const tile = document.getElementById('remote-tile-' + safeSidId(sid));
+    if (tile) tile.remove();
+    // If no remote tiles remain, restore the placeholder tile.
+    const container = document.getElementById('meeting-remote-tiles');
+    const anyRemote = container && container.querySelector('[id^="remote-tile-"]');
+    if (!anyRemote) {
+      const phTile = document.getElementById('meeting-peer-placeholder-tile');
+      if (phTile) phTile.style.display = '';
+      const placeholder = document.getElementById('meeting-video-placeholder');
+      if (placeholder) {
+        placeholder.style.display = 'flex';
+        placeholder.textContent = forcedLang === 'ar' ? 'بانتظار المشارك…' : 'Waiting for peer…';
+      }
+    }
+  }
+
+  function attachRemoteTrack(sid, event) {
+    const video = getOrCreateRemoteTile(sid);
+    if (!video) return;
+    if (event.streams && event.streams[0]) {
+      video.srcObject = event.streams[0];
+    } else {
+      if (!video.srcObject) video.srcObject = new MediaStream();
+      try { video.srcObject.addTrack(event.track); } catch (_) {}
+    }
+    // Only reveal the tile when it actually carries a video track — an
+    // audio-only track must not hide the avatar/placeholder.
+    const hasVideo = video.srcObject &&
+      video.srcObject.getVideoTracks &&
+      video.srcObject.getVideoTracks().length > 0;
+    if (hasVideo) {
+      video.style.display = 'block';
+      const phTile = document.getElementById('meeting-peer-placeholder-tile');
+      if (phTile) phTile.style.display = 'none';
+      // A real remote camera must not stay hidden behind the speaker avatar
+      // overlay on the local tile; the avatar is only for the no-video case.
+      const corner = document.getElementById('meeting-avatar-corner');
+      if (corner) corner.classList.remove('visible');
+    }
+    updateParticipantsUI();
+  }
+
+  function updateParticipantsUI() {
+    const peerDiv = document.getElementById('participant-peer');
+    const n = peerCount();
+    if (peerDiv) {
+      if (n === 0) {
+        peerDiv.innerHTML = forcedLang === 'ar'
+          ? '<span style="color:var(--gray-400); font-style:italic;">بانتظار المشارك…</span>'
+          : '<span style="color:var(--gray-400); font-style:italic;">Waiting for peer…</span>';
+        peerDiv.style.fontStyle = 'italic';
+      } else {
+        const parts = Object.keys(peers).map(sid => {
+          const e = peers[sid] || {};
+          const nm = e.name || (forcedLang === 'ar' ? 'مشارك' : 'Peer');
+          const rl = e.role ? ` <span style="font-size:10px; opacity:0.75;">(${e.role})</span>` : '';
+          return `<strong>${nm}</strong>${rl}`;
+        });
+        peerDiv.innerHTML = parts.join('<br>');
+        peerDiv.style.fontStyle = 'normal';
+      }
+    }
+    // Update the live remote-tile labels with names as they arrive.
+    Object.keys(peers).forEach(sid => {
+      const e = peers[sid] || {};
+      const lbl = document.getElementById('remote-label-' + safeSidId(sid));
+      if (lbl && e.name) lbl.textContent = e.name;
+    });
   }
 
   function generateMeetingRoomId() {
@@ -3354,12 +3467,13 @@ button.is-busy{opacity:.6;cursor:progress}
       camBtn.classList.add('on');
       setMeetingUiState(inMeeting);
 
-      // If WebRTC peer connection exists, add tracks now
-      if (peerConnection) {
+      // Add local camera tracks to every existing peer connection now. Adding
+      // tracks triggers onnegotiationneeded → renegotiation per peer.
+      Object.values(peers).forEach(p => {
         meetingCamStream.getTracks().forEach(track => {
-          peerConnection.addTrack(track, meetingCamStream);
+          try { p.pc.addTrack(track, meetingCamStream); } catch (_) {}
         });
-      }
+      });
 
       return true;
     } catch (_) {
@@ -3598,155 +3712,116 @@ button.is-busy{opacity:.6;cursor:progress}
           renderMeetingSentence(payload.text, payload.senderRole, false);
         });
 
-        socket.on('new_peer', () => {
-          console.log('[Meeting] New peer joined');
-          socket.emit('announce_presence', {
-            room: currentMeetingRoom,
-            name: displayName,
-            role: isDeafHohUser ? 'Signer' : 'Speaker'
-          });
+        // ── Mesh signaling ──
+        // I am the newcomer: offer to every peer already in the room.
+        socket.on('room_peers', (data) => {
+          (data && data.peers ? data.peers : []).forEach(sid => createPeer(sid, true));
         });
 
-        socket.on('presence_announced', (data) => {
-          const peerDiv = document.getElementById('participant-peer');
-          if (peerDiv) {
-            peerDiv.innerHTML = `<strong>${data.name}</strong> <span style="font-size:10px; opacity:0.75;">(${data.role})</span>`;
-            peerDiv.style.fontStyle = 'normal';
+        // Someone joined after me: create their connection and WAIT for offer.
+        socket.on('new_peer', (data) => {
+          const sid = data && data.sid;
+          if (sid) createPeer(sid, false);
+          // Keep announcing my presence so they can show my name.
+          if (socket && socket.connected) {
+            socket.emit('announce_presence', {
+              room: currentMeetingRoom,
+              name: displayName,
+              role: isDeafHohUser ? 'Signer' : 'Speaker'
+            });
           }
-          socket.emit('announce_presence_reply', {
-            room: currentMeetingRoom,
-            name: displayName,
-            role: isDeafHohUser ? 'Signer' : 'Speaker'
-          });
+        });
 
-          // Initiate WebRTC connection
-          if (data.sender_sid && socket && socket.id) {
-            const peerRole = (data.role || '').toString().toLowerCase();
-            const myRole = isDeafHohUser ? 'signer' : 'speaker';
-            let isCaller = false;
-            if (myRole === 'signer' && peerRole === 'speaker') {
-              isCaller = true;
-            } else if (myRole === 'speaker' && peerRole === 'signer') {
-              isCaller = false;
-            } else {
-              isCaller = socket.id < data.sender_sid;
-            }
-            initWebRtc(data.sender_sid, isCaller);
+        // presence_announced / presence_reply now ONLY update participant NAME UI.
+        socket.on('presence_announced', (data) => {
+          if (!data) return;
+          const sid = data.sender_sid;
+          if (sid && peers[sid]) {
+            peers[sid].name = data.name;
+            peers[sid].role = data.role;
+          }
+          updateParticipantsUI();
+          if (socket && socket.connected) {
+            socket.emit('announce_presence_reply', {
+              room: currentMeetingRoom,
+              name: displayName,
+              role: isDeafHohUser ? 'Signer' : 'Speaker'
+            });
           }
         });
 
         socket.on('presence_reply', (data) => {
-          const peerDiv = document.getElementById('participant-peer');
-          if (peerDiv) {
-            peerDiv.innerHTML = `<strong>${data.name}</strong> <span style="font-size:10px; opacity:0.75;">(${data.role})</span>`;
-            peerDiv.style.fontStyle = 'normal';
+          if (!data) return;
+          const sid = data.sender_sid;
+          if (sid && peers[sid]) {
+            peers[sid].name = data.name;
+            peers[sid].role = data.role;
           }
+          updateParticipantsUI();
+        });
 
-          // Initiate WebRTC connection
-          if (data.sender_sid && socket && socket.id) {
-            const peerRole = (data.role || '').toString().toLowerCase();
-            const myRole = isDeafHohUser ? 'signer' : 'speaker';
-            let isCaller = false;
-            if (myRole === 'signer' && peerRole === 'speaker') {
-              isCaller = true;
-            } else if (myRole === 'speaker' && peerRole === 'signer') {
-              isCaller = false;
-            } else {
-              isCaller = socket.id < data.sender_sid;
-            }
-            initWebRtc(data.sender_sid, isCaller);
+        socket.on('peer_left', (data) => {
+          const sid = data && data.sid;
+          if (sid) {
+            removePeer(sid);
+          } else {
+            // Legacy no-sid → clear all peers.
+            Object.keys(peers).forEach(removePeer);
           }
         });
 
-        socket.on('peer_left', () => {
-          const peerDiv = document.getElementById('participant-peer');
-          if (peerDiv) {
-            peerDiv.innerHTML = `<span style="color:var(--gray-400); font-style:italic;">${forcedLang === 'ar' ? 'بانتظار الطرف الآخر...' : 'Waiting for peer...'}</span>`;
-          }
-          if (peerConnection) {
-            try { peerConnection.close(); } catch(_) {}
-            peerConnection = null;
-          }
-          peerSocketId = null;
-          const remoteVideo = document.getElementById('remote_video');
-          if (remoteVideo) {
-            remoteVideo.srcObject = null;
-            remoteVideo.style.display = 'none';
-          }
-          const placeholder = document.getElementById('meeting-video-placeholder');
-          if (placeholder) {
-            placeholder.style.display = 'flex';
-            placeholder.textContent = 'بانتظار الطرف الآخر...';
-          }
-        });
-
-        // WebRTC Signaling listeners
+        // ── WebRTC signaling listeners (targeted by sender_sid) ──
         socket.on('webrtc_offer', async (data) => {
-          console.log("[WebRTC] Received offer from", data.sender_sid);
-          if (!peerConnection) {
-            initWebRtc(data.sender_sid, false);
-          }
+          const sid = data && data.sender_sid;
+          if (!sid) return;
+          const entry = peers[sid] || createPeer(sid, false);
+          if (!entry) return;
+          const pc = entry.pc;
           try {
-            await peerConnection.setRemoteDescription(new RTCSessionDescription(data.sdp));
-            console.log("[WebRTC] Applying buffered ICE candidates...");
-            while (iceCandidateBuffer.length > 0) {
-              const candidate = iceCandidateBuffer.shift();
-              try {
-                await peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
-              } catch (err) {
-                console.error("[WebRTC] Error adding buffered ICE candidate:", err);
-              }
+            await pc.setRemoteDescription(new RTCSessionDescription(data.sdp));
+            await drainIce(entry);
+            const answer = await pc.createAnswer();
+            await pc.setLocalDescription(answer);
+            if (socket && socket.connected) {
+              socket.emit('webrtc_answer', {
+                sdp: answer,
+                room: currentMeetingRoom,
+                target_sid: sid
+              });
             }
-            console.log("[WebRTC] Creating answer...");
-            const answer = await peerConnection.createAnswer();
-            await peerConnection.setLocalDescription(answer);
-            socket.emit('webrtc_answer', {
-              sdp: answer,
-              room: currentMeetingRoom
-            });
+            entry.negotiated = true; // enable post-handshake renegotiation for this peer
           } catch (err) {
-            console.error("[WebRTC] Error handling offer:", err);
+            console.error('[WebRTC] handle offer', err);
           }
         });
 
         socket.on('webrtc_answer', async (data) => {
-          console.log("[WebRTC] Received answer from", data.sender_sid);
-          if (peerConnection) {
-            try {
-              await peerConnection.setRemoteDescription(new RTCSessionDescription(data.sdp));
-              console.log("[WebRTC] Applying buffered ICE candidates...");
-              while (iceCandidateBuffer.length > 0) {
-                const candidate = iceCandidateBuffer.shift();
-                try {
-                  await peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
-                } catch (err) {
-                  console.error("[WebRTC] Error adding buffered ICE candidate:", err);
-                }
-              }
-            } catch (err) {
-              console.error("[WebRTC] Error setting remote description:", err);
-            }
+          const entry = data && peers[data.sender_sid];
+          if (!entry) return;
+          try {
+            await entry.pc.setRemoteDescription(new RTCSessionDescription(data.sdp));
+            await drainIce(entry);
+          } catch (err) {
+            console.error('[WebRTC] handle answer', err);
           }
         });
 
         socket.on('webrtc_ice_candidate', async (data) => {
-          console.log("[WebRTC] Received ICE candidate from", data.sender_sid);
-          if (peerConnection && data.candidate) {
-            if (peerConnection.remoteDescription) {
-              try {
-                await peerConnection.addIceCandidate(new RTCIceCandidate(data.candidate));
-              } catch (err) {
-                console.error("[WebRTC] Error adding ICE candidate:", err);
-              }
-            } else {
-              console.log("[WebRTC] Buffering ICE candidate until remote description is set");
-              iceCandidateBuffer.push(data.candidate);
+          const entry = data && peers[data.sender_sid];
+          if (!entry || !data.candidate) return;
+          if (entry.pc.remoteDescription && entry.pc.remoteDescription.type) {
+            try {
+              await entry.pc.addIceCandidate(new RTCIceCandidate(data.candidate));
+            } catch (err) {
+              console.error('[WebRTC] add ice', err);
             }
+          } else {
+            entry.iceBuffer.push(data.candidate);
           }
         });
 
         socket.on('room_full', (data) => {
-          setStatus(forcedLang === 'ar' ? '\u0627\u0644\u063a\u0631\u0641\u0629 \u0645\u0645\u062a\u0644\u0626\u0629 (\u0627\u0644\u062d\u062f \u0627\u0644\u0623\u0642\u0635\u0649 \u0634\u062e\u0635\u064a\u0646)' : `Room ${data.room || ''} is full (max 2 participants)`, false);
+          setStatus(forcedLang === 'ar' ? `\u0627\u0644\u063a\u0631\u0641\u0629 ${(data && data.room) || ''} \u0645\u0645\u062a\u0644\u0626\u0629 (6 \u0643\u062d\u062f \u0623\u0642\u0635\u0649)` : `Room ${(data && data.room) || ''} is full (max 6)`, false);
           leaveMeeting();
         });
       }
@@ -3818,11 +3893,21 @@ button.is-busy{opacity:.6;cursor:progress}
       micBtn.style.color = '';
     }
 
-    if (peerConnection) {
-      try { peerConnection.close(); } catch(_) {}
-      peerConnection = null;
+    // Close all mesh peer connections and clear the dynamic remote tiles.
+    Object.keys(peers).forEach(removePeer);
+    const _remoteTiles = document.getElementById('meeting-remote-tiles');
+    if (_remoteTiles) {
+      _remoteTiles.querySelectorAll('[id^="remote-tile-"]').forEach(el => el.remove());
     }
-    peerSocketId = null;
+    {
+      const _phTile = document.getElementById('meeting-peer-placeholder-tile');
+      if (_phTile) _phTile.style.display = '';
+      const _ph = document.getElementById('meeting-video-placeholder');
+      if (_ph) {
+        _ph.style.display = 'flex';
+        _ph.textContent = forcedLang === 'ar' ? 'بانتظار المشارك…' : 'Waiting for peer…';
+      }
+    }
 
     if (socket && socket.connected && currentMeetingRoom) {
       socket.emit('leave_room', { room: currentMeetingRoom });
@@ -4447,7 +4532,8 @@ button.is-busy{opacity:.6;cursor:progress}
     get socket() { return socket; },
     get meetingCamStream() { return meetingCamStream; },
     set meetingCamStream(v) { meetingCamStream = v; },
-    get peerConnection() { return peerConnection; },
+    get peerConnection() { const k = Object.keys(peers)[0]; return k ? peers[k].pc : null; },
+    get peerConnections() { return Object.values(peers).map(p => p.pc).filter(Boolean); },
     get glossBuffer() { return glossBuffer; },
   };
 </script>

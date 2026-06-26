@@ -1077,15 +1077,27 @@
     } catch (e) {}
   }
 
+  // Collect the outgoing video sender from every peer connection (mesh-aware,
+  // with a 1:1 fallback). Applies background blur to all peers present at enable
+  // time. NOTE: peers that join AFTER blur is enabled receive the raw camera
+  // (known limitation — toggle blur off/on after everyone has joined to re-apply).
+  function allVideoSenders() {
+    var senders = [];
+    var pcs = dash('peerConnections'); // mesh: array of RTCPeerConnection
+    if (!pcs || !pcs.length) { var single = dash('peerConnection'); pcs = single ? [single] : []; }
+    pcs.forEach(function (pc) {
+      try {
+        var s = pc.getSenders().find(function (x) { return x.track && x.track.kind === 'video'; });
+        if (s) senders.push(s);
+      } catch (e) {}
+    });
+    return senders;
+  }
+
   async function startVbgProcessing() {
     var stream = dash('meetingCamStream');
-    var pc = dash('peerConnection');
-    if (!stream || !pc) return false; // not in a meeting with a camera yet — caller will retry
-
-    var sender = null;
-    try { sender = pc.getSenders().find(function (s) { return s.track && s.track.kind === 'video'; }); }
-    catch (e) {}
-    if (!sender) return false;
+    var senders = allVideoSenders();
+    if (!stream || !senders.length) return false; // not in a meeting with a camera yet — caller retries
 
     try {
       await loadMediaPipe();
@@ -1137,7 +1149,7 @@
       } catch (e) {}
     });
     _vbg.seg = seg;
-    _vbg.originalTrack = sender.track;
+    _vbg.originalTrack = senders[0].track;
 
     _vbg.active = true;
     var pump = async function () {
@@ -1152,7 +1164,7 @@
       _vbg.outStream = canvas.captureStream(24);
       var newTrack = _vbg.outStream.getVideoTracks()[0];
       if (newTrack) {
-        await sender.replaceTrack(newTrack);
+        for (var si = 0; si < senders.length; si++) { try { await senders[si].replaceTrack(newTrack); } catch (e) {} }
         var localVid = byId('meeting-local-video');
         if (localVid) localVid.srcObject = _vbg.outStream;
       }
@@ -1168,10 +1180,9 @@
     if (_vbg.poll) { clearInterval(_vbg.poll); _vbg.poll = null; }
     // Restore the original camera track to the sender + local preview.
     try {
-      var pc = dash('peerConnection');
-      var sender = pc && pc.getSenders ? pc.getSenders().find(function (s) { return s.track && s.track.kind === 'video'; }) : null;
-      if (sender && _vbg.originalTrack) {
-        await sender.replaceTrack(_vbg.originalTrack);
+      var senders = allVideoSenders();
+      if (_vbg.originalTrack) {
+        for (var si = 0; si < senders.length; si++) { try { await senders[si].replaceTrack(_vbg.originalTrack); } catch (e) {} }
         var localVid = byId('meeting-local-video');
         var orig = dash('meetingCamStream');
         if (localVid && orig) localVid.srcObject = orig;

@@ -1524,6 +1524,9 @@ async def get_vocabulary(current_user: dict = Depends(get_current_user)):
 # ═══════════════════════════════════════════════════════════════
 
 rooms: dict = {}  # Map sid -> room_id
+# Max participants per meeting room. Mesh WebRTC scales to small groups; keep
+# this modest (each peer holds N-1 connections).
+MEETING_ROOM_CAP = int(os.environ.get("MEETING_ROOM_CAP", "6"))
 
 @sio.on("connect")
 async def on_connect(sid, environ, auth=None):
@@ -1550,18 +1553,22 @@ async def on_disconnect(sid):
 @sio.on("join_room")
 async def join_room(sid, data):
     room_id = data.get("room", "general")
-    
-    # Limit to 1-1 (max 2 participants)
-    participants = [s for s, r in rooms.items() if r == room_id]
-    if len(participants) >= 2:
+
+    # Existing participants BEFORE this peer joins (the mesh the joiner connects to).
+    existing = [s for s, r in rooms.items() if r == room_id]
+    if len(existing) >= MEETING_ROOM_CAP:
         await sio.emit("room_full", {"room": room_id}, to=sid)
-        print(f"[WS] Rejecting {sid} from room '{room_id}' (room full)")
+        print(f"[WS] Rejecting {sid} from room '{room_id}' (room full, cap={MEETING_ROOM_CAP})")
         return
 
     await sio.enter_room(sid, room_id)
     rooms[sid] = room_id
+    # Tell the joiner who is already here so it can initiate a connection to each
+    # (the newcomer is the deterministic offerer → avoids glare). Then notify the
+    # existing peers that a new peer arrived (they will answer the incoming offer).
+    await sio.emit("room_peers", {"peers": existing}, to=sid)
     await sio.emit("new_peer", {"sid": sid}, room=room_id, skip_sid=sid)
-    print(f"[WS] {sid} joined room '{room_id}'")
+    print(f"[WS] {sid} joined room '{room_id}' ({len(existing)+1} now present)")
 
 @sio.on("leave_room")
 async def leave_room(sid, data):
@@ -1587,18 +1594,35 @@ async def announce_presence_reply(sid, data):
 
 @sio.on("webrtc_offer")
 async def webrtc_offer(sid, data):
+    # Mesh: route to a specific peer when target_sid is given; otherwise broadcast
+    # to the room (1:1 backward-compatibility).
     room = data.get("room", "general")
-    await sio.emit("webrtc_offer", {"sdp": data["sdp"], "sender_sid": sid}, room=room, skip_sid=sid)
+    target = data.get("target_sid")
+    payload = {"sdp": data["sdp"], "sender_sid": sid}
+    if target:
+        await sio.emit("webrtc_offer", payload, to=target)
+    else:
+        await sio.emit("webrtc_offer", payload, room=room, skip_sid=sid)
 
 @sio.on("webrtc_answer")
 async def webrtc_answer(sid, data):
     room = data.get("room", "general")
-    await sio.emit("webrtc_answer", {"sdp": data["sdp"], "sender_sid": sid}, room=room, skip_sid=sid)
+    target = data.get("target_sid")
+    payload = {"sdp": data["sdp"], "sender_sid": sid}
+    if target:
+        await sio.emit("webrtc_answer", payload, to=target)
+    else:
+        await sio.emit("webrtc_answer", payload, room=room, skip_sid=sid)
 
 @sio.on("webrtc_ice_candidate")
 async def webrtc_ice_candidate(sid, data):
     room = data.get("room", "general")
-    await sio.emit("webrtc_ice_candidate", {"candidate": data["candidate"], "sender_sid": sid}, room=room, skip_sid=sid)
+    target = data.get("target_sid")
+    payload = {"candidate": data["candidate"], "sender_sid": sid}
+    if target:
+        await sio.emit("webrtc_ice_candidate", payload, to=target)
+    else:
+        await sio.emit("webrtc_ice_candidate", payload, room=room, skip_sid=sid)
 
 @sio.on("translate_sentence")
 async def translate_sentence(sid, data):
