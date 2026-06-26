@@ -1088,9 +1088,8 @@ button.t-nav-item[aria-label="Sign out"]:hover svg{color:var(--danger,#ef4444)}
   // positives low while feeling responsive.
   // Accuracy-tuned: more votes + higher agreement = far fewer false detections.
   // Mirrors the server stream constants (_STREAM_VOTE_BUFFER / _STREAM_STABILITY).
-  const VOTE_BUFFER_SIZE = 2;    // 2 agreeing votes accept (was 3-of-3 — too strict)
-  const STABILITY_FRAMES = 2;
-  const STRONG_CONF = 0.78;      // a single frame this confident accepts immediately
+  const VOTE_BUFFER_SIZE = 3;    // 2-of-3 fills in ~75ms vs 5-vote ~400ms
+  const STABILITY_FRAMES = 3;
   const GLOBAL_COOLDOWN_FRM = 8;   // matches server _STREAM_COOLDOWN (~400ms at 20fps)
   const MIN_HAND_FRAMES = 1;      // start streaming on the very first hand frame
   const MAX_HAND_GAP_FRAMES = 3;  // faster gap detection (3 frames ≈ 150ms)
@@ -2161,29 +2160,28 @@ button.t-nav-item[aria-label="Sign out"]:hover svg{color:var(--danger,#ef4444)}
         voteBuffer.push(data.text);
         if (voteBuffer.length > VOTE_BUFFER_SIZE) voteBuffer.shift();
 
-        // Accept on a single strong frame, or on a short vote consensus.
-        let winner = null;
-        if (data.confidence >= STRONG_CONF && data.text !== lastPredWord) {
-          winner = data.text;
-        } else if (voteBuffer.length >= VOTE_BUFFER_SIZE) {
+        if (voteBuffer.length >= VOTE_BUFFER_SIZE) {
+          // Majority vote — mirrors Counter(vote_buffer).most_common(1)
           const counts = {};
           for (const w of voteBuffer) counts[w] = (counts[w] || 0) + 1;
-          const cand = Object.keys(counts).reduce((a, b) => counts[a] > counts[b] ? a : b);
-          if (counts[cand] >= STABILITY_FRAMES && cand !== lastPredWord) winner = cand;
-        }
+          const winner = Object.keys(counts).reduce((a, b) => counts[a] > counts[b] ? a : b);
+          const count = counts[winner];
 
-        if (winner) {
-          lastPredWord = winner;
-          voteBuffer = [];            // vote_buffer.clear()
-          frameBuffer = [];           // sequence.clear() — flush stale frames
-          globalCooldown = GLOBAL_COOLDOWN_FRM;
-          if (window._setDetectState) _setDetectState('locked', 'Locked', 'hs');
-          setTimeout(() => { if (window._setDetectState) _setDetectState('cooldown', 'Cooldown', 'hs'); }, 80);
-          setTimeout(() => {
-            if (!window._setDetectState || !cameraOn) return;
-            _setDetectState(_hsHandsPresent ? 'detecting' : 'idle', _hsHandsPresent ? 'Detecting' : 'Idle', 'hs');
-          }, GLOBAL_COOLDOWN_FRM * 50 + 80);
-          handleDetectedSign(winner, data.confidence || 0);
+          if (count >= STABILITY_FRAMES && winner !== lastPredWord) {
+            // Sign accepted — mirror script:
+            // vote_buffer.clear() + sequence.clear() + global_cooldown + last_predicted_word = winner
+            lastPredWord = winner;
+            voteBuffer = [];            // vote_buffer.clear()
+            frameBuffer = [];           // sequence.clear() — flush stale frames
+            globalCooldown = GLOBAL_COOLDOWN_FRM;
+            if (window._setDetectState) _setDetectState('locked', 'Locked', 'hs');
+            setTimeout(() => { if (window._setDetectState) _setDetectState('cooldown', 'Cooldown', 'hs'); }, 80);
+            setTimeout(() => {
+              if (!window._setDetectState || !cameraOn) return;
+              _setDetectState(_hsHandsPresent ? 'detecting' : 'idle', _hsHandsPresent ? 'Detecting' : 'Idle', 'hs');
+            }, GLOBAL_COOLDOWN_FRM * 50 + 80);
+            handleDetectedSign(winner, count / VOTE_BUFFER_SIZE);
+          }
         }
       }
       // If confidence < threshold: script does stability_counter -= 1 (we just let voteBuffer age out)

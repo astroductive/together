@@ -1046,9 +1046,8 @@ button.is-busy{opacity:.6;cursor:progress}
   // an earlier first inference make recognition feel responsive on a remote server.
   // Accuracy-tuned: more votes + higher agreement = far fewer false detections.
   // Mirrors the server stream constants (_STREAM_VOTE_BUFFER / _STREAM_STABILITY).
-  const VOTE_BUFFER_SIZE = 2;    // 2 agreeing votes accept (was 3-of-3 — too strict)
-  const STABILITY_FRAMES = 2;
-  const STRONG_CONF = 0.78;      // a single frame this confident accepts immediately
+  const VOTE_BUFFER_SIZE = 3;
+  const STABILITY_FRAMES = 3;
   const GLOBAL_COOLDOWN_FRM = 8;
   const MIN_HAND_FRAMES = 1;
   const MAX_HAND_GAP_FRAMES = 3;
@@ -2092,19 +2091,16 @@ button.is-busy{opacity:.6;cursor:progress}
         voteBuffer.push(data.text);
         if (voteBuffer.length > VOTE_BUFFER_SIZE) voteBuffer.shift();
 
-        // Accept on a single strong frame, or on a short vote consensus.
-        let winner = null;
-        if (data.confidence >= STRONG_CONF && data.text !== lastPredWord) {
-          winner = data.text;
-        } else if (voteBuffer.length >= VOTE_BUFFER_SIZE) {
+        if (voteBuffer.length >= VOTE_BUFFER_SIZE) {
+          // Majority vote — mirrors Counter(vote_buffer).most_common(1)
           const counts = {};
           for (const w of voteBuffer) counts[w] = (counts[w] || 0) + 1;
-          const cand = Object.keys(counts).reduce((a, b) => counts[a] > counts[b] ? a : b);
-          if (counts[cand] >= STABILITY_FRAMES && cand !== lastPredWord) winner = cand;
-        }
+          const winner = Object.keys(counts).reduce((a, b) => counts[a] > counts[b] ? a : b);
+          const count = counts[winner];
 
-        if (winner) {
-          {
+          if (count >= STABILITY_FRAMES && winner !== lastPredWord) {
+            // Sign accepted — mirror script:
+            // vote_buffer.clear() + sequence.clear() + global_cooldown + last_predicted_word = winner
             lastPredWord = winner;
             voteBuffer = [];            // vote_buffer.clear()
             frameBuffer = [];           // sequence.clear() — flush stale frames
@@ -2115,7 +2111,7 @@ button.is-busy{opacity:.6;cursor:progress}
               if (!window._setDetectState || !cameraOn) return;
               _setDetectState(_hsHandsPresent ? 'detecting' : 'idle', _hsHandsPresent ? 'يرصد' : 'خامل', 'hs');
             }, GLOBAL_COOLDOWN_FRM * 50 + 80);
-            handleDetectedSign(winner, data.confidence || 0);
+            handleDetectedSign(winner, count / VOTE_BUFFER_SIZE);
           }
         }
       }

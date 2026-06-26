@@ -1680,13 +1680,8 @@ from collections import deque as _deque, Counter as _Counter
 _STREAM_SEQ_LENGTH = 60
 # Tuned for fast response on idle hardware: lower buffer/stability fires faster while
 # the 2/3 vote requirement still filters noise adequately. CPU headroom is high.
-_STREAM_VOTE_BUFFER = 2        # need 2 votes; with STABILITY=2 that's 2 agreeing
-_STREAM_STABILITY = 2          # 2 consecutive same-label predictions accept
-# A single very-confident frame is trustworthy enough to emit immediately —
-# the 250-class ASL softmax clears 0.65 only sporadically, so requiring a multi
-# vote consensus could leave a clearly-recognized sign never accepted. Frames at
-# or above this confidence bypass the vote (still gated by cooldown + last_pred).
-_STREAM_STRONG_CONF = float(os.environ.get("STREAM_STRONG_CONF", "0.78"))
+_STREAM_VOTE_BUFFER = 3        # was 5 — 2/3 fills in ~75ms vs 5-vote ~400ms
+_STREAM_STABILITY = 2          # was 3 — 2-of-3 agreement
 _STREAM_COOLDOWN = 8           # was 18 — ~400ms between detections (was ~900ms)
 _STREAM_MIN_SEQ = 6            # was 12 — first inference fires after 6 frames (~300ms)
 # 0.025s = 40 inferences/s.  Client sends at 20fps so this never over-runs the
@@ -1806,29 +1801,22 @@ async def sign_frame(sid, data):
         st.last_conf = float(confidence)
         await sio.emit("sign_conf", {"module": module, "confidence": st.last_conf}, to=sid)
 
-        # Accept either when one frame is very confident (fast path) OR when a
-        # short vote window agrees (consensus path). Both are gated by the
-        # cooldown + last_pred guard so a held sign isn't re-fired every frame.
+        # Majority vote — mirrors Counter(vote_buffer).most_common(1)
         st.votes.append(prediction)
-        winner = None
-        if st.last_conf >= _STREAM_STRONG_CONF and prediction != st.last_pred:
-            winner = prediction                              # fast path
-        elif len(st.votes) >= _STREAM_VOTE_BUFFER:
-            cand, count = _Counter(st.votes).most_common(1)[0]
-            if count >= _STREAM_STABILITY and cand != st.last_pred:
-                winner = cand                                # consensus path
-        if winner:
-            st.last_pred = winner
-            st.votes.clear()
-            st.frames.clear()
-            st.cooldown = _STREAM_COOLDOWN
-            disp = (ARABIC_TRANSLATIONS.get(winner.lower(), winner)
-                    if lang in ("arabic", "ar", "egyptian", "eg") else winner)
-            await sio.emit("sign_detected", {
-                "module": module,
-                "word": disp,
-                "confidence": st.last_conf,
-            }, to=sid)
+        if len(st.votes) >= _STREAM_VOTE_BUFFER:
+            winner, count = _Counter(st.votes).most_common(1)[0]
+            if count >= _STREAM_STABILITY and winner != st.last_pred:
+                st.last_pred = winner
+                st.votes.clear()
+                st.frames.clear()
+                st.cooldown = _STREAM_COOLDOWN
+                disp = (ARABIC_TRANSLATIONS.get(winner.lower(), winner)
+                        if lang in ("arabic", "ar", "egyptian", "eg") else winner)
+                await sio.emit("sign_detected", {
+                    "module": module,
+                    "word": disp,
+                    "confidence": st.last_conf,
+                }, to=sid)
     except Exception as e:
         # A single bad frame (ragged landmarks, transient model error, dead client)
         # must not silently kill this client's stream. Log and keep going.
