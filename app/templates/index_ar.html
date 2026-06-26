@@ -2494,10 +2494,10 @@ button.is-busy{opacity:.6;cursor:progress}
         ctx.fillRect(0, canvas.height - 4, (f / n) * canvas.width, 4);
         ctx.restore();
 
-        await sleep(25); // ~40 fps
+        await sleep(60); // ~16 fps — slow, easy to follow
       }
 
-      await sleep(350); // brief pause between words
+      await sleep(550); // brief pause between words
     }
 
     // Hold the last frame — redraw skeleton + "Done" label
@@ -3372,9 +3372,9 @@ button.is-busy{opacity:.6;cursor:progress}
         for (let f = 0; f < n; f++) {
           const flat = flattenLandmarkFrame(lms[f]);
           drawAuraAvatar(ctx, flat, canvas.width, canvas.height);
-          await sleep(25);
+          await sleep(60);
         }
-        await sleep(180);
+        await sleep(300);
       }
     } catch (_) {
       // no-op

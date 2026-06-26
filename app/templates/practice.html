@@ -313,7 +313,7 @@
 
     if (!window.SignPlayer || !t.word) return;
     let data = null;
-    try { data = await SignPlayer.fetchSignLandmarks(t.word); } catch (_) { data = null; }
+    try { data = await SignPlayer.fetchSignLandmarks(t.word, lang()); } catch (_) { data = null; }
     if (myToken !== targetToken) return;  // target changed while awaiting
 
     if (!data || !data.landmarks || !data.landmarks.length) {

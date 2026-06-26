@@ -18,9 +18,12 @@
 
   // Fetch a single sign's landmark frames. Returns
   //   { word, landmarks: [N][...], frame_count, video_url } or null if missing.
-  async function fetchSignLandmarks(word) {
+  // lang: 'arabic'/'ar' routes to the Arabic sign DB; anything else to ASL.
+  async function fetchSignLandmarks(word, lang) {
+    var base = (lang === 'arabic' || lang === 'ar' || lang === 'egyptian')
+      ? '/api/signs_ar/' : '/api/signs/';
     try {
-      const res = await authFetch('/api/signs/' + encodeURIComponent(word));
+      const res = await authFetch(base + encodeURIComponent(word));
       if (!res.ok) return null;
       return await res.json();
     } catch (_) {
@@ -29,12 +32,13 @@
   }
 
   // Play one or more sign items onto a canvas. Each item: {word, landmarks, frame_count}.
-  // opts: { fps=40, holdMs=350, label=true, loop=false, signal:{stop:bool} }
+  // opts: { fps=16, holdMs=550, label=true, loop=false, signal:{stop:bool} }
+  // Default is a deliberately SLOW playback so signs are easy to follow.
   async function playLandmarkSequence(items, canvas, ctx, opts) {
     opts = opts || {};
-    const fps = opts.fps || 40;
+    const fps = opts.fps || 16;
     const frameDelay = Math.max(8, Math.round(1000 / fps));
-    const holdMs = opts.holdMs != null ? opts.holdMs : 350;
+    const holdMs = opts.holdMs != null ? opts.holdMs : 550;
     const showLabel = opts.label !== false;
     const signal = opts.signal || {};
     let lastFlat = null, lastWord = '';

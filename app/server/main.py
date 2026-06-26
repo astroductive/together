@@ -1449,6 +1449,38 @@ async def get_batch_arabic_sign_landmarks(
     return {"found": found, "missing": missing}
 
 
+@app.get("/api/signs_ar/{word}")
+async def get_arabic_sign_landmarks(
+    word: str,
+    current_user: dict = Depends(get_current_user)
+):
+    """Single-word Arabic landmark lookup (Sign Dictionary / Practice, ArSL).
+
+    `word` may be an Arabic term or one of the 20 English class keys
+    (baby, eat, ...). We try the term directly and its English translation
+    against the Arabic sign DB (signs_ar.db).
+    """
+    ar_db = get_arabic_sign_db()
+    if ar_db is None:
+        raise HTTPException(status_code=503, detail="Arabic sign database not ready.")
+
+    def _sync():
+        candidates = []
+        for cand in [word, translate_arabic_to_english(word)]:
+            for part in (cand or "").split():
+                cleaned = re.sub(r"[^a-z0-9]", "", part.lower().strip())
+                if cleaned and cleaned not in candidates:
+                    candidates.append(cleaned)
+        for w in candidates:
+            lms = ar_db.get_landmarks(w)
+            if lms:
+                return {"word": w, "landmarks": lms, "frame_count": len(lms), "video_url": None}
+        raise HTTPException(status_code=404, detail=f"Arabic sign not found for '{word}'.")
+
+    with Timer("signs.single_ar"):
+        return await run_in_threadpool(_sync)
+
+
 # ── Vocabulary listing (for Sign Dictionary + Practice pages) ──
 _VOCAB_CACHE = None
 _MODELS_DIR = os.path.join(os.path.dirname(BASE_DIR), "models")

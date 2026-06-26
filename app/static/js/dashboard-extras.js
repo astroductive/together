@@ -867,7 +867,7 @@
       var flat = flattenFrame(frames[f]);
       lastFlat = flat;
       try { window.drawAuraAvatar(ctx, flat, w, h); } catch (e) {}
-      await sleep(25); // ~40fps
+      await sleep(60); // ~16fps — slow, easy to follow
     }
     // Hold the last frame.
     if (lastFlat && _demoPlaying) { try { window.drawAuraAvatar(ctx, lastFlat, w, h); } catch (e) {} }

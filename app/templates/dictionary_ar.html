@@ -133,12 +133,14 @@
     <div class="dc-noanim" id="dc-noanim" style="display:none">لا يتوفر رسم متحرك لهذه الإشارة بعد.</div>
     <div class="dc-actions">
       <button type="button" class="t-btn t-btn--soft" id="dc-replay" style="display:none">▶ إعادة التشغيل</button>
-      <a class="dc-vid" id="dc-video" href="#" target="_blank" rel="noopener" style="display:none">
+      <button type="button" class="dc-vid t-btn t-btn--soft" id="dc-video" style="display:none">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px"><polygon points="5 3 19 12 5 21 5 3"/></svg>
         مشاهدة الفيديو
-      </a>
+      </button>
       <button type="button" class="t-btn t-btn--ghost" id="dc-close-2">إغلاق</button>
     </div>
+    <video id="dc-videoel" controls playsinline preload="none" style="display:none;width:100%;margin-top:12px;border-radius:12px;background:#000"></video>
+    <div class="dc-noanim" id="dc-vid-err" style="display:none">الفيديو غير متوفر لهذه الإشارة.</div>
   </div>
 </div>
 {% endblock %}
@@ -303,6 +305,9 @@
     noanim.style.display = 'none';
     replayBtn.style.display = 'none';
     videoLink.style.display = 'none';
+    var _vEl = $('dc-videoel'), _vErr = $('dc-vid-err');
+    if (_vEl) { try { _vEl.pause(); } catch (_) {} _vEl.removeAttribute('src'); _vEl.style.display = 'none'; }
+    if (_vErr) _vErr.style.display = 'none';
     overlay.classList.add('is-open');
     document.body.style.overflow = 'hidden';
 
@@ -310,7 +315,7 @@
 
     let data = null;
     try {
-      data = await SignPlayer.fetchSignLandmarks(sign.word);
+      data = await SignPlayer.fetchSignLandmarks(sign.word, sign.lang);
     } catch (_) {
       data = null;
     }
@@ -318,8 +323,9 @@
     // The modal may have been closed/changed while we awaited the fetch.
     if (activeSign !== sign || !overlay.classList.contains('is-open')) return;
 
+    // Inline video (the old external link opened a blank tab / 404'd).
     if (data && data.video_url) {
-      videoLink.href = data.video_url;
+      videoLink.dataset.src = data.video_url;
       videoLink.style.display = 'inline-flex';
     }
 
@@ -336,6 +342,8 @@
 
   function closeModal() {
     stopPlayback();
+    var _vEl = $('dc-videoel');
+    if (_vEl) { try { _vEl.pause(); } catch (_) {} _vEl.removeAttribute('src'); _vEl.style.display = 'none'; }
     overlay.classList.remove('is-open');
     document.body.style.overflow = '';
     activeSign = null;
@@ -343,6 +351,16 @@
   }
 
   replayBtn.addEventListener('click', play);
+  videoLink.addEventListener('click', () => {
+    const url = videoLink.dataset.src;
+    const vEl = $('dc-videoel'), vErr = $('dc-vid-err');
+    if (!url || !vEl) return;
+    vErr.style.display = 'none';
+    vEl.onerror = () => { vEl.style.display = 'none'; vErr.style.display = 'block'; };
+    vEl.src = url;
+    vEl.style.display = 'block';
+    vEl.play().catch(() => {});
+  });
   $('dc-close').addEventListener('click', closeModal);
   $('dc-close-2').addEventListener('click', closeModal);
   overlay.addEventListener('click', (e) => { if (e.target === overlay) closeModal(); });
