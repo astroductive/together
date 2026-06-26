@@ -465,7 +465,7 @@ button.t-nav-item[aria-label="Sign out"]:hover svg{color:var(--danger,#ef4444)}
       </a>
       <a class="t-nav-item" onclick="switchModule(event,'meeting')" href="#" id="nav-meeting">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M17 20h5v-2a3 3 0 0 0-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 0 1 5.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 0 1 9.288 0M15 7a3 3 0 1 1-6 0 3 3 0 0 1 6 0z"/></svg>
-        <span class="t-nav-label"><b>Live Meeting</b><i>Two-way call</i></span>
+        <span class="t-nav-label"><b>SignLine</b><i>Live meeting</i></span>
       </a>
     </nav>
     <div class="t-sidebar-sep"></div>
@@ -559,7 +559,7 @@ button.t-nav-item[aria-label="Sign out"]:hover svg{color:var(--danger,#ef4444)}
         <option value="speech">Sign to Speech</option>
         <option value="text2sign">Text to Sign</option>
         <option value="speech2sign">Speech to Sign</option>
-        <option value="meeting">Live Meeting</option>
+        <option value="meeting">SignLine</option>
       </select>
     </div>
     <div class="d-mobile-qa" id="mobile-quick-actions">
@@ -821,7 +821,7 @@ button.t-nav-item[aria-label="Sign out"]:hover svg{color:var(--danger,#ef4444)}
       <div class="d-meet">
         <div class="d-meet-hero">
           <div>
-            <div class="d-meet-title">Live Meeting</div>
+            <div class="d-meet-title">SignLine</div>
             <div class="d-meet-sub">Start a new call or enter a meeting code. Share the link and collaborate with real-time sign-language translation.</div>
           </div>
           <span class="d-meet-pill" id="meeting-status-pill">Not connected</span>
@@ -963,7 +963,7 @@ button.t-nav-item[aria-label="Sign out"]:hover svg{color:var(--danger,#ef4444)}
     </a>
     <a href="#" onclick="switchModule(event,'meeting')" id="mob-nav-meeting">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M17 20h5v-2a3 3 0 0 0-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 0 1 5.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 0 1 9.288 0M15 7a3 3 0 1 1-6 0 3 3 0 0 1 6 0z"/></svg>
-      <span>Meeting</span>
+      <span>SignLine</span>
     </a>
   </nav>
 </div><!-- /.t-scope.t-app -->
@@ -1099,7 +1099,7 @@ button.t-nav-item[aria-label="Sign out"]:hover svg{color:var(--danger,#ef4444)}
     speech: { panel: 'panel-speech', nav: 'nav-speech', title: 'Sign to Speech' },
     text2sign: { panel: 'panel-text2sign', nav: 'nav-text2sign', title: 'Text to Sign' },
     speech2sign: { panel: 'panel-speech2sign', nav: 'nav-speech2sign', title: 'Speech to Sign' },
-    meeting: { panel: 'panel-meeting', nav: 'nav-meeting', title: 'Live Meeting' },
+    meeting: { panel: 'panel-meeting', nav: 'nav-meeting', title: 'SignLine' },
   };
   let socket = null;
   let inMeeting = false;
@@ -4943,11 +4943,11 @@ setInterval(function() {
 
 const _moduleLabels = {
   vision: 'Sign→Text', speech: 'Sign→Speech',
-  text2sign: 'Text→Sign', speech2sign: 'Speech→Sign', meeting: 'Meeting'
+  text2sign: 'Text→Sign', speech2sign: 'Speech→Sign', meeting: 'SignLine'
 };
 const _moduleNames = {
   vision: 'HandScript', speech: 'VoiceBridge',
-  text2sign: 'SignType', speech2sign: 'TalkSide', meeting: 'Live Meeting'
+  text2sign: 'SignType', speech2sign: 'TalkSide', meeting: 'SignLine'
 };
 const _moduleSubs = {
   vision: 'Sign → Text', speech: 'Sign → Speech',

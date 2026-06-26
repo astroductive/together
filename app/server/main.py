@@ -609,6 +609,10 @@ async def page_signtype(request: Request, lang: str | None = None):
 async def page_talkside(request: Request, lang: str | None = None):
     return _localized_page(request, "products/talkside", lang)
 
+@app.get("/products/signline", response_class=HTMLResponse)
+async def page_signline(request: Request, lang: str | None = None):
+    return _localized_page(request, "products/signline", lang)
+
 @app.get("/languages/asl", response_class=HTMLResponse)
 async def page_asl(request: Request, lang: str | None = None):
     return _localized_page(request, "languages/asl", lang)

@@ -21,6 +21,14 @@
   html[data-theme="light"] .logo-on-light{display:block}
   .lp-footer-brand .logo-on-dark,.lp-footer-brand .logo-on-light{height:38px;width:auto;margin-bottom:14px}
   .lp-nav-brand{display:flex;align-items:center;text-decoration:none;flex-shrink:0}
+  /* Constrain the brand mark + wordmark — the markup uses .lp-nav-logo-mark /
+     .lp-nav-brand-name (NOT .lp-nav-logo-img), so without these the 404px PNGs
+     render full-size and blow up the header. */
+  .lp-nav-logo-mark{height:38px;width:auto;display:block;flex:none}
+  .lp-nav-brand-text{display:flex;flex-direction:column;justify-content:center;margin-inline-start:10px;min-width:0}
+  .lp-nav-brand-name{height:20px;width:auto;display:block;object-fit:contain;filter:brightness(0) invert(1)}
+  html[data-theme="light"] .lp-nav-brand-name{filter:none}
+  .lp-nav-brand-tag{font-size:9px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin-top:3px;white-space:nowrap}
   .lp-nav-links{display:flex;align-items:center;gap:2px;margin-inline-start:18px;flex:1}
   .lp-dd{position:relative}
   .lp-dd-btn{display:inline-flex;align-items:center;gap:5px;padding:7px 13px;border-radius:var(--radius-full);font-size:13.5px;font-weight:600;color:var(--muted);background:none;border:none;cursor:pointer;transition:color .18s,background .18s}

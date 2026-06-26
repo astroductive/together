@@ -434,7 +434,7 @@ button.is-busy{opacity:.6;cursor:progress}
       </a>
       <a class="t-nav-item" onclick="switchModule(event,'meeting')" href="#" id="nav-meeting">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M17 20h5v-2a3 3 0 0 0-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 0 1 5.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 0 1 9.288 0M15 7a3 3 0 1 1-6 0 3 3 0 0 1 6 0z"/></svg>
-        <span class="t-nav-label"><b>اجتماع مباشر</b><i>مكالمة ثنائية</i></span>
+        <span class="t-nav-label"><b>SignLine</b><i>مكالمة ثنائية</i></span>
       </a>
     </nav>
     <div class="t-sidebar-sep"></div>
@@ -528,7 +528,7 @@ button.is-busy{opacity:.6;cursor:progress}
         <option value="speech">الترجمة إلى كلام</option>
         <option value="text2sign">تحويل النص إلى إشارة</option>
         <option value="speech2sign">تحويل الكلام إلى إشارة</option>
-        <option value="meeting">اجتماع مباشر</option>
+        <option value="meeting">SignLine</option>
       </select>
     </div>
     <div class="d-mobile-qa" id="mobile-quick-actions">
@@ -783,7 +783,7 @@ button.is-busy{opacity:.6;cursor:progress}
       <div class="d-meet">
         <div class="d-meet-hero">
           <div>
-            <div class="d-meet-title">اجتماع مباشر</div>
+            <div class="d-meet-title">SignLine</div>
             <div class="d-meet-sub">ابدأ مكالمة جديدة أو أدخل رمز الاجتماع. شارك الرابط وتعاون مع ترجمة فورية للغة الإشارة.</div>
           </div>
           <span class="d-meet-pill" id="meeting-status-pill">غير متصل</span>
@@ -925,7 +925,7 @@ button.is-busy{opacity:.6;cursor:progress}
     </a>
     <a href="#" onclick="switchModule(event,'meeting')" id="mob-nav-meeting">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M17 20h5v-2a3 3 0 0 0-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 0 1 5.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 0 1 9.288 0M15 7a3 3 0 1 1-6 0 3 3 0 0 1 6 0z"/></svg>
-      <span>اجتماع</span>
+      <span>SignLine</span>
     </a>
   </nav>
 </div><!-- /.t-scope.t-app -->
@@ -1057,7 +1057,7 @@ button.is-busy{opacity:.6;cursor:progress}
     speech: { panel: 'panel-speech', nav: 'nav-speech', title: 'Sign to Speech' },
     text2sign: { panel: 'panel-text2sign', nav: 'nav-text2sign', title: 'Text to Sign' },
     speech2sign: { panel: 'panel-speech2sign', nav: 'nav-speech2sign', title: 'Speech to Sign' },
-    meeting: { panel: 'panel-meeting', nav: 'nav-meeting', title: 'Live Meeting' },
+    meeting: { panel: 'panel-meeting', nav: 'nav-meeting', title: 'SignLine' },
   };
   let socket = null;
   let inMeeting = false;
@@ -1184,7 +1184,7 @@ button.is-busy{opacity:.6;cursor:progress}
       moduleMap.speech.title = 'الترجمة إلى كلام';
       moduleMap.text2sign.title = 'تحويل النص إلى إشارة';
       moduleMap.speech2sign.title = 'تحويل الكلام إلى إشارة';
-      moduleMap.meeting.title = 'اجتماع مباشر';
+      moduleMap.meeting.title = 'SignLine';
 
       // 4. Translate sidebar items
       const navVision = document.getElementById('nav-vision');
@@ -1196,7 +1196,7 @@ button.is-busy{opacity:.6;cursor:progress}
       const navSpeech2sign = document.getElementById('nav-speech2sign');
       if (navSpeech2sign) navSpeech2sign.querySelector('.sidebar-label').textContent = 'تحويل الكلام إلى إشارة';
       const navMeeting = document.getElementById('nav-meeting');
-      if (navMeeting) navMeeting.querySelector('.sidebar-label').textContent = 'اجتماع مباشر';
+      if (navMeeting) navMeeting.querySelector('.sidebar-label').textContent = 'SignLine';
 
       // Sign out button sidebar
       const sbSignout = document.querySelector('.sidebar-user button');
@@ -1357,7 +1357,7 @@ button.is-busy{opacity:.6;cursor:progress}
       // -- Live Meeting Panel --
       const pMeeting = document.getElementById('panel-meeting');
       if (pMeeting) {
-        pMeeting.querySelector('.meet-title').textContent = 'اجتماع مباشر';
+        pMeeting.querySelector('.meet-title').textContent = 'SignLine';
         pMeeting.querySelector('.meet-subtitle').textContent = 'ابدأ مكالمة جديدة أو أدخل رمز الاجتماع. شارك الرابط وتعاون مع ترجمة فورية للغة الإشارة.';
         document.getElementById('meeting-status-pill').textContent = 'غير متصل';
 
@@ -1399,7 +1399,7 @@ button.is-busy{opacity:.6;cursor:progress}
         mobSelect.options[1].text = 'الترجمة إلى كلام';
         mobSelect.options[2].text = 'تحويل النص إلى إشارة';
         mobSelect.options[3].text = 'تحويل الكلام إلى إشارة';
-        mobSelect.options[4].text = 'اجتماع مباشر';
+        mobSelect.options[4].text = 'SignLine';
       }
     } else {
       // Force English/ASL and hide dropdowns
@@ -4708,11 +4708,11 @@ setInterval(function() {
 
 const _moduleLabels = {
   vision: 'إشارة→نص', speech: 'إشارة→كلام',
-  text2sign: 'نص→إشارة', speech2sign: 'كلام→إشارة', meeting: 'اجتماع'
+  text2sign: 'نص→إشارة', speech2sign: 'كلام→إشارة', meeting: 'SignLine'
 };
 const _moduleNames = {
   vision: 'HandScript', speech: 'VoiceBridge',
-  text2sign: 'SignType', speech2sign: 'TalkSide', meeting: 'اجتماع مباشر'
+  text2sign: 'SignType', speech2sign: 'TalkSide', meeting: 'SignLine'
 };
 const _moduleSubs = {
   vision: 'إشارة → نص', speech: 'إشارة → كلام',
