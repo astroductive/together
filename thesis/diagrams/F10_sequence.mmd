@@ -1,0 +1,29 @@
+sequenceDiagram
+  autonumber
+  actor U as Deaf/HoH user
+  participant B as Browser (MediaPipe)
+  participant S as Socket.IO server
+  participant E as ASLService / Predictor
+  participant L as LLM provider chain
+  U->>B: sign in front of webcam
+  B->>B: MediaPipe Holistic → 543 landmarks
+  B->>B: EMA smooth + compact payload
+  B->>S: sign_start {language, w, h}
+  S-->>B: sign_ready
+  loop every frame (~20 fps)
+    B->>S: sign_frame {frame}
+    S->>S: append to 60-frame buffer
+    alt buffer >= 6 and not busy
+      S->>E: predict_sign(frames) [threadpool]
+      E-->>S: (label, confidence)
+      S->>S: majority vote (2/3) + cooldown
+      opt vote accepted
+        S-->>B: sign_detected {word, confidence}
+      end
+    end
+  end
+  B->>S: POST /api/translate/sentence {gloss[]}
+  S->>L: gloss→sentence (few-shot, cached)
+  L-->>S: natural sentence
+  S-->>B: {sentence, source}
+  B-->>U: caption + optional speech (TTS)

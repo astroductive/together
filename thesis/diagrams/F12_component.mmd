@@ -1,0 +1,49 @@
+flowchart TB
+  subgraph FE["Frontend components"]
+    APPJS["app.js<br/>capture / stream / avatar"]
+    LP["landmark-player.js"]
+    AUTHJS["auth.js"]
+    THEME["theme.js"]
+    SW["sw.js (PWA)"]
+  end
+  subgraph BE["Backend components (app/server)"]
+    MAIN["main.py<br/>routes + Socket.IO"]
+    ASLSVC["asl_service.py<br/>ASLService / SignDB"]
+    PRED["sign_predictor.py<br/>CNN-GRU"]
+    GLOSS["gloss.py"]
+    STITCH["stitch.py"]
+    AUTH["auth.py"]
+    PROF["profiling.py"]
+    LSTORE["landmark_store.py"]
+    subgraph PROVIDERS["providers/"]
+      PBASE["base.py"]
+      PGEM["gemini.py"]
+      POLL["ollama.py"]
+      PLOC["local.py"]
+    end
+    subgraph DB["db/"]
+      MODELS["models.py"]
+      REPO["repository.py"]
+      DBASE["base.py"]
+    end
+  end
+  PGSQL[("PostgreSQL + pgvector")]
+
+  APPJS -->|REST / Socket.IO| MAIN
+  LP --> MAIN
+  AUTHJS --> MAIN
+  MAIN --> ASLSVC
+  MAIN --> PRED
+  MAIN --> GLOSS
+  MAIN --> AUTH
+  MAIN --> PROF
+  ASLSVC --> LSTORE
+  ASLSVC --> REPO
+  MAIN --> STITCH
+  GLOSS --> PBASE
+  PBASE --> PGEM
+  PBASE --> POLL
+  PBASE --> PLOC
+  REPO --> MODELS
+  MODELS --> DBASE
+  DBASE --> PGSQL

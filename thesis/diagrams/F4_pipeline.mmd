@@ -1,0 +1,16 @@
+flowchart TB
+  subgraph CAPTURE["Capture & encode (browser)"]
+    direction LR
+    A["Frame capture<br/>getUserMedia 20 fps"] --> B["MediaPipe Holistic<br/>543 landmarks"] --> C["EMA smoothing<br/>alpha 0.65"] --> D["Compact 59-landmark<br/>payload (null = missing)"]
+  end
+  subgraph RECOGNIZE["Recognition & output (server)"]
+    direction LR
+    F["Rolling buffer<br/>60 frames"] --> G{"language?"}
+    G -- English --> H1["TFLite 250-class<br/>logits → softmax"]
+    G -- Arabic --> H2["CNN-GRU 20-class<br/>177-d, windows 30/45/60"]
+    H1 --> I["Majority vote 2/3<br/>+ cooldown"]
+    H2 --> I
+    I --> J["gloss → sentence<br/>LLM (cached)"] --> M["Caption + TTS"]
+  end
+  D -- "Socket.IO sign_frame" --> F
+  M --> N(["Text + speech output"])

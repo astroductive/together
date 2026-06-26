@@ -1,0 +1,68 @@
+classDiagram
+  direction LR
+  class SignDB {
+    +str LANGUAGE = "en"
+    +float MAX_DISTANCE = 0.35
+    +SentenceTransformer model
+    +list words
+    +match_word(query) str
+    +get_landmarks(word) list
+    +phrase_landmarks(phrase) list
+  }
+  class ArabicSignDB {
+    +str LANGUAGE = "ar"
+    +float MAX_DISTANCE = 0.55
+    +list VOCAB[20]
+  }
+  class ASLService {
+    +float CONFIDENCE_THRESH = 0.50
+    +int MAX_FRAMES = 128
+    +Interpreter interpreter
+    +dict labels[250]
+    +predict_sign(landmarks) tuple
+  }
+  class SignLanguagePredictor {
+    +int input_dim = 177
+    +int num_classes = 20
+    +SignLanguageCNNGRU model
+    +predict_sign_from_landmarks(lm,w,h) tuple
+    +extract_features(results,w,h) ndarray
+  }
+  class SignLanguageCNNGRU {
+    +Conv1d conv1 / conv2
+    +GRU gru1 (2L, bidir)
+    +Linear fc1 / fc2
+    +forward(x) Tensor
+  }
+  class SignRepository {
+    +get_exact(word,lang) Sign
+    +nearest(emb,lang,maxd) tuple
+    +words(lang) list
+    +upsert(...) Sign
+  }
+  class Sign {
+    +int id
+    +str word
+    +str language
+    +str landmark_file
+    +Vector~384~ embedding
+  }
+  class GlossEngine {
+    <<module gloss.py>>
+    +english_to_gloss(s,lang) list
+    +gloss_to_sentence(tokens,lang) str
+    +annotate_nmm(tokens,s) dict
+    +detect_sentence_type(s) str
+  }
+  class FallbackLLM {
+    +list~LLMProvider~ providers
+    +chain_names
+    +generate(prompt,temp) str
+  }
+
+  SignDB <|-- ArabicSignDB
+  SignDB <|-- ASLService
+  ASLService ..> SignRepository : nearest()
+  SignRepository ..> Sign : returns
+  SignLanguagePredictor *-- SignLanguageCNNGRU
+  GlossEngine ..> FallbackLLM : uses

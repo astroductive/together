@@ -1,0 +1,33 @@
+flowchart LR
+  DEAF(["Deaf / HoH user"])
+  HEAR(["Hearing user"])
+  ADMIN(["System / provider"])
+
+  subgraph SYS["Together platform"]
+    U1(["Sign → Text"])
+    U2(["Sign → Speech"])
+    U3(["Text → Sign avatar"])
+    U4(["Speech → Sign avatar"])
+    U5(["Join live meeting<br/>(WebRTC)"])
+    U6(["Practice / Dictionary"])
+    U7(["Register / Login"])
+    U8(["Switch language EN/AR"])
+  end
+
+  DEAF --- U1
+  DEAF --- U2
+  DEAF --- U5
+  DEAF --- U6
+  HEAR --- U3
+  HEAR --- U4
+  HEAR --- U5
+  DEAF --- U7
+  HEAR --- U7
+  DEAF --- U8
+  HEAR --- U8
+  U1 -. "uses" .- ADMIN
+  U3 -. "uses" .- ADMIN
+  U4 -. "uses" .- ADMIN
+
+  classDef actor fill:#f3eafc,stroke:#7d4fb5,font-weight:bold;
+  class DEAF,HEAR,ADMIN actor;

@@ -1,0 +1,43 @@
+flowchart TB
+  subgraph CLIENT["Browser client (vanilla JS, PWA)"]
+    CAM["Webcam"] --> MP["MediaPipe Holistic<br/>(WASM, 543 landmarks)"]
+    MP --> SM["EMA smoothing +<br/>59-landmark payload"]
+    AV["Landmark avatar<br/>(canvas renderer)"]
+    MIC["Microphone /<br/>Web Speech API"]
+  end
+
+  subgraph SERVER["FastAPI + Socket.IO server (ASGI / uvicorn)"]
+    direction TB
+    API["REST API + Socket.IO<br/>streaming endpoints"]
+    REC["Recognition<br/>ASLService (TFLite, 250)<br/>SignLanguagePredictor (CNN-GRU, 20)"]
+    GL["Gloss engine<br/>Topic-Comment + NMM"]
+    LK["Sign lookup<br/>SBERT + pgvector"]
+    PV["Provider chains<br/>LLM / TTS / STT"]
+  end
+
+  subgraph DATA["Persistence"]
+    PG[("PostgreSQL + pgvector<br/>users, tokens, signs")]
+    NPZ[["Landmark store<br/>.npz on disk"]]
+  end
+
+  subgraph EXT["External / offline providers"]
+    GEM["Google Gemini"]
+    OLL["Ollama (llama3.2)"]
+    PYT["pyttsx3 / Whisper"]
+  end
+
+  SM -- "landmark frames<br/>(Socket.IO)" --> API
+  MIC -- "audio / text" --> API
+  API --> REC
+  API --> GL
+  API --> LK
+  GL --> PV
+  API --> PV
+  REC --> API
+  LK --> PG
+  LK --> NPZ
+  PV --> GEM
+  PV --> OLL
+  PV --> PYT
+  API -- "gloss / sentence / landmarks / audio" --> AV
+  API -- "text / speech" --> CLIENT

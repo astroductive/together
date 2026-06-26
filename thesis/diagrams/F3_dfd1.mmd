@@ -1,0 +1,31 @@
+flowchart TB
+  DEAF(["Deaf/HoH user"])
+  HEAR(["Hearing user"])
+  PROV(["Provider chain<br/>Gemini / Ollama / pyttsx3 / Whisper"])
+
+  P1["1.0 Capture &<br/>landmark extraction"]
+  P2["2.0 Sign recognition<br/>(TFLite / CNN-GRU)"]
+  P3["3.0 Gloss → sentence<br/>+ TTS"]
+  P4["4.0 Sentence → gloss<br/>+ NMM"]
+  P5["5.0 Sign lookup &<br/>avatar synthesis"]
+  P6["6.0 Auth &<br/>session"]
+
+  D1[("D1 signs + embeddings<br/>Postgres/pgvector")]
+  D2[["D2 landmark store (.npz)"]]
+  D3[("D3 users + refresh tokens")]
+
+  DEAF -- "video frames" --> P1
+  P1 -- "543-landmark sequence" --> P2
+  P2 -- "gloss tokens" --> P3
+  P3 -- "sentence" --> HEAR
+  P3 -- "text" --> PROV
+  PROV -- "natural sentence / audio" --> P3
+  HEAR -- "speech / text" --> P4
+  P4 -- "gloss + NMM" --> P5
+  P5 -- "landmark sequences" --> DEAF
+  P5 <-- "embedding search" --> D1
+  P5 <-- "landmark blobs" --> D2
+  P4 <--> PROV
+  DEAF -- "credentials" --> P6
+  HEAR -- "credentials" --> P6
+  P6 <--> D3

@@ -1,0 +1,20 @@
+flowchart TB
+  ST([Start stream]) --> CAP["Capture frame + extract landmarks"]
+  CAP --> HAND{"Hand visible?"}
+  HAND -- No --> GAP["Increment hand-gap; hold skeleton"]
+  GAP --> RESETQ{"gap > 3 frames?"}
+  RESETQ -- Yes --> CLR["Clear buffer + votes"] --> CAP
+  RESETQ -- No --> CAP
+  HAND -- Yes --> BUF["Append to rolling buffer (max 60)"]
+  BUF --> READY{"buffer >= 6 and not busy<br/>and cooldown == 0?"}
+  READY -- No --> CAP
+  READY -- Yes --> INF["Run model inference (threadpool)"]
+  INF --> CONF{"confidence ><br/>threshold?"}
+  CONF -- No --> CAP
+  CONF -- Yes --> VOTE["Push to vote buffer"]
+  VOTE --> WIN{"2-of-3 agree and<br/>!= last sign?"}
+  WIN -- No --> CAP
+  WIN -- Yes --> EMIT["Emit sign_detected;<br/>set cooldown; clear buffers"]
+  EMIT --> MORE{"More signing?"}
+  MORE -- Yes --> CAP
+  MORE -- No --> SENT["gloss → sentence (LLM)"] --> END([Caption / speech])

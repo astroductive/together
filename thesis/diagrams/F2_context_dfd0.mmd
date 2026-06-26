@@ -1,0 +1,17 @@
+flowchart LR
+  DEAF(["Deaf / Hard-of-Hearing<br/>user (signer)"])
+  HEAR(["Hearing user<br/>(speaker)"])
+  SYS["0 — Together<br/>Sign-Language Translation Platform"]
+  GEMINI(["Google Gemini API<br/>(LLM / TTS / STT)"])
+
+  DEAF -- "sign landmarks / text" --> SYS
+  SYS -- "captions / sign avatar" --> DEAF
+  HEAR -- "speech / text" --> SYS
+  SYS -- "speech / sign avatar / captions" --> HEAR
+  SYS -- "prompts / audio" --> GEMINI
+  GEMINI -- "sentences / audio / transcripts" --> SYS
+
+  classDef ext fill:#f3eafc,stroke:#7d4fb5;
+  classDef proc fill:#eaf2fb,stroke:#2f6db5,font-weight:bold;
+  class DEAF,HEAR,GEMINI ext;
+  class SYS proc;

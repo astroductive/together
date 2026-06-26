@@ -1,0 +1,14 @@
+stateDiagram-v2
+  [*] --> Idle
+  Idle --> Buffering : sign_start
+  Buffering --> Inferring : buffer >= 6 frames
+  Inferring --> Buffering : confidence < threshold
+  Inferring --> Voting : confidence >= threshold
+  Voting --> Buffering : no 2/3 consensus
+  Voting --> Cooldown : sign accepted (emit)
+  Cooldown --> Buffering : cooldown elapsed (8 frames)
+  Buffering --> Idle : hand gap > 3 frames (reset)
+  Inferring --> Idle : sign_stop
+  Buffering --> Idle : sign_stop
+  Cooldown --> Idle : sign_stop
+  Idle --> [*] : disconnect

@@ -1,0 +1,23 @@
+flowchart TB
+  subgraph DEV["User device"]
+    BR["Web browser<br/>(MediaPipe WASM, WebRTC,<br/>service worker / PWA)"]
+  end
+  subgraph CLOUD["Application host (Render / Docker)"]
+    direction TB
+    WEB["web: uvicorn<br/>FastAPI + Socket.IO ASGI<br/>(start_server.py, :8000)"]
+    MODELS[["models/<br/>model.tflite (11 MB)<br/>best_model.pth (1.1 MB)"]]
+    LMS[["data/landmarks/*.npz"]]
+  end
+  subgraph SVC["Backing services"]
+    PG[("postgres:16<br/>+ pgvector")]
+    OLL["ollama<br/>(llama3.2)"]
+  end
+  GEM(["Google Gemini API"])
+
+  BR -- "HTTPS / WSS" --> WEB
+  BR -- "WebRTC mesh (P2P media)" --- BR
+  WEB --> MODELS
+  WEB --> LMS
+  WEB -- "SQLAlchemy / psycopg" --> PG
+  WEB -- "HTTP (offline fallback)" --> OLL
+  WEB -- "HTTPS (default)" --> GEM

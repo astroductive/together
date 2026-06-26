@@ -1,0 +1,27 @@
+erDiagram
+  USERS ||--o{ REFRESH_TOKENS : "has"
+  USERS {
+    int id PK
+    string full_name
+    string email UK "unique, indexed"
+    string hashed_password "Argon2id"
+    string role "default Speaker"
+    datetime created_at
+  }
+  REFRESH_TOKENS {
+    int id PK
+    string jti UK "unique, indexed"
+    int user_id FK "indexed"
+    bool revoked "default false"
+    datetime expires_at
+    datetime created_at
+  }
+  SIGNS {
+    int id PK
+    string word "indexed"
+    string language "en or ar, indexed"
+    string video_filename
+    string landmark_file "path to .npz"
+    int frame_count
+    vector embedding "pgvector(384), HNSW cosine"
+  }
