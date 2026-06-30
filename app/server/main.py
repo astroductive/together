@@ -1142,7 +1142,10 @@ async def translate_sign(
                 print(f"[/api/translate] Detected Arabic: {arabic_prediction} ({confidence:.2f})")
             except UnicodeEncodeError:
                 print(f"[/api/translate] Detected Arabic: (safe/transliterated) {prediction} ({confidence:.2f})")
-            return _with_server_timing({"text": arabic_prediction, "confidence": float(confidence)}, response, _t.elapsed_ms)
+            # `raw` is the model's English class key (e.g. "baby") — the display
+            # `text` may be its Arabic translation. Clients that need to match a
+            # known target (Practice) compare against `raw`.
+            return _with_server_timing({"text": arabic_prediction, "raw": prediction, "confidence": float(confidence)}, response, _t.elapsed_ms)
         return _with_server_timing({"text": "", "confidence": 0.0}, response, _t.elapsed_ms)
     else:
         engine = get_asl_engine()
@@ -1154,7 +1157,7 @@ async def translate_sign(
             prediction, confidence = await run_in_threadpool(engine.predict_sign, body.frames)
         if prediction:
             print(f"[/api/translate] Detected ASL: {prediction} ({confidence:.2f})")
-            return _with_server_timing({"text": prediction, "confidence": float(confidence)}, response, _t.elapsed_ms)
+            return _with_server_timing({"text": prediction, "raw": prediction, "confidence": float(confidence)}, response, _t.elapsed_ms)
         return _with_server_timing({"text": "", "confidence": 0.0}, response, _t.elapsed_ms)
 
 
@@ -1292,16 +1295,24 @@ async def metrics(current_user: dict = Depends(get_current_user)):
 from fastapi.responses import FileResponse
 import sqlite3
 
-def get_video_filename(word: str) -> str:
-    """Return the stored video filename for an English sign word (from Postgres)."""
+def _basename(path: str) -> str:
+    """Cross-platform basename. The sign DBs were built on Windows, so stored
+    paths use backslashes (e.g. 'signs_videos\\TV.mp4' / 'c:\\...\\baby_0.mp4').
+    os.path.basename does NOT split backslashes on Linux, which left the slash in
+    the filename and 404'd every video — normalise both separators first."""
+    return os.path.basename((path or "").replace("\\", "/")).strip()
+
+
+def get_video_filename(word: str, lang: str = "en") -> str:
+    """Return the stored video filename for a sign word (from Postgres)."""
     try:
         from db.base import SessionLocal
         from db.repository import SignRepository
         db = SessionLocal()
         try:
-            sign = SignRepository(db).get_exact(word, "en")
+            sign = SignRepository(db).get_exact(word, "ar" if lang in ("ar", "arabic", "egyptian", "eg") else "en")
             if sign and sign.video_filename:
-                return os.path.basename(sign.video_filename)
+                return _basename(sign.video_filename)
         finally:
             db.close()
     except Exception as e:
@@ -1310,16 +1321,19 @@ def get_video_filename(word: str) -> str:
 
 @app.get("/api/videos/{filename}")
 def serve_sign_video(filename: str):
-    """Serve a sign MP4 video file from the data/signs_videos or root signs_videos directories."""
-    safe_name = os.path.basename(filename)
-    # 1. Check inside data/signs_videos
-    path_data = os.path.join(BASE_DIR, "data", "signs_videos", safe_name)
-    if os.path.exists(path_data):
-        return FileResponse(path_data, media_type="video/mp4")
-    # 2. Check inside root signs_videos
-    path_root = os.path.join(BASE_DIR, "signs_videos", safe_name)
-    if os.path.exists(path_root):
-        return FileResponse(path_root, media_type="video/mp4")
+    """Serve a sign MP4 from any of the known video directories (English + Arabic)."""
+    safe_name = _basename(filename)  # backslash-safe (DBs were built on Windows)
+    search_dirs = [
+        os.path.join(BASE_DIR, "data", "signs_videos"),
+        os.path.join(BASE_DIR, "signs_videos"),
+        os.path.join(BASE_DIR, "data", "signs_videos_ar"),
+        os.path.join(BASE_DIR, "signs_videos_ar"),
+        os.path.join(BASE_DIR, "data", "signs_ar_videos"),
+    ]
+    for d in search_dirs:
+        path = os.path.join(d, safe_name)
+        if os.path.exists(path):
+            return FileResponse(path, media_type="video/mp4")
     raise HTTPException(status_code=404, detail=f"Video '{safe_name}' not found.")
 
 
@@ -1538,7 +1552,10 @@ async def get_arabic_sign_landmarks(
         for w in candidates:
             lms = ar_db.get_landmarks(w)
             if lms:
-                return {"word": w, "landmarks": lms, "frame_count": len(lms), "video_url": None}
+                matched = ar_db.match_word(w) if hasattr(ar_db, "match_word") else w
+                video_fn = get_video_filename(matched or w, lang="ar")
+                video_url = f"/api/videos/{video_fn}" if video_fn else None
+                return {"word": w, "landmarks": lms, "frame_count": len(lms), "video_url": video_url}
         raise HTTPException(status_code=404, detail=f"Arabic sign not found for '{word}'.")
 
     with Timer("signs.single_ar"):
@@ -1875,6 +1892,7 @@ async def sign_frame(sid, data):
                 await sio.emit("sign_detected", {
                     "module": module,
                     "word": disp,
+                    "raw": winner,          # English class key, for target matching
                     "confidence": st.last_conf,
                 }, to=sid)
     except Exception as e:

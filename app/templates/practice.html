@@ -61,7 +61,8 @@
   .pr-cam-stage video,.pr-cam-stage canvas{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
   /* Mirror the live feed + skeleton, like the dashboard (selfieMode on, CSS flip). */
   #pr-video{transform:scaleX(-1)}
-  #pr-output{transform:scaleX(-1)}
+  /* NOTE: do NOT flip the skeleton canvas — selfieMode:true already mirrors the
+     landmarks to match the flipped video; flipping the canvas too double-mirrors it. */
   .pr-cam-placeholder{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;color:var(--muted);font-size:14px;text-align:center;padding:18px}
   .pr-cam-placeholder svg{width:38px;height:38px;color:var(--faint)}
   .pr-live-badge{position:absolute;top:10px;left:10px;display:none;align-items:center;gap:6px;background:rgba(220,40,40,.9);color:#fff;font-size:11px;font-weight:700;letter-spacing:.04em;padding:4px 9px;border-radius:var(--radius-full);text-transform:uppercase;z-index:3}
@@ -505,7 +506,7 @@
     streamSocket.on('sign_detected', (d) => {
       if (!d || !d.word || d.module === 'speech') return;
       if (!cameraOn) return;
-      handleDetectedSign(d.word, d.confidence || 0);
+      handleDetectedSign(d.word, d.confidence || 0, d.raw);
     });
     return streamSocket;
   }
@@ -532,12 +533,15 @@
   function streaming() { return streamActive && streamSocket && streamSocket.connected; }
 
   // ── Central detection handler (socket OR http both route here) ───────
-  function handleDetectedSign(word, confidence) {
+  function handleDetectedSign(word, confidence, raw) {
     if (!cameraOn || graded || !round.length) return;
     setLastDetected(word);
     const target = (curTarget().word || '').toString().trim().toLowerCase();
-    const got = (word || '').toString().trim().toLowerCase();
-    if (target && got === target) {
+    // Match on the model's English class key (raw) — for Arabic the displayed
+    // `word` is the translation (e.g. "طفل") while the target is the key ("baby").
+    const got    = (word || '').toString().trim().toLowerCase();
+    const gotRaw = (raw  || '').toString().trim().toLowerCase();
+    if (target && (gotRaw === target || got === target)) {
       gradeCorrect(word, confidence);
     }
   }
@@ -631,7 +635,7 @@
       // If streaming took over (or camera stopped) while in flight, discard.
       if (!cameraOn || streaming()) { inferenceRunning = false; return; }
       if (data && data.text && data.confidence > 0) {
-        handleDetectedSign(data.text, data.confidence);
+        handleDetectedSign(data.text, data.confidence, data.raw);
       }
     } catch (err) {
       console.warn('[Practice] HTTP inference error:', err);

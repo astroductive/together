@@ -94,7 +94,13 @@ def migrate_language(db_path: str, language: str) -> tuple[int, int]:
                     f"{language}/{word}: embedding dim {emb.shape[0]} != {EMBEDDING_DIM}"
                 )
             lms = np.asarray(lms)
-            video_filename = os.path.basename(video_path) if video_path else None
+            # The sign DBs were built on Windows; normalise backslashes so the
+            # basename is the bare file name on Linux (e.g. 'TV.mp4', 'baby_0.mp4')
+            # rather than the whole 'signs_videos\TV.mp4' string.
+            video_filename = (
+                os.path.basename(video_path.replace("\\", "/")).strip()
+                if video_path else None
+            )
 
             # Upsert metadata first to obtain a stable sign id, then key the
             # landmark file by that id.
