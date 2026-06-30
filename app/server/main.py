@@ -114,7 +114,8 @@ from auth import (
     rotate_refresh_token,
     verify_password,
 )
-from schemas import UserCreate, UserResponse, Token, TokenRefresh, UserUpdate
+from schemas import UserCreate, UserResponse, Token, TokenRefresh, UserUpdate, OtpSendRequest
+from sms_otp import sms_enabled, send_code, check_code, normalize_phone
 from asl_service import ASLService, SignDB, ArabicSignDB
 
 # Offload blocking ML/LLM/network calls off the event loop so concurrent
@@ -698,17 +699,74 @@ async def signup(
         )
 
 
+    # ── SMS phone verification (enforced only when Twilio is configured) ──
+    phone = normalize_phone(user_data.phone or "") or None
+    phone_verified = False
+    if sms_enabled():
+        if not phone:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="A phone number is required.",
+            )
+        code = (user_data.code or "").strip()
+        if not code:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Enter the SMS verification code sent to your phone.",
+            )
+        result = check_code(phone, code)
+        if not result["approved"]:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=result["error"] or "Invalid or expired verification code.",
+            )
+        phone_verified = True
+
     hashed = get_password_hash(password)
     new_user = User(
         full_name=full_name,
         email=email,
         hashed_password=hashed,
         role=role,
+        phone=phone,
+        phone_verified=phone_verified,
     )
     db.add(new_user)
     db.commit()
     db.refresh(new_user)
     return new_user
+
+
+@app.get("/api/auth/sms-status")
+async def sms_status():
+    """Lets the signup UI know whether to require phone verification."""
+    return {"sms_enabled": sms_enabled()}
+
+
+@app.post("/api/auth/send-otp")
+async def send_otp(
+    body: OtpSendRequest,
+    _: None = Depends(require_auth_rate_limit),
+):
+    """Send an SMS verification code to a phone number (Twilio Verify)."""
+    if not sms_enabled():
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="SMS verification is not configured on the server.",
+        )
+    phone = normalize_phone(body.phone or "")
+    if not phone or not phone.startswith("+") or len(phone) < 8:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Enter your phone in international format, e.g. +201234567890.",
+        )
+    result = send_code(phone)
+    if not result["ok"]:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=result["error"] or "Could not send the verification code.",
+        )
+    return {"sent": True}
 
 
 @app.post("/api/auth/login", response_model=Token)

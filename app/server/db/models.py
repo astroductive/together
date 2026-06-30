@@ -35,6 +35,10 @@ class User(Base):
     email: Mapped[str] = mapped_column(String, unique=True, index=True, nullable=False)
     hashed_password: Mapped[str] = mapped_column(String, nullable=False)
     role: Mapped[str] = mapped_column(String, default="Speaker")
+    # Phone + SMS-OTP verification (Twilio Verify). Nullable so accounts created
+    # before SMS was enabled, or while it's unconfigured, still work.
+    phone: Mapped[str | None] = mapped_column(String, nullable=True)
+    phone_verified: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
 

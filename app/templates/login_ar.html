@@ -103,6 +103,7 @@
 {% endblock %}
 
 {% block content %}
+{% include '_lang_toggle.html' %}
 <canvas id="sf-canvas" aria-hidden="true"></canvas>
 <a href="/?lang=ar" class="ap-back">
   <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
@@ -216,6 +217,25 @@
           </div>
         </div>
 
+        <!-- التسجيل فقط: الهاتف + التحقق عبر SMS (يظهر فقط عند تفعيله على الخادم) -->
+        <div id="field-phone" style="display:none;flex-direction:column;gap:18px;margin-top:18px">
+          <div class="t-field" style="margin-bottom:0">
+            <label class="t-label" for="inp-phone">رقم الهاتف</label>
+            <div style="display:flex;gap:8px;align-items:flex-start">
+              <input type="tel" id="inp-phone" class="t-input" placeholder="+201234567890"
+                     autocomplete="tel" inputmode="tel" style="flex:1" dir="ltr">
+              <button type="button" class="t-btn t-btn--soft" id="otp-send-btn" onclick="sendOtp()"
+                      style="white-space:nowrap">إرسال الرمز</button>
+            </div>
+            <div style="font-size:11px;color:var(--muted);margin-top:6px">بصيغة دولية، مثال ‎+20…‎ لمصر.</div>
+            <div class="t-field" id="otp-code-field" style="display:none;margin-top:14px;margin-bottom:0">
+              <label class="t-label" for="inp-otp">رمز التحقق عبر SMS</label>
+              <input type="text" id="inp-otp" class="t-input" inputmode="numeric"
+                     autocomplete="one-time-code" maxlength="10" placeholder="123456" dir="ltr">
+            </div>
+          </div>
+        </div>
+
         <button type="submit" class="t-btn t-btn--accent t-btn--block t-btn--lg" id="submit-btn"
                 style="margin-top:24px">
           <span id="btn-label">تسجيل الدخول</span>
@@ -238,6 +258,50 @@
 <script>
   let currentTab = 'login';
   const params = new URLSearchParams(window.location.search);
+
+  // ── التحقق من الهاتف عبر SMS (يعمل فقط عند ضبط Twilio على الخادم) ──
+  let smsEnabled = false;
+  let otpSent = false;
+  function updatePhoneVisibility() {
+    const f = document.getElementById('field-phone');
+    if (f) f.style.display = (currentTab === 'signup' && smsEnabled) ? 'flex' : 'none';
+  }
+  (async function loadSmsStatus(){
+    try {
+      const r = await fetch('/api/auth/sms-status');
+      if (r.ok) smsEnabled = !!(await r.json()).sms_enabled;
+    } catch (_) {}
+    updatePhoneVisibility();
+  })();
+
+  async function sendOtp() {
+    const phone = (document.getElementById('inp-phone').value || '').trim();
+    if (!phone.startsWith('+') || phone.length < 8) {
+      showError('أدخل رقم هاتفك بالصيغة الدولية، مثال ‎+201234567890‎.'); return;
+    }
+    const btn = document.getElementById('otp-send-btn');
+    const orig = btn.textContent;
+    btn.disabled = true; btn.textContent = 'جارٍ الإرسال…'; clearError();
+    try {
+      const res = await fetch('/api/auth/send-otp', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone }),
+      });
+      if (!res.ok) throw new Error(await parseApiError(res, 'تعذّر إرسال الرمز.'));
+      otpSent = true;
+      document.getElementById('otp-code-field').style.display = 'block';
+      document.getElementById('inp-otp').focus();
+      showSuccess('تم إرسال رمز التحقق. أدخله بالأسفل.');
+      let s = 30; btn.textContent = 'إعادة الإرسال (' + s + ')';
+      const iv = setInterval(() => {
+        s--;
+        if (s <= 0) { clearInterval(iv); btn.disabled = false; btn.textContent = 'إعادة إرسال الرمز'; }
+        else btn.textContent = 'إعادة الإرسال (' + s + ')';
+      }, 1000);
+    } catch (err) {
+      showError(err.message); btn.disabled = false; btn.textContent = orig;
+    }
+  }
 
   function getSafeNextPath() {
     const raw = params.get('next') || '';
@@ -279,6 +343,7 @@
     document.getElementById('auth-switch-signup').style.display = tab === 'signup' ? 'block' : 'none';
     document.getElementById('form-error').classList.remove('is-visible');
     document.getElementById('form-success').classList.remove('is-visible');
+    updatePhoneVisibility();
   }
 
   function showError(msg) {
@@ -342,8 +407,17 @@
         if (!fullName) { showError('يرجى إدخال اسمك الكامل.'); setLoading(false); return; }
         if (password.length < 8) { showError('يجب أن تتكوّن كلمة المرور من 8 أحرف على الأقل.'); setLoading(false); return; }
         if (password !== confirm) { showError('كلمتا المرور غير متطابقتين.'); setLoading(false); return; }
+        const payload = { full_name: fullName, email: email.toLowerCase(), password, role };
+        if (smsEnabled) {
+          const phone = (document.getElementById('inp-phone').value || '').trim();
+          const code  = (document.getElementById('inp-otp').value || '').trim();
+          if (!phone) { showError('يرجى إدخال رقم هاتفك.'); setLoading(false); return; }
+          if (!otpSent) { showError('اضغط «إرسال الرمز» للتحقق من هاتفك أولاً.'); setLoading(false); return; }
+          if (!code) { showError('أدخل رمز التحقق المرسَل عبر SMS.'); setLoading(false); return; }
+          payload.phone = phone; payload.code = code;
+        }
         const res = await fetch('/api/auth/signup', { method:'POST', headers:{'Content-Type':'application/json'},
-          body: JSON.stringify({ full_name: fullName, email: email.toLowerCase(), password, role }) });
+          body: JSON.stringify(payload) });
         if (!res.ok) throw new Error(await parseApiError(res,'فشل التسجيل.'));
         showSuccess('تم إنشاء الحساب! يمكنك الآن تسجيل الدخول.');
         switchTab('login');

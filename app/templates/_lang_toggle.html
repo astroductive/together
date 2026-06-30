@@ -1,0 +1,34 @@
+{# Floating EN / العربية language switch. Self-contained — include on any page
+   that doesn't already have a language control (auth pages etc.). It rewrites
+   its own links to the current path with ?lang= and marks the active one. #}
+<div class="lang-switch" role="group" aria-label="Language / اللغة">
+  <a data-lang="en" hreflang="en">EN</a>
+  <a data-lang="ar" hreflang="ar" lang="ar">ع</a>
+</div>
+<style>
+  .lang-switch{position:fixed;top:14px;inset-inline-end:14px;z-index:300;display:inline-flex;gap:2px;
+    background:var(--surface-2,#1c1c22);border:1px solid var(--border,#2a2a32);border-radius:10px;padding:3px;
+    box-shadow:var(--shadow,0 6px 20px rgba(0,0,0,.18))}
+  .lang-switch a{font-size:12.5px;font-weight:700;color:var(--faint,#888);padding:5px 11px;border-radius:8px;
+    text-decoration:none;cursor:pointer;line-height:1.2;transition:background .15s,color .15s}
+  .lang-switch a:hover{color:var(--text,#111)}
+  .lang-switch a.is-active{background:var(--surface,#fff);color:var(--text,#111)}
+  @media(max-width:768px){.lang-switch{top:10px;inset-inline-end:10px}}
+</style>
+<script>
+(function(){
+  try{
+    var de = document.documentElement;
+    var isAr = de.getAttribute('dir') === 'rtl'
+      || de.lang === 'ar'
+      || /(?:^|;)\s*lang=ar(?:;|$)/.test(document.cookie);
+    document.querySelectorAll('.lang-switch a').forEach(function(a){
+      var lang = a.getAttribute('data-lang');
+      var u = new URL(window.location.href);
+      u.searchParams.set('lang', lang);
+      a.href = u.pathname + u.search + u.hash;
+      a.classList.toggle('is-active', (lang === 'ar') === isAr);
+    });
+  }catch(e){}
+})();
+</script>

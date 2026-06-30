@@ -7,6 +7,13 @@ class UserCreate(BaseModel):
     email: str
     password: str
     role: str = "Speaker"
+    # Phone + SMS code — required only when SMS verification is configured.
+    phone: Optional[str] = None
+    code: Optional[str] = None
+
+
+class OtpSendRequest(BaseModel):
+    phone: str
 
 
 class UserLogin(BaseModel):
@@ -30,6 +37,8 @@ class UserResponse(BaseModel):
     full_name: Optional[str]
     email: EmailStr
     role: str
+    phone: Optional[str] = None
+    phone_verified: bool = False
 
     class Config:
         from_attributes = True
