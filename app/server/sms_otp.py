@@ -1,92 +1,141 @@
-"""SMS one-time-passcode verification via Twilio Verify.
+"""Phone OTP verification via WhatsApp (WASender API — wasenderapi.com).
 
-Server-side phone verification used at signup. We use Twilio Verify (not raw
-Messaging) so Twilio owns code generation, expiry, retries and rate-limiting —
-we just "start" and "check".
+WASender is a plain WhatsApp message sender, not a "verify" service, so unlike
+Twilio Verify we generate the one-time code ourselves, deliver it as a WhatsApp
+message, and verify it locally. Used at signup.
 
-Configuration (all three required to enable; set as env vars / Render secrets):
-    TWILIO_ACCOUNT_SID
-    TWILIO_AUTH_TOKEN
-    TWILIO_VERIFY_SERVICE_SID
+Configuration (set as env vars / Render secrets):
+    WASENDER_API_KEY   required — enables the feature (the device/session API
+                       key from the WASender dashboard)
+    WASENDER_API_URL   optional — default https://wasenderapi.com/api/send-message
+    OTP_TTL_SECONDS    optional — code lifetime, default 300 (5 minutes)
+    OTP_MESSAGE        optional — message template containing "{code}"
 
-When they are not set, ``sms_enabled()`` returns False and signup proceeds
-WITHOUT phone verification (so local dev / an un-provisioned deploy still works).
-Once configured, signup enforces a valid code.
+When WASENDER_API_KEY is unset, ``sms_enabled()`` returns False and signup
+proceeds WITHOUT a code (so dev / an un-provisioned deploy still works).
 
-No SDK dependency — this talks to the Twilio REST API with ``requests``.
+The public interface (sms_enabled / send_code / check_code / normalize_phone)
+is unchanged from the old Twilio module, so the routes and UI are untouched.
+
+Codes are stored IN-MEMORY (sha256-hashed) with a TTL + a per-code attempt cap.
+This assumes a single server process (the app runs one uvicorn worker); pending
+codes are simply lost on restart, which is fine for a short-lived OTP. For a
+multi-instance deploy, swap ``_store`` for Redis.
 """
 from __future__ import annotations
 
+import hashlib
+import hmac
 import os
+import secrets
+import threading
+import time
 
 import requests
 
-_VERIFY_BASE = "https://verify.twilio.com/v2/Services"
+_DEFAULT_URL = "https://wasenderapi.com/api/send-message"
+_DEFAULT_MSG = "Your Together verification code is {code}. It expires in 5 minutes."
 _TIMEOUT = 15
+_MAX_ATTEMPTS = 5
+
+# phone -> {"hash": str, "expires": float, "attempts": int}
+_store: dict[str, dict] = {}
+_lock = threading.Lock()
 
 
-def _cfg() -> tuple[str, str, str]:
-    return (
-        os.environ.get("TWILIO_ACCOUNT_SID", "").strip(),
-        os.environ.get("TWILIO_AUTH_TOKEN", "").strip(),
-        os.environ.get("TWILIO_VERIFY_SERVICE_SID", "").strip(),
-    )
+def _key() -> str:
+    return os.environ.get("WASENDER_API_KEY", "").strip()
+
+
+def _url() -> str:
+    return os.environ.get("WASENDER_API_URL", "").strip() or _DEFAULT_URL
+
+
+def _ttl() -> int:
+    try:
+        return int(os.environ.get("OTP_TTL_SECONDS", "300"))
+    except ValueError:
+        return 300
 
 
 def sms_enabled() -> bool:
-    """True only when all three Twilio Verify credentials are present."""
-    sid, token, service = _cfg()
-    return bool(sid and token and service)
+    """True when WASender is configured (a single API key is enough)."""
+    return bool(_key())
 
 
 def normalize_phone(phone: str) -> str:
-    """Trim spaces/dashes. Twilio Verify expects E.164 (e.g. +201234567890);
-    we don't fabricate a country code — the UI asks the user for the full
-    international number and Twilio rejects anything malformed."""
+    """Trim spaces/dashes. WhatsApp/WASender expects an international number
+    (E.164, e.g. +201234567890)."""
     return (phone or "").strip().replace(" ", "").replace("-", "")
 
 
-def _twilio_message(resp: requests.Response) -> str:
-    try:
-        return (resp.json() or {}).get("message", "") or ""
-    except Exception:
-        return ""
+def _hash(phone: str, code: str) -> str:
+    return hashlib.sha256(f"{phone}:{code}".encode("utf-8")).hexdigest()
+
+
+def _purge_locked(now: float) -> None:
+    for p in [p for p, v in _store.items() if v["expires"] < now]:
+        _store.pop(p, None)
 
 
 def send_code(phone: str) -> dict:
-    """Start an SMS verification. Returns {'ok': bool, 'error': str|None}."""
-    sid, token, service = _cfg()
-    if not (sid and token and service):
-        return {"ok": False, "error": "SMS verification is not configured on the server."}
-    url = f"{_VERIFY_BASE}/{service}/Verifications"
+    """Generate a code, remember it, and WhatsApp it. Returns {'ok','error'}."""
+    if not _key():
+        return {"ok": False, "error": "WhatsApp verification is not configured on the server."}
+
+    code = f"{secrets.randbelow(1_000_000):06d}"
+    now = time.time()
+    with _lock:
+        _purge_locked(now)
+        _store[phone] = {"hash": _hash(phone, code), "expires": now + _ttl(), "attempts": 0}
+
+    text = (os.environ.get("OTP_MESSAGE") or _DEFAULT_MSG).format(code=code)
     try:
         resp = requests.post(
-            url, data={"To": phone, "Channel": "sms"}, auth=(sid, token), timeout=_TIMEOUT
+            _url(),
+            json={"to": phone, "text": text},
+            headers={
+                "Authorization": f"Bearer {_key()}",
+                "Content-Type": "application/json",
+            },
+            timeout=_TIMEOUT,
         )
     except requests.RequestException as exc:
-        return {"ok": False, "error": f"Could not reach the SMS provider: {exc}"}
+        with _lock:
+            _store.pop(phone, None)
+        return {"ok": False, "error": f"Could not reach the WhatsApp provider: {exc}"}
+
     if resp.status_code in (200, 201):
         return {"ok": True, "error": None}
-    return {"ok": False, "error": _twilio_message(resp) or f"SMS provider error ({resp.status_code})."}
+
+    # Failed to send → drop the stored code so it can't be checked.
+    with _lock:
+        _store.pop(phone, None)
+    message = ""
+    try:
+        message = (resp.json() or {}).get("message", "") or ""
+    except Exception:
+        pass
+    return {"ok": False, "error": message or f"WhatsApp provider error ({resp.status_code})."}
 
 
 def check_code(phone: str, code: str) -> dict:
-    """Check a submitted code. Returns {'approved': bool, 'error': str|None}."""
-    sid, token, service = _cfg()
-    if not (sid and token and service):
-        return {"approved": False, "error": "SMS verification is not configured on the server."}
-    url = f"{_VERIFY_BASE}/{service}/VerificationCheck"
-    try:
-        resp = requests.post(
-            url, data={"To": phone, "Code": code}, auth=(sid, token), timeout=_TIMEOUT
-        )
-    except requests.RequestException as exc:
-        return {"approved": False, "error": f"Could not reach the SMS provider: {exc}"}
-    if resp.status_code in (200, 201):
-        try:
-            approved = (resp.json() or {}).get("status") == "approved"
-        except Exception:
-            approved = False
-        return {"approved": approved, "error": None if approved else "Invalid or expired code."}
-    # 404 here usually means the code already expired / was consumed.
-    return {"approved": False, "error": _twilio_message(resp) or "Invalid or expired code."}
+    """Verify a submitted code locally. Returns {'approved','error'}."""
+    if not _key():
+        return {"approved": False, "error": "WhatsApp verification is not configured on the server."}
+
+    code = (code or "").strip()
+    now = time.time()
+    with _lock:
+        _purge_locked(now)
+        entry = _store.get(phone)
+        if not entry:
+            return {"approved": False, "error": "No code was sent, or it expired. Request a new one."}
+        if entry["attempts"] >= _MAX_ATTEMPTS:
+            _store.pop(phone, None)
+            return {"approved": False, "error": "Too many attempts. Request a new code."}
+        entry["attempts"] += 1
+        if hmac.compare_digest(entry["hash"], _hash(phone, code)):
+            _store.pop(phone, None)  # one-time use
+            return {"approved": True, "error": None}
+        return {"approved": False, "error": "Invalid or expired code."}

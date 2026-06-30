@@ -712,7 +712,7 @@ async def signup(
         if not code:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Enter the SMS verification code sent to your phone.",
+                detail="Enter the WhatsApp verification code sent to your phone.",
             )
         result = check_code(phone, code)
         if not result["approved"]:
@@ -748,11 +748,11 @@ async def send_otp(
     body: OtpSendRequest,
     _: None = Depends(require_auth_rate_limit),
 ):
-    """Send an SMS verification code to a phone number (Twilio Verify)."""
+    """Send a WhatsApp verification code to a phone number (WASender)."""
     if not sms_enabled():
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="SMS verification is not configured on the server.",
+            detail="WhatsApp verification is not configured on the server.",
         )
     phone = normalize_phone(body.phone or "")
     if not phone or not phone.startswith("+") or len(phone) < 8:
@@ -760,7 +760,8 @@ async def send_otp(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Enter your phone in international format, e.g. +201234567890.",
         )
-    result = send_code(phone)
+    # The WhatsApp send is a blocking HTTP call — keep it off the event loop.
+    result = await run_in_threadpool(send_code, phone)
     if not result["ok"]:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
