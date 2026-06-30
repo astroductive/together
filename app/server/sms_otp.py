@@ -33,7 +33,7 @@ import time
 
 import requests
 
-_DEFAULT_URL = "https://wasenderapi.com/api/send-message"
+_DEFAULT_URL = "https://www.wasenderapi.com/api/send-message"
 _DEFAULT_MSG = "Your Together verification code is {code}. It expires in 5 minutes."
 _TIMEOUT = 15
 _MAX_ATTEMPTS = 5
@@ -90,10 +90,13 @@ def send_code(phone: str) -> dict:
         _store[phone] = {"hash": _hash(phone, code), "expires": now + _ttl(), "attempts": 0}
 
     text = (os.environ.get("OTP_MESSAGE") or _DEFAULT_MSG).format(code=code)
+    # WASender wants the recipient as digits-only with country code, no "+"
+    # (their docs: "to": "212612345678"). We key our store by the +E.164 form.
+    to = phone.lstrip("+")
     try:
         resp = requests.post(
             _url(),
-            json={"to": phone, "text": text},
+            json={"to": to, "text": text},
             headers={
                 "Authorization": f"Bearer {_key()}",
                 "Content-Type": "application/json",
