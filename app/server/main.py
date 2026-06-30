@@ -761,7 +761,8 @@ async def send_otp(
             detail="Enter your phone in international format, e.g. +201234567890.",
         )
     # The WhatsApp send is a blocking HTTP call — keep it off the event loop.
-    result = await run_in_threadpool(send_code, phone)
+    name = (body.name or "").strip()[:60] or None
+    result = await run_in_threadpool(send_code, phone, name, body.lang)
     if not result["ok"]:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,

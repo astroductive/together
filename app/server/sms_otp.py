@@ -34,7 +34,12 @@ import time
 import requests
 
 _DEFAULT_URL = "https://www.wasenderapi.com/api/send-message"
-_DEFAULT_MSG = "Your Together verification code is {code}. It expires in 5 minutes."
+# Personalized + localized defaults. Both expose {name} and {code}. A custom
+# OTP_MESSAGE env var (if set) overrides these for all languages.
+_DEFAULT_MSG_EN = "Hi {name}, your Together verification code is {code}. It expires in 5 minutes."
+_DEFAULT_MSG_AR = "مرحباً {name}، رمز التحقق الخاص بك في «معاً» هو {code}. ينتهي خلال 5 دقائق."
+_NAME_FALLBACK_EN = "there"
+_NAME_FALLBACK_AR = "صديقنا"
 _TIMEOUT = 15
 _MAX_ATTEMPTS = 5
 
@@ -78,8 +83,9 @@ def _purge_locked(now: float) -> None:
         _store.pop(p, None)
 
 
-def send_code(phone: str) -> dict:
-    """Generate a code, remember it, and WhatsApp it. Returns {'ok','error'}."""
+def send_code(phone: str, name: str | None = None, lang: str | None = None) -> dict:
+    """Generate a random code, remember it, and WhatsApp a personalized message
+    to the account holder. Returns {'ok','error'}."""
     if not _key():
         return {"ok": False, "error": "WhatsApp verification is not configured on the server."}
 
@@ -89,7 +95,14 @@ def send_code(phone: str) -> dict:
         _purge_locked(now)
         _store[phone] = {"hash": _hash(phone, code), "expires": now + _ttl(), "attempts": 0}
 
-    text = (os.environ.get("OTP_MESSAGE") or _DEFAULT_MSG).format(code=code)
+    is_ar = (lang or "").strip().lower().startswith("ar")
+    person = (name or "").strip() or (_NAME_FALLBACK_AR if is_ar else _NAME_FALLBACK_EN)
+    template = os.environ.get("OTP_MESSAGE") or (_DEFAULT_MSG_AR if is_ar else _DEFAULT_MSG_EN)
+    try:
+        text = template.format(code=code, name=person)
+    except (KeyError, IndexError):
+        # A custom OTP_MESSAGE that doesn't use {name}/{code} placeholders.
+        text = template.replace("{code}", code).replace("{name}", person)
     # WASender wants the recipient as digits-only with country code, no "+"
     # (their docs: "to": "212612345678"). We key our store by the +E.164 form.
     to = phone.lstrip("+")

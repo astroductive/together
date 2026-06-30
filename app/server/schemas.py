@@ -14,6 +14,8 @@ class UserCreate(BaseModel):
 
 class OtpSendRequest(BaseModel):
     phone: str
+    name: Optional[str] = None
+    lang: Optional[str] = None
 
 
 class UserLogin(BaseModel):
