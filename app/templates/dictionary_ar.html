@@ -178,9 +178,18 @@
         asl: (data.asl || []).length,
         arabic: (data.arabic || []).length,
       };
+      // Keep the English `word` (drives API lookups) but DISPLAY the Arabic
+      // `word_ar` / `category_ar` everywhere on this RTL dashboard.
+      const mk = (w, lang) => ({
+        word: w.word,
+        word_ar: w.word_ar || w.word,
+        category: w.category || 'general',
+        category_ar: w.category_ar || w.category || 'general',
+        lang,
+      });
       ALL = []
-        .concat((data.asl || []).map((w) => ({ word: w.word, category: w.category || 'general', lang: 'asl' })))
-        .concat((data.arabic || []).map((w) => ({ word: w.word, category: w.category || 'general', lang: 'arabic' })));
+        .concat((data.asl || []).map((w) => mk(w, 'asl')))
+        .concat((data.arabic || []).map((w) => mk(w, 'arabic')));
 
       subtitle.innerHTML = '<b>' + counts.asl + '</b> إشارة ASL · <b>' + counts.arabic + '</b> إشارة ArSL';
       buildCategoryFilter();
@@ -195,19 +204,23 @@
 
   function buildCategoryFilter() {
     const sel = $('dc-cat');
-    const cats = Array.from(new Set(ALL.map((s) => s.category))).sort();
-    for (const c of cats) {
+    // value = stable English category key, label = its Arabic name.
+    const seen = new Map();
+    for (const s of ALL) if (!seen.has(s.category)) seen.set(s.category, s.category_ar || s.category);
+    for (const c of Array.from(seen.keys()).sort()) {
       const opt = document.createElement('option');
       opt.value = c;
-      opt.textContent = cap(c);
+      opt.textContent = seen.get(c);
       sel.appendChild(opt);
     }
   }
 
   // ── Filtering + render ──────────────────────────────────────────
   function currentFilter() {
+    const raw = $('dc-search').value.trim();
     return {
-      q: $('dc-search').value.trim().toLowerCase(),
+      q: raw.toLowerCase(),
+      qRaw: raw,                 // raw query so Arabic labels match too
       lang: $('dc-lang').value,
       cat: $('dc-cat').value,
     };
@@ -218,7 +231,7 @@
     const items = ALL.filter((s) =>
       (f.lang === 'all' || s.lang === f.lang) &&
       (f.cat === 'all' || s.category === f.cat) &&
-      (!f.q || s.word.toLowerCase().includes(f.q))
+      (!f.q || s.word.toLowerCase().includes(f.q) || (s.word_ar || '').includes(f.qRaw))
     );
 
     countEl.innerHTML = 'عرض <b>' + items.length + '</b> من ' + ALL.length + ' إشارة';
@@ -247,9 +260,9 @@
           '<span class="dc-chip"></span>' +
           '<span class="dc-play">▶ تشغيل</span>' +
         '</div>';
-      card.querySelector('.dc-word').textContent = cap(s.word);
-      card.querySelector('.dc-chip').textContent = s.category;
-      card.title = cap(s.word) + ' · ' + langLabel(s.lang);
+      card.querySelector('.dc-word').textContent = s.word_ar || cap(s.word);
+      card.querySelector('.dc-chip').textContent = s.category_ar || s.category;
+      card.title = (s.word_ar || cap(s.word)) + ' · ' + langLabel(s.lang);
       card.addEventListener('click', () => openSign(s));
       frag.appendChild(card);
     }
@@ -293,7 +306,7 @@
     const mySignal = signal;
     try {
       await SignPlayer.playLandmarkSequence(
-        [{ word: activeData.word || activeSign.word, landmarks: activeData.landmarks, frame_count: activeData.frame_count }],
+        [{ word: (activeSign && activeSign.word_ar) || activeData.word || activeSign.word, landmarks: activeData.landmarks, frame_count: activeData.frame_count }],
         canvas, ctx,
         { loop: true, signal: mySignal }
       );
@@ -303,8 +316,8 @@
   async function openSign(sign) {
     activeSign = sign;
     activeData = null;
-    $('dc-modal-word').textContent = cap(sign.word);
-    $('dc-modal-cat').textContent = cap(sign.category) + ' · ' + langLabel(sign.lang);
+    $('dc-modal-word').textContent = sign.word_ar || cap(sign.word);
+    $('dc-modal-cat').textContent = (sign.category_ar || cap(sign.category)) + ' · ' + langLabel(sign.lang);
     noanim.style.display = 'none';
     replayBtn.style.display = 'none';
     videoLink.style.display = 'none';

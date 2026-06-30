@@ -49,6 +49,7 @@ from fastapi.templating import Jinja2Templates
 from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
 from sqlalchemy.orm import Session
 from sqlalchemy import func
+from sqlalchemy.exc import IntegrityError
 import socketio
 import os
 import uvicorn
@@ -116,6 +117,7 @@ from auth import (
 )
 from schemas import UserCreate, UserResponse, Token, TokenRefresh, UserUpdate, OtpSendRequest
 from sms_otp import sms_enabled, send_code, check_code, normalize_phone
+from sign_labels import ar_label as _ar_label, CATEGORY_AR as _CATEGORY_AR
 from asl_service import ASLService, SignDB, ArabicSignDB
 
 # Offload blocking ML/LLM/network calls off the event loop so concurrent
@@ -690,6 +692,10 @@ async def signup(
             detail="Password must be at least 8 characters long."
         )
 
+    # Normalize the phone up-front so the duplicate check, the OTP store key,
+    # and the stored value are all the same canonical form.
+    phone = normalize_phone(user_data.phone or "") or None
+
     # Check for duplicate email
     existing = db.query(User).filter(func.lower(User.email) == email).first()
     if existing:
@@ -698,9 +704,18 @@ async def signup(
             detail="An account with this email already exists."
         )
 
+    # One account per phone number. Checked here for a friendly message BEFORE
+    # we consume the OTP; the DB unique constraint (see migration 0003) is the
+    # race-proof backstop, enforced again at commit below.
+    if phone:
+        existing_phone = db.query(User).filter(User.phone == phone).first()
+        if existing_phone:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="An account with this phone number already exists.",
+            )
 
-    # ── SMS phone verification (enforced only when Twilio is configured) ──
-    phone = normalize_phone(user_data.phone or "") or None
+    # ── SMS phone verification (enforced only when WhatsApp/WASender is set up) ──
     phone_verified = False
     if sms_enabled():
         if not phone:
@@ -732,7 +747,16 @@ async def signup(
         phone_verified=phone_verified,
     )
     db.add(new_user)
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError:
+        # A concurrent signup claimed the same email or phone between our check
+        # and this commit — the unique constraints make the second one lose.
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="An account with this email or phone number already exists.",
+        )
     db.refresh(new_user)
     return new_user
 
@@ -746,6 +770,7 @@ async def sms_status():
 @app.post("/api/auth/send-otp")
 async def send_otp(
     body: OtpSendRequest,
+    db: Session = Depends(get_db),
     _: None = Depends(require_auth_rate_limit),
 ):
     """Send a WhatsApp verification code to a phone number (WASender)."""
@@ -755,10 +780,19 @@ async def send_otp(
             detail="WhatsApp verification is not configured on the server.",
         )
     phone = normalize_phone(body.phone or "")
-    if not phone or not phone.startswith("+") or len(phone) < 8:
+    # Require a real E.164 number: '+', a non-zero country code, 7–15 digits.
+    # normalize_phone canonicalizes formatting; this rejects national/garbage input.
+    if not re.fullmatch(r"\+[1-9]\d{6,14}", phone or ""):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Enter your phone in international format, e.g. +201234567890.",
+        )
+    # One account per phone: don't send a fresh signup code to a number that is
+    # already registered (and don't waste a WhatsApp send on it).
+    if db.query(User).filter(User.phone == phone).first():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="An account with this phone number already exists. Please log in instead.",
         )
     # The WhatsApp send is a blocking HTTP call — keep it off the event loop.
     name = (body.name or "").strip()[:60] or None
@@ -1303,6 +1337,28 @@ def _basename(path: str) -> str:
     return os.path.basename((path or "").replace("\\", "/")).strip()
 
 
+# Every directory a sign MP4 might live in (English + Arabic, with/without data/).
+_VIDEO_DIRS = [
+    os.path.join(BASE_DIR, "data", "signs_videos"),
+    os.path.join(BASE_DIR, "signs_videos"),
+    os.path.join(BASE_DIR, "data", "signs_videos_ar"),
+    os.path.join(BASE_DIR, "signs_videos_ar"),
+    os.path.join(BASE_DIR, "data", "signs_ar_videos"),
+]
+
+
+def _find_video_path(filename: str):
+    """Absolute path of an on-disk sign video, or None if no file matches."""
+    safe_name = _basename(filename)  # backslash-safe (DBs were built on Windows)
+    if not safe_name:
+        return None
+    for d in _VIDEO_DIRS:
+        path = os.path.join(d, safe_name)
+        if os.path.isfile(path):
+            return path
+    return None
+
+
 def get_video_filename(word: str, lang: str = "en") -> str:
     """Return the stored video filename for a sign word (from Postgres)."""
     try:
@@ -1319,22 +1375,28 @@ def get_video_filename(word: str, lang: str = "en") -> str:
         print(f"[ERROR] get_video_filename query failed: {e}")
     return ""
 
+
+def resolve_video_url(word: str, lang: str = "en"):
+    """URL for a sign's video — but ONLY when the file actually exists on disk.
+
+    Knowing the DB filename isn't enough: the Arabic clips aren't shipped in the
+    repo and some English words have no clip, so advertising a video_url for them
+    makes the dictionary show a 'Watch video' button that then 404s ('Video
+    unavailable for this sign'). Returning None instead keeps the button hidden
+    and lets the avatar animation stand in."""
+    fn = get_video_filename(word, lang)
+    if fn and _find_video_path(fn):
+        return f"/api/videos/{fn}"
+    return None
+
+
 @app.get("/api/videos/{filename}")
 def serve_sign_video(filename: str):
     """Serve a sign MP4 from any of the known video directories (English + Arabic)."""
-    safe_name = _basename(filename)  # backslash-safe (DBs were built on Windows)
-    search_dirs = [
-        os.path.join(BASE_DIR, "data", "signs_videos"),
-        os.path.join(BASE_DIR, "signs_videos"),
-        os.path.join(BASE_DIR, "data", "signs_videos_ar"),
-        os.path.join(BASE_DIR, "signs_videos_ar"),
-        os.path.join(BASE_DIR, "data", "signs_ar_videos"),
-    ]
-    for d in search_dirs:
-        path = os.path.join(d, safe_name)
-        if os.path.exists(path):
-            return FileResponse(path, media_type="video/mp4")
-    raise HTTPException(status_code=404, detail=f"Video '{safe_name}' not found.")
+    path = _find_video_path(filename)
+    if path:
+        return FileResponse(path, media_type="video/mp4")
+    raise HTTPException(status_code=404, detail=f"Video '{_basename(filename)}' not found.")
 
 
 # NOTE: /api/signs/lookup MUST be registered before /api/signs/{word}
@@ -1387,16 +1449,14 @@ async def get_sign_landmarks(
             full_phrase = " ".join(normalized_words)
             lm = db.phrase_landmarks(full_phrase)
             if lm is not None:
-                video_fn = get_video_filename(full_phrase)
-                video_url = f"/api/videos/{video_fn}" if video_fn else None
+                video_url = resolve_video_url(full_phrase)
                 return {"word": full_phrase, "landmarks": lm, "frame_count": len(lm), "video_url": video_url}
 
         lookup_word = normalized_words[0]
         lms = db.get_landmarks(lookup_word)
         if lms:
             matched_sign = db.match_word(lookup_word)
-            video_fn = get_video_filename(matched_sign or lookup_word)
-            video_url = f"/api/videos/{video_fn}" if video_fn else None
+            video_url = resolve_video_url(matched_sign or lookup_word)
             return {"word": lookup_word, "landmarks": lms, "frame_count": len(lms), "video_url": video_url}
         raise HTTPException(status_code=404, detail=f"Sign not found for '{word}'.")
 
@@ -1429,8 +1489,7 @@ async def get_batch_sign_landmarks(
             full_phrase = ' '.join(normalized_words)
             lm = db.phrase_landmarks(full_phrase)
             if lm is not None:
-                video_fn = get_video_filename(full_phrase)
-                video_url = f"/api/videos/{video_fn}" if video_fn else None
+                video_url = resolve_video_url(full_phrase)
                 return {
                     "found": [{"word": full_phrase, "landmarks": lm, "frame_count": len(lm), "video_url": video_url}],
                     "missing": []
@@ -1451,8 +1510,7 @@ async def get_batch_sign_landmarks(
                 if matched_sign == prev_matched_sign:
                     continue
 
-                video_fn = get_video_filename(matched_sign or w)
-                video_url = f"/api/videos/{video_fn}" if video_fn else None
+                video_url = resolve_video_url(matched_sign or w)
                 found.append({"word": w, "landmarks": lms, "frame_count": len(lms), "video_url": video_url})
                 prev_matched_sign = matched_sign
             else:
@@ -1553,8 +1611,7 @@ async def get_arabic_sign_landmarks(
             lms = ar_db.get_landmarks(w)
             if lms:
                 matched = ar_db.match_word(w) if hasattr(ar_db, "match_word") else w
-                video_fn = get_video_filename(matched or w, lang="ar")
-                video_url = f"/api/videos/{video_fn}" if video_fn else None
+                video_url = resolve_video_url(matched or w, lang="ar")
                 return {"word": w, "landmarks": lms, "frame_count": len(lms), "video_url": video_url}
         raise HTTPException(status_code=404, detail=f"Arabic sign not found for '{word}'.")
 
@@ -1615,9 +1672,20 @@ def _load_vocabulary():
 
     asl_words = _read("sign_to_prediction_index_map.json")
     ar_words = _read("class_mapping.json")
+
+    def _entry(w):
+        # English key drives lookups; word_ar/category_ar drive the Arabic UI.
+        cat = _categorize_word(w)
+        return {
+            "word": w,
+            "word_ar": _ar_label(w),
+            "category": cat,
+            "category_ar": _CATEGORY_AR.get(cat, cat),
+        }
+
     _VOCAB_CACHE = {
-        "asl": [{"word": w, "category": _categorize_word(w)} for w in asl_words],
-        "arabic": [{"word": w, "category": _categorize_word(w)} for w in ar_words],
+        "asl": [_entry(w) for w in asl_words],
+        "arabic": [_entry(w) for w in ar_words],
         "counts": {"asl": len(asl_words), "arabic": len(ar_words)},
     }
     return _VOCAB_CACHE

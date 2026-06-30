@@ -27,6 +27,7 @@ from __future__ import annotations
 import hashlib
 import hmac
 import os
+import re
 import secrets
 import threading
 import time
@@ -42,8 +43,11 @@ _NAME_FALLBACK_EN = "there"
 _NAME_FALLBACK_AR = "صديقنا"
 _TIMEOUT = 15
 _MAX_ATTEMPTS = 5
+# Minimum seconds between two sends to the SAME number — blocks WhatsApp spam /
+# OTP-cost abuse even if the per-IP rate limiter is evaded (e.g. rotating IPs).
+_DEFAULT_RESEND_COOLDOWN = 30
 
-# phone -> {"hash": str, "expires": float, "attempts": int}
+# phone -> {"hash": str, "expires": float, "attempts": int, "sent_at": float}
 _store: dict[str, dict] = {}
 _lock = threading.Lock()
 
@@ -63,15 +67,44 @@ def _ttl() -> int:
         return 300
 
 
+def _cooldown() -> int:
+    # Read lazily + defensively so a malformed env value can't crash app import.
+    try:
+        return int(os.environ.get("OTP_RESEND_COOLDOWN", str(_DEFAULT_RESEND_COOLDOWN)))
+    except ValueError:
+        return _DEFAULT_RESEND_COOLDOWN
+
+
 def sms_enabled() -> bool:
     """True when WASender is configured (a single API key is enough)."""
     return bool(_key())
 
 
 def normalize_phone(phone: str) -> str:
-    """Trim spaces/dashes. WhatsApp/WASender expects an international number
-    (E.164, e.g. +201234567890)."""
-    return (phone or "").strip().replace(" ", "").replace("-", "")
+    """Canonicalize a number to ONE E.164 form (``+<countrycode><number>``) so
+    every spelling of the SAME line collides.
+
+    Two users must not be able to register the same WhatsApp number by varying
+    its formatting. We drop all separators/letters, collapse a leading
+    international ``00`` prefix, and ALWAYS emit a single leading ``+``. So
+    ``+201234567890``, ``20 123-456 7890`` (no plus) and ``0020123456 7890`` all
+    map to the identical string ``+201234567890`` — the canonical value used
+    everywhere: the in-memory OTP store key, the ``users.phone`` uniqueness
+    check/column, and (via ``lstrip('+')``) the WASender recipient.
+
+    Note: this does NOT validate the country code — a bare national number like
+    ``01234567890`` becomes the (invalid) ``+01234567890``. The send-otp route
+    enforces a real E.164 shape on top of this; the point here is purely that one
+    physical number has exactly one canonical key."""
+    digits = re.sub(r"\D", "", phone or "")  # drops spaces, dashes, dots, parens, '+'
+    if not digits:
+        return ""
+    # 00<country><number> is the international-access spelling of +<country><number>.
+    if digits.startswith("00"):
+        digits = digits[2:]
+    if not digits:
+        return ""
+    return "+" + digits
 
 
 def _hash(phone: str, code: str) -> str:
@@ -93,7 +126,17 @@ def send_code(phone: str, name: str | None = None, lang: str | None = None) -> d
     now = time.time()
     with _lock:
         _purge_locked(now)
-        _store[phone] = {"hash": _hash(phone, code), "expires": now + _ttl(), "attempts": 0}
+        cooldown = _cooldown()
+        existing = _store.get(phone)
+        if existing and (now - existing.get("sent_at", 0)) < cooldown:
+            wait = int(cooldown - (now - existing["sent_at"])) + 1
+            return {"ok": False, "error": f"Please wait {wait} seconds before requesting another code."}
+        # Reserve the slot (and reset the attempt counter) before we send so a
+        # concurrent request hits the cooldown instead of issuing a 2nd code.
+        _store[phone] = {
+            "hash": _hash(phone, code), "expires": now + _ttl(),
+            "attempts": 0, "sent_at": now,
+        }
 
     is_ar = (lang or "").strip().lower().startswith("ar")
     person = (name or "").strip() or (_NAME_FALLBACK_AR if is_ar else _NAME_FALLBACK_EN)
