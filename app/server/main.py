@@ -246,6 +246,16 @@ async def validation_exception_handler(request: _Request, exc: RequestValidation
 _raw_origins = os.environ.get("ALLOWED_ORIGINS", "http://localhost:8000,http://127.0.0.1:8000")
 _cors_origins = [o.strip() for o in _raw_origins.split(",") if o.strip()]
 
+# The same list gates Socket.IO handshakes (engine.io rejects any other
+# Origin with HTTP 400 "not an accepted origin"), so a deploy where
+# ALLOWED_ORIGINS was never set silently loses ALL socket traffic — live
+# streaming and meeting signaling — while plain HTTP keeps working. Render
+# injects its public URL as RENDER_EXTERNAL_URL; include it automatically so
+# the app accepts its own origin without manual configuration.
+_render_url = (os.environ.get("RENDER_EXTERNAL_URL") or "").strip().rstrip("/")
+if _render_url and _render_url not in _cors_origins:
+    _cors_origins.append(_render_url)
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=_cors_origins,
@@ -1752,6 +1762,68 @@ async def get_vocabulary(current_user: dict = Depends(get_current_user)):
     return _load_vocabulary()
 
 
+# ── WebRTC ICE configuration (STUN + optional Cloudflare TURN) ──
+# Without a TURN relay, two peers behind symmetric NAT / carrier-grade NAT
+# (most phone↔laptop pairs on different networks) can exchange offers all day
+# and never pass media. The client asks this endpoint for iceServers before
+# creating peer connections. When Cloudflare Calls TURN credentials are
+# configured we mint SHORT-LIVED credentials server-side (the API token never
+# reaches the browser or git); otherwise we fall back to public STUN, which
+# preserves today's behavior (same-network / permissive-NAT calls).
+_STUN_FALLBACK = [
+    {"urls": "stun:stun.l.google.com:19302"},
+    {"urls": "stun:stun1.l.google.com:19302"},
+]
+_TURN_KEY_ID = os.environ.get("CLOUDFLARE_TURN_KEY_ID", "").strip()
+_TURN_API_TOKEN = os.environ.get("CLOUDFLARE_TURN_API_TOKEN", "").strip()
+_TURN_TTL = int(os.environ.get("TURN_TTL_SECONDS", "86400"))
+_turn_cache = {"expires": 0.0, "ice_servers": None}
+_turn_cache_lock = Lock()
+
+
+def _mint_ice_servers():
+    """Blocking: fetch short-lived TURN credentials from Cloudflare (cached)."""
+    now = time.time()
+    with _turn_cache_lock:
+        if _turn_cache["ice_servers"] and now < _turn_cache["expires"]:
+            return _turn_cache["ice_servers"]
+    resp = requests.post(
+        f"https://rtc.live.cloudflare.com/v1/turn/keys/{_TURN_KEY_ID}/credentials/generate-ice-servers",
+        headers={"Authorization": f"Bearer {_TURN_API_TOKEN}",
+                 "Content-Type": "application/json"},
+        json={"ttl": _TURN_TTL},
+        timeout=10,
+    )
+    resp.raise_for_status()
+    ice_servers = resp.json().get("iceServers")
+    if not ice_servers:
+        raise ValueError("Cloudflare TURN response had no iceServers")
+    # Keep STUN alongside TURN so candidate gathering still produces srflx
+    # candidates quickly even if the relay is slow to answer.
+    if isinstance(ice_servers, dict):
+        ice_servers = [ice_servers]
+    ice_servers = ice_servers + _STUN_FALLBACK
+    with _turn_cache_lock:
+        # Refresh at 80% of the TTL so clients never receive nearly-expired creds.
+        _turn_cache["ice_servers"] = ice_servers
+        _turn_cache["expires"] = now + _TURN_TTL * 0.8
+    return ice_servers
+
+
+@app.get("/api/webrtc-config")
+async def webrtc_config(current_user: dict = Depends(get_current_user)):
+    """ICE servers for meeting peer connections (STUN + TURN when configured)."""
+    if not (_TURN_KEY_ID and _TURN_API_TOKEN):
+        return {"iceServers": _STUN_FALLBACK, "turn": False}
+    try:
+        with Timer("webrtc.mint_ice"):
+            ice_servers = await run_in_threadpool(_mint_ice_servers)
+        return {"iceServers": ice_servers, "turn": True}
+    except Exception as e:
+        print(f"[webrtc-config] TURN credential mint failed ({e}); STUN fallback")
+        return {"iceServers": _STUN_FALLBACK, "turn": False}
+
+
 # ═══════════════════════════════════════════════════════════════
 # SOCKET.IO — WebRTC signaling & meeting relay
 # ═══════════════════════════════════════════════════════════════
@@ -1859,8 +1931,15 @@ async def webrtc_ice_candidate(sid, data):
 
 @sio.on("translate_sentence")
 async def translate_sentence(sid, data):
-    room = data.get("room", "general")
-    await sio.emit("remote_sentence", data, room=room, skip_sid=sid)
+    room = data.get("room", "general") if isinstance(data, dict) else "general"
+    # Only relay into the room this socket actually joined (a stale client
+    # can't caption a room it already left), and stamp the sender server-side
+    # so captions are attributable without trusting the client payload.
+    if rooms.get(sid) != room:
+        return
+    payload = dict(data)
+    payload["sender_sid"] = sid
+    await sio.emit("remote_sentence", payload, room=room, skip_sid=sid)
 
 
 # ═══════════════════════════════════════════════════════════════
