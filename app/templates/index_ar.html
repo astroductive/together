@@ -87,6 +87,7 @@
 <script src="https://unpkg.com/@mediapipe/camera_utils/camera_utils.js"></script>
 <script src="https://unpkg.com/@mediapipe/drawing_utils/drawing_utils.js"></script>
 <script src="/static/js/socket.io.js"></script>
+<script src="/static/js/sign-diag.js"></script>
 {% endblock %}
 
 
@@ -1694,6 +1695,7 @@ button.is-busy{opacity:.6;cursor:progress}
 
     streamSocket.on('sign_conf', (d) => {
       if (!d) return;
+      if (window.SignDiag) SignDiag.event(d.module, 'sign_conf', d);
       const mod = d.module === 'speech' ? 's2sp' : 'hs';
       if (mod === 'hs' && (!cameraOn || !_hsHandsPresent)) return;
       if (mod === 's2sp' && (!s2spCameraOn || !_s2spHandsPresent)) return;
@@ -1703,6 +1705,7 @@ button.is-busy{opacity:.6;cursor:progress}
 
     streamSocket.on('sign_detected', (d) => {
       if (!d || !d.word) return;
+      if (window.SignDiag) SignDiag.event(d.module, 'sign_detected', d);
       if (d.module === 'speech') {
         if (s2spCameraOn) {
           if (window._setDetectState) _setDetectState('locked', 'مؤكّد', 's2sp');
@@ -1967,6 +1970,7 @@ button.is-busy{opacity:.6;cursor:progress}
 
   function onHolisticResults(results) {
     _holisticBusy = false; // WASM has finished — safe to send the next frame
+    if (window.SignDiag) SignDiag.frame(results);
     // Native <video> shows the smooth feed underneath (CSS-mirrored); the
     // canvas only paints the skeleton so display is independent of inference.
     const canvas = document.getElementById('output_canvas');
@@ -2034,6 +2038,7 @@ button.is-busy{opacity:.6;cursor:progress}
         streamLang.vision = language;
       }
       const single = preparePayload([frame], language)[0];
+      if (window.SignDiag) SignDiag.payload('vision', single, { path: 'socket', language });
       s.emit('sign_frame', { module: 'vision', frame: single });
       return;
     }
@@ -2101,6 +2106,7 @@ button.is-busy{opacity:.6;cursor:progress}
       const h = videoEl ? (videoEl.videoHeight || 480) : 480;
 
       const payloadFrames = preparePayload(frames, language);
+      if (window.SignDiag) SignDiag.payload('vision', payloadFrames, { path: 'http', language, w, h });
       const res = await authFetch('/api/translate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -4221,6 +4227,7 @@ button.is-busy{opacity:.6;cursor:progress}
 
   function onS2SpHolisticResults(results) {
     _s2spHolisticBusy = false; // WASM finished — safe to send next frame
+    if (window.SignDiag) SignDiag.frame(results);
     const canvas = document.getElementById('s2sp-canvas');
     canvas.width = results.image.width;
     canvas.height = results.image.height;
@@ -4277,6 +4284,7 @@ button.is-busy{opacity:.6;cursor:progress}
         streamLang.speech = s2spLanguage;
       }
       const single = preparePayload([frame], s2spLanguage)[0];
+      if (window.SignDiag) SignDiag.payload('speech', single, { path: 'socket', language: s2spLanguage });
       ss.emit('sign_frame', { module: 'speech', frame: single });
       return;
     }
@@ -4300,6 +4308,7 @@ button.is-busy{opacity:.6;cursor:progress}
       const h = videoEl ? (videoEl.videoHeight || 480) : 480;
 
       const payloadFrames = preparePayload(frames, language);
+      if (window.SignDiag) SignDiag.payload('speech', payloadFrames, { path: 'http', language, w, h });
       const res = await authFetch('/api/translate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

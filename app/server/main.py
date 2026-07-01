@@ -1149,6 +1149,44 @@ def _with_server_timing(payload: dict, response: Response, infer_ms: float) -> d
     return payload
 
 
+# SIGN_DEBUG=1 logs a one-line summary of exactly what reaches each model
+# (shape, missing-landmark encoding, per-hand presence) so a live session can
+# be compared against the offline contract without a debugger. Off by default;
+# pure observability. Pairs with the browser-side SignDiag HUD (?diag=1).
+SIGN_DEBUG = os.environ.get("SIGN_DEBUG", "0") == "1"
+
+
+def _debug_payload_summary(frames, language, w, h, source):
+    if not SIGN_DEBUG:
+        return
+    try:
+        import numpy as _np
+        arr = _np.array(frames, dtype=_np.float32)
+        if arr.ndim == 2:  # a single frame
+            arr = arr[None, ...]
+        n = arr.shape[0]
+        if arr.ndim == 3 and arr.shape[1] == 543:
+            lh, rh = arr[:, 468:489], arr[:, 522:543]
+        elif arr.ndim == 3 and arr.shape[1] == 59:
+            lh, rh = arr[:, :21], arr[:, 38:59]
+        else:
+            print(f"[SignDebug:{source}] lang={language} UNEXPECTED shape={tuple(arr.shape)}")
+            return
+
+        def _present(part):
+            flat = part.reshape(n, -1)
+            return int(_np.sum(~_np.all(_np.isnan(flat) | (flat == 0.0), axis=1)))
+
+        nan_pct = float(_np.mean(_np.isnan(arr))) * 100.0
+        zero_pct = float(_np.mean(arr == 0.0)) * 100.0
+        print(f"[SignDebug:{source}] lang={language} w={w} h={h} frames={n} "
+              f"shape={tuple(arr.shape)} NaN={nan_pct:.1f}% zeros={zero_pct:.1f}% "
+              f"lh_present={_present(lh)}/{n} rh_present={_present(rh)}/{n} "
+              f"x_range=({_np.nanmin(arr[..., 0]):.3f},{_np.nanmax(arr[..., 0]):.3f})")
+    except Exception as e:  # noqa: BLE001 — diagnostics must never break inference
+        print(f"[SignDebug:{source}] summary failed: {e}")
+
+
 @app.post("/api/translate")
 async def translate_sign(
     body: TranslateRequest,
@@ -1158,6 +1196,7 @@ async def translate_sign(
 ):
     """Accepts a rolling window of landmark frames, runs TFLite (ASL) or PyTorch (Arabic) inference."""
     lang = (body.language or "english").lower().strip()
+    _debug_payload_summary(body.frames, lang, body.w, body.h, "http")
     if lang in ["arabic", "ar", "egyptian", "eg"]:
         engine = get_arabic_engine()
         if engine is None:
@@ -1835,7 +1874,7 @@ _STREAM_MIN_INTERVAL = float(os.environ.get("STREAM_MIN_INTERVAL_S", "0.025"))
 
 
 class _StreamState:
-    __slots__ = ("frames", "votes", "cooldown", "last_pred", "last_conf", "language", "w", "h", "busy", "last_infer")
+    __slots__ = ("frames", "votes", "cooldown", "last_pred", "last_conf", "language", "w", "h", "busy", "last_infer", "dbg_n")
 
     def __init__(self, language: str, w: int, h: int):
         self.frames = _deque(maxlen=_STREAM_SEQ_LENGTH)
@@ -1848,6 +1887,7 @@ class _StreamState:
         self.h = h
         self.busy = False
         self.last_infer = 0.0
+        self.dbg_n = 0  # frames received; drives the throttled SIGN_DEBUG summary
 
 
 # keyed by (sid, module) so a client can run vision + speech panels independently
@@ -1895,6 +1935,10 @@ async def sign_frame(sid, data):
         return
 
     st.frames.append(frame)
+    st.dbg_n += 1
+    if SIGN_DEBUG and (st.dbg_n == 1 or st.dbg_n % 100 == 0):
+        _debug_payload_summary([frame], st.language, st.w, st.h,
+                               f"socket:{module}:frame#{st.dbg_n}")
 
     # Per-frame cooldown tick (mirrors the script's global_cooldown decrement)
     if st.cooldown > 0:
