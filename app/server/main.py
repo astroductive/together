@@ -1623,34 +1623,46 @@ async def get_batch_arabic_sign_landmarks(
     if ar_db is None:
         raise HTTPException(status_code=503, detail="Arabic sign database not ready.")
 
-    # Translate each word from Arabic to English
-    translated_words = [translate_arabic_to_english(w) for w in body.words]
-    
-    # Flatten multi-word translations
-    all_english_words = []
-    for tw in translated_words:
-        for part in tw.split():
-            cleaned = re.sub(r"[^a-z0-9]", "", part.lower().strip())
-            if cleaned:
-                all_english_words.append(cleaned)
+    # Everything below blocks (per-word Gemini translation calls, SBERT encode,
+    # Postgres + npz reads). The English twin already runs it in the threadpool
+    # (main.py /api/signs/batch); running it inline here stalled the single
+    # event loop — freezing Socket.IO streaming AND meeting signaling for the
+    # duration of the LLM round-trips.
+    def _sync():
+        # Translate each word from Arabic to English
+        translated_words = [translate_arabic_to_english(w) for w in body.words]
 
-    found = []
-    missing = []
-    prev_matched = None
+        # Flatten multi-word translations
+        all_english_words = []
+        for tw in translated_words:
+            for part in tw.split():
+                cleaned = re.sub(r"[^a-z0-9]", "", part.lower().strip())
+                if cleaned:
+                    all_english_words.append(cleaned)
 
-    for w in all_english_words:
-        lms = ar_db.get_landmarks(w)
-        if lms:
-            matched = ar_db.match_word(w)
-            # Skip consecutive duplicates
-            if matched == prev_matched:
-                continue
-            found.append({"word": w, "landmarks": lms, "frame_count": len(lms)})
-            prev_matched = matched
-        else:
-            missing.append(w)
+        found = []
+        missing = []
+        prev_matched = None
 
-    return {"found": found, "missing": missing}
+        for w in all_english_words:
+            lms = ar_db.get_landmarks(w)
+            if lms:
+                matched = ar_db.match_word(w)
+                # Skip consecutive duplicates
+                if matched == prev_matched:
+                    continue
+                # video_url parity with the English batch endpoint.
+                video_url = resolve_video_url(matched or w, lang="ar")
+                found.append({"word": w, "landmarks": lms, "frame_count": len(lms),
+                              "video_url": video_url})
+                prev_matched = matched
+            else:
+                missing.append(w)
+
+        return {"found": found, "missing": missing}
+
+    with Timer("signs.batch_ar"):
+        return await run_in_threadpool(_sync)
 
 
 @app.get("/api/signs_ar/{word}")
