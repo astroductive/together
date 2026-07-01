@@ -714,35 +714,31 @@
         return;
       }
 
-      if (typeof window.Camera === 'undefined') {
-        showBanner('تعذّر تحميل مساعد الكاميرا في MediaPipe. التقييم المباشر غير متاح. أعد التحميل للمحاولة مجددًا.');
-        stopCamera();
-        return;
-      }
-
+      // Drive Holistic from the stream we ALREADY acquired (rAF loop, like
+      // the dashboard). The camera_utils Camera helper opened a SECOND
+      // getUserMedia stream and replaced video.srcObject, orphaning the
+      // first — camera light stayed on after Stop, and phones that refuse
+      // two concurrent captures failed with NotReadableError.
+      video.play().catch(() => {});
       let lastFrameMs = 0;
       const FRAME_INTERVAL = 1000 / 20;   // ~20fps inference, like the dashboard
-      mpCamera = new window.Camera(video, {
-        onFrame: async () => {
-          const now = performance.now();
-          if (now - lastFrameMs < FRAME_INTERVAL) return;
-          if (_holisticBusy) return;
+      const runFrame = async () => {
+        if (!cameraOn || video.srcObject !== stream) return;
+        const now = performance.now();
+        if (now - lastFrameMs >= FRAME_INTERVAL &&
+            video.readyState >= 2 && holistic && !_holisticBusy) {
           lastFrameMs = now;
           _holisticBusy = true;
-          try { if (holistic) await holistic.send({ image: video }); }
+          try { await holistic.send({ image: video }); }
           catch (e) { console.error('[Practice] Holistic send error:', e); _holisticBusy = false; }
-        },
-        width: 480, height: 360,
-      });
-      mpCamera.start().catch((e) => {
-        console.error('[Practice] Camera start failed:', e);
-        showBanner('تعذّر تشغيل الكاميرا. تأكّد من عدم استخدام تطبيق آخر لها، ثم أعد المحاولة.');
-        stopCamera();
-      });
+        }
+        requestAnimationFrame(runFrame);
+      };
+      requestAnimationFrame(runFrame);
     };
 
     navigator.mediaDevices.getUserMedia({
-      video: { width: { ideal: 480 }, height: { ideal: 360 }, frameRate: { ideal: 15, max: 20 } },
+      video: { facingMode: 'user', width: { ideal: 480 }, height: { ideal: 360 }, frameRate: { ideal: 15, max: 20 } },
     })
       .then(handleStream)
       .catch((err) => {

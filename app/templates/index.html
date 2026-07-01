@@ -1913,30 +1913,32 @@ button.t-nav-item[aria-label="Sign out"]:hover svg{color:var(--danger,#ef4444)}
         };
         requestAnimationFrame(runFrame);
       } else {
-        console.log("[Camera] Initializing MediaPipe Camera helper...");
-        if (!window.Camera) {
-          console.error("[Camera] MediaPipe Camera helper not loaded.");
-          setStatus('Library Error', false);
-          return;
-        }
-
+        // Drive Holistic from the stream we ALREADY acquired (same rAF pattern
+        // as the in-meeting branch above). The camera_utils Camera helper is
+        // gone: its start() opened a SECOND getUserMedia stream and replaced
+        // video.srcObject, orphaning the first stream — the camera light
+        // stayed on after Stop, and phones that refuse two concurrent
+        // captures failed with NotReadableError.
+        video.play().catch(() => {});
         let _lastFrameMs = 0;
         const _FRAME_INTERVAL = 1000 / 20; // 20fps — fills the server buffer ~33% faster
-        mpCamera = new window.Camera(video, {
-          onFrame: async () => {
-            const now = performance.now();
-            if (now - _lastFrameMs < _FRAME_INTERVAL) return;
-            if (_holisticBusy) return;
+        const runSoloFrame = async () => {
+          // Stop when the camera is off, a meeting takes over, or a NEWER
+          // stream replaced this one (restart spawns its own loop).
+          if (!cameraOn || inMeeting || video.srcObject !== stream) return;
+          const now = performance.now();
+          if (now - _lastFrameMs >= _FRAME_INTERVAL &&
+              video.readyState >= 2 && holistic && !_holisticBusy) {
             _lastFrameMs = now;
             _holisticBusy = true;
             // Must clear the guard if send() rejects (WASM abort / transient error),
             // otherwise the loop early-returns forever and the camera freezes.
-            try { if (holistic) await holistic.send({ image: video }); }
+            try { await holistic.send({ image: video }); }
             catch (e) { console.error("[Camera] Holistic send error:", e); _holisticBusy = false; }
-          },
-          width: 480, height: 360,
-        });
-        mpCamera.start().then(() => console.log("[Camera] MediaPipe Camera started."));
+          }
+          requestAnimationFrame(runSoloFrame);
+        };
+        requestAnimationFrame(runSoloFrame);
       }
 
     };
@@ -1945,7 +1947,7 @@ button.t-nav-item[aria-label="Sign out"]:hover svg{color:var(--danger,#ef4444)}
       handleStream(meetingCamStream);
     } else {
       navigator.mediaDevices.getUserMedia({
-        video: { width: { ideal: 480 }, height: { ideal: 360 }, frameRate: { ideal: 15, max: 20 } }
+        video: { facingMode: 'user', width: { ideal: 480 }, height: { ideal: 360 }, frameRate: { ideal: 15, max: 20 } }
       })
         .then(handleStream)
         .catch(err => {
@@ -3593,6 +3595,7 @@ button.t-nav-item[aria-label="Sign out"]:hover svg{color:var(--danger,#ef4444)}
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
         video: {
+          facingMode: 'user',   // guarantee the front camera on phones
           width: { ideal: 640 },
           height: { ideal: 480 },
           frameRate: { ideal: 24, max: 30 }
@@ -4354,7 +4357,7 @@ button.t-nav-item[aria-label="Sign out"]:hover svg{color:var(--danger,#ef4444)}
     }
 
     navigator.mediaDevices.getUserMedia({
-      video: { width: { ideal: 480 }, height: { ideal: 360 }, frameRate: { ideal: 15, max: 20 } }
+      video: { facingMode: 'user', width: { ideal: 480 }, height: { ideal: 360 }, frameRate: { ideal: 15, max: 20 } }
     }).then(stream => {
       console.log("[Camera] Stream acquired.");
       if (!s2spCameraOn) {
@@ -4390,23 +4393,25 @@ button.t-nav-item[aria-label="Sign out"]:hover svg{color:var(--danger,#ef4444)}
         s2spHolistic.onResults(onS2SpHolisticResults);
       }
 
-      console.log("[Camera] Initializing MediaPipe Camera helper (S2SP)...");
-      if (!window.Camera) return;
+      // Drive S2SP Holistic from the stream we ALREADY acquired — the Camera
+      // helper opened a second getUserMedia stream and leaked the first
+      // (see the Sign-to-Text camera path for the full story).
+      video.play().catch(() => {});
       let _s2spLastMs = 0;
-      s2spMpCamera = new window.Camera(video, {
-        onFrame: async () => {
-          const now = performance.now();
-          if (now - _s2spLastMs < 1000/20) return;
-          if (_s2spHolisticBusy) return;
+      const runS2SpFrame = async () => {
+        if (!s2spCameraOn || video.srcObject !== stream) return;
+        const now = performance.now();
+        if (now - _s2spLastMs >= 1000/20 && video.readyState >= 2 &&
+            s2spHolistic && !_s2spHolisticBusy) {
           _s2spLastMs = now;
           _s2spHolisticBusy = true;
           // Clear the guard on a rejected send() or the S2SP camera freezes.
-          try { if (s2spHolistic) await s2spHolistic.send({ image: video }); }
+          try { await s2spHolistic.send({ image: video }); }
           catch (e) { console.error("[Camera] S2SP holistic send error:", e); _s2spHolisticBusy = false; }
-        },
-        width: 480, height: 360,
-      });
-      s2spMpCamera.start().then(() => console.log("[Camera] S2SP MediaPipe Camera started."));
+        }
+        requestAnimationFrame(runS2SpFrame);
+      };
+      requestAnimationFrame(runS2SpFrame);
     }).catch(err => {
       console.error("[Camera] Error:", err);
       s2spCameraOn = false;
