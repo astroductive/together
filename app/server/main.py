@@ -1833,6 +1833,12 @@ rooms: dict = {}  # Map sid -> room_id
 # this modest (each peer holds N-1 connections).
 MEETING_ROOM_CAP = int(os.environ.get("MEETING_ROOM_CAP", "6"))
 
+# Serializes the check-then-commit in join_room: socketio runs handlers
+# concurrently (async_handlers=True), so two simultaneous joins could both
+# pass the cap check before either records itself in `rooms`.
+import asyncio as _asyncio
+_join_lock = _asyncio.Lock()
+
 @sio.on("connect")
 async def on_connect(sid, environ, auth=None):
     token = (auth or {}).get("token") if isinstance(auth, dict) else None
@@ -1859,15 +1865,26 @@ async def on_disconnect(sid):
 async def join_room(sid, data):
     room_id = data.get("room", "general")
 
-    # Existing participants BEFORE this peer joins (the mesh the joiner connects to).
-    existing = [s for s, r in rooms.items() if r == room_id]
-    if len(existing) >= MEETING_ROOM_CAP:
-        await sio.emit("room_full", {"room": room_id}, to=sid)
-        print(f"[WS] Rejecting {sid} from room '{room_id}' (room full, cap={MEETING_ROOM_CAP})")
-        return
+    async with _join_lock:
+        # A socket can only be in ONE meeting room: joining a new room while
+        # still registered in another must announce the departure to the old
+        # room, or its members keep a ghost tile for this sid forever.
+        prev = rooms.get(sid)
+        if prev and prev != room_id:
+            await sio.leave_room(sid, prev)
+            await sio.emit("peer_left", {"sid": sid}, room=prev)
+            rooms.pop(sid, None)
+            print(f"[WS] {sid} implicitly left room '{prev}' to join '{room_id}'")
 
-    await sio.enter_room(sid, room_id)
-    rooms[sid] = room_id
+        # Existing participants BEFORE this peer joins (the mesh the joiner connects to).
+        existing = [s for s, r in rooms.items() if r == room_id]
+        if len(existing) >= MEETING_ROOM_CAP:
+            await sio.emit("room_full", {"room": room_id}, to=sid)
+            print(f"[WS] Rejecting {sid} from room '{room_id}' (room full, cap={MEETING_ROOM_CAP})")
+            return
+
+        rooms[sid] = room_id  # commit inside the lock — cap check stays exact
+        await sio.enter_room(sid, room_id)
     # Tell the joiner who is already here so it can initiate a connection to each
     # (the newcomer is the deterministic offerer → avoids glare). Then notify the
     # existing peers that a new peer arrived (they will answer the incoming offer).
@@ -1879,7 +1896,11 @@ async def join_room(sid, data):
 async def leave_room(sid, data):
     room_id = data.get("room", "general")
     await sio.leave_room(sid, room_id)
-    rooms.pop(sid, None)
+    # Only clear the registry entry if it actually points at this room — a
+    # stale leave for a room the client already moved on from must not evict
+    # its CURRENT room membership.
+    if rooms.get(sid) == room_id:
+        rooms.pop(sid, None)
     await sio.emit("peer_left", {"sid": sid}, room=room_id, skip_sid=sid)
     print(f"[WS] {sid} left room '{room_id}'")
 
