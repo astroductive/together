@@ -205,7 +205,13 @@ def _warm_engines():
             t0 = _t.perf_counter()
             ar = get_arabic_engine()
             if ar is not None:
-                dummy_lm = [[[0.0, 0.0, 0.0]] * 59] * 10   # 10 frames × 59 landmarks
+                # The dummy MUST contain non-zero hand landmarks: an all-zeros
+                # frame is rejected by the hand-presence gate in
+                # predict_sign_from_landmarks BEFORE any torch forward pass
+                # (verified: 0 model calls on zeros, 1 on this), which made the
+                # warm-up a no-op and left the first real Arabic user paying
+                # the first-inference cost.
+                dummy_lm = [[[0.5, 0.5, 0.0]] * 59] * 10   # 10 frames × 59 landmarks
                 ar.predict_sign_from_landmarks(dummy_lm, 640, 480)
             print(f"[warm] Arabic engine ready in {(_t.perf_counter()-t0)*1000:.0f} ms")
         except Exception as e:
@@ -1205,10 +1211,17 @@ async def translate_sign(
         w = body.w if body.w is not None else 640
         h = body.h if body.h is not None else 480
         # Run blocking PyTorch inference in a worker thread to keep the event loop free.
+        # Malformed frames raise inside the Arabic predictor (the ASL engine catches
+        # internally and returns empty) — match the English contract: an unusable
+        # payload is an empty result, not a 500. The socket path already does this.
         with Timer("infer.arabic") as _t:
-            prediction, confidence = await run_in_threadpool(
-                engine.predict_sign_from_landmarks, body.frames, w, h
-            )
+            try:
+                prediction, confidence = await run_in_threadpool(
+                    engine.predict_sign_from_landmarks, body.frames, w, h
+                )
+            except Exception as e:
+                print(f"[/api/translate] Arabic inference error on malformed payload: {e}")
+                prediction, confidence = None, 0.0
         if prediction:
             arabic_prediction = ARABIC_TRANSLATIONS.get(prediction.lower(), prediction)
             try:
