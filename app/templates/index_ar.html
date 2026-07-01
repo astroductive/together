@@ -2828,6 +2828,26 @@ button.is-busy{opacity:.6;cursor:progress}
   // Newcomer is the deterministic OFFERER to every peer already in the room
   // (driven by room_peers). Existing peers, on new_peer, create the connection
   // and WAIT for the newcomer's offer. This removes glare without sid-compare.
+  // ICE servers for the mesh. Refreshed from /api/webrtc-config on every
+  // meeting join: with Cloudflare TURN configured the server mints
+  // short-lived relay credentials; STUN-only is the fallback so a failed
+  // fetch degrades to the previous behavior instead of blocking the join.
+  let rtcIceServers = [
+    { urls: 'stun:stun.l.google.com:19302' },
+    { urls: 'stun:stun1.l.google.com:19302' }
+  ];
+  async function refreshIceServers() {
+    try {
+      const res = await authFetch('/api/webrtc-config');
+      if (!res.ok) return;
+      const data = await res.json();
+      if (data && Array.isArray(data.iceServers) && data.iceServers.length) {
+        rtcIceServers = data.iceServers;
+        console.log('[WebRTC] ICE config loaded (turn=' + !!data.turn + ')');
+      }
+    } catch (e) { console.warn('[WebRTC] ICE config fetch failed; using STUN only', e); }
+  }
+
   function createPeer(remoteSid, isOfferer) {
     if (!remoteSid || remoteSid === (socket && socket.id)) return null;
     let entry = peers[remoteSid];
@@ -2835,13 +2855,7 @@ button.is-busy{opacity:.6;cursor:progress}
     // duplicate room_peers/new_peer/offer event.
     if (entry && entry.pc && entry.pc.signalingState !== 'closed') return entry;
 
-    const config = {
-      iceServers: [
-        { urls: 'stun:stun.l.google.com:19302' },
-        { urls: 'stun:stun1.l.google.com:19302' }
-      ]
-    };
-    const pc = new RTCPeerConnection(config);
+    const pc = new RTCPeerConnection({ iceServers: rtcIceServers });
     entry = peers[remoteSid] = { pc, iceBuffer: [], makingOffer: false };
 
     pc.onicecandidate = (e) => {
@@ -2858,9 +2872,12 @@ button.is-busy{opacity:.6;cursor:progress}
 
     pc.onconnectionstatechange = () => {
       const st = pc.connectionState;
+      console.log('[WebRTC]', remoteSid, 'connection:', st);
       // A transient 'disconnected' may recover; only tear down on failed/closed.
       if (st === 'failed' || st === 'closed') removePeer(remoteSid);
     };
+    pc.oniceconnectionstatechange = () =>
+      console.log('[WebRTC]', remoteSid, 'ice:', pc.iceConnectionState);
 
     // Add local camera tracks if we have them.
     if (meetingCamStream) {
@@ -2871,11 +2888,12 @@ button.is-busy{opacity:.6;cursor:progress}
 
     let offerCreated = false;
     const sendOffer = async () => {
+      // Fail loudly if signaling is down: silently marking the peer
+      // negotiated while the offer never left this tab wedges the pair.
+      if (!socket || !socket.connected) throw new Error('signaling socket not connected');
       const offer = await pc.createOffer();
       await pc.setLocalDescription(offer);
-      if (socket && socket.connected) {
-        socket.emit('webrtc_offer', { sdp: offer, room: currentMeetingRoom, target_sid: remoteSid });
-      }
+      socket.emit('webrtc_offer', { sdp: offer, room: currentMeetingRoom, target_sid: remoteSid });
       entry.negotiated = true;
     };
     const makeOffer = async () => {
@@ -2948,6 +2966,7 @@ button.is-busy{opacity:.6;cursor:progress}
     video = document.createElement('video');
     video.id = videoId;
     video.autoplay = true;
+    video.muted = true;   // streams are video-only; muted keeps autoplay allowed everywhere
     video.playsInline = true;
     video.setAttribute('playsinline', '');
     video.style.cssText = 'width:100%;height:100%;object-fit:cover';
@@ -3679,6 +3698,9 @@ button.is-busy{opacity:.6;cursor:progress}
 
 
   async function joinMeeting() {
+    // Load ICE servers BEFORE joining: room_peers can arrive immediately
+    // after join_room and createPeer needs the TURN credentials by then.
+    await refreshIceServers();
     try {
       if (socket) {
         try {
@@ -3704,6 +3726,7 @@ button.is-busy{opacity:.6;cursor:progress}
       const syncMeetingConnection = () => {
         if (!socket || !socket.connected || roomJoined) return;
         roomJoined = true;
+        inMeeting = true;
         socket.emit('join_room', { room: roomId });
         socket.emit('announce_presence', {
           room: roomId,
@@ -3730,6 +3753,12 @@ button.is-busy{opacity:.6;cursor:progress}
           if (socket !== currentSocket) return;
           inMeeting = false;
           setMeetingUiState(false);
+          // The server forgot this sid: every peer connection is orphaned and
+          // the auto-reconnect arrives with a NEW sid. Tear down the mesh and
+          // unlatch roomJoined so the 'connect' handler re-joins the room —
+          // previously a reconnected tab sat in the meeting UI receiving nothing.
+          Object.keys(peers).forEach(removePeer);
+          roomJoined = false;
         });
 
         socket.on('connect_error', (err) => {
@@ -3842,8 +3871,12 @@ button.is-busy{opacity:.6;cursor:progress}
         });
 
         socket.on('webrtc_ice_candidate', async (data) => {
-          const entry = data && peers[data.sender_sid];
-          if (!entry || !data.candidate) return;
+          const sid = data && data.sender_sid;
+          if (!sid || !data.candidate) return;
+          // Mirror the offer handler: create the peer if a candidate beats
+          // the offer here, so it is buffered instead of dropped.
+          const entry = peers[sid] || createPeer(sid, false);
+          if (!entry) return;
           if (entry.pc.remoteDescription && entry.pc.remoteDescription.type) {
             try {
               await entry.pc.addIceCandidate(new RTCIceCandidate(data.candidate));
@@ -3966,7 +3999,9 @@ button.is-busy{opacity:.6;cursor:progress}
 
     inMeeting = false;
     currentMeetingRoom = 'general';
-    document.getElementById('meeting-room-id').value = currentMeetingRoom;
+    // Leave the input empty: writing 'general' back gets sanitized to
+    // 'GENER' (A-Z, max 5) on the next join and lands in the wrong room.
+    document.getElementById('meeting-room-id').value = '';
     document.getElementById('remote-sentence').textContent = 'No messages yet.';
     document.getElementById('remote-sentence').style.color = 'var(--gray-500)';
     const _histEl = document.getElementById('meeting-caption-history');
