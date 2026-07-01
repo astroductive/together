@@ -1052,7 +1052,9 @@ from typing import List as _List, Optional as _Optional
 
 class TranslateRequest(_BaseModel):
     # Rolling window sent from the browser: [N_frames, 543, 3]
-    # N can be 1..60; the backend pads/trims to 60 automatically.
+    # N is variable; the ASL engine feeds the raw sequence (padding to a
+    # fixed length was measured to LOWER accuracy) and only trims very long
+    # windows (128 ASL / 60 ArSL).
     # We use Optional[float] because missing landmarks are sent as null.
     frames: _List[_List[_List[_Optional[float]]]]
     language: _Optional[str] = "english"
