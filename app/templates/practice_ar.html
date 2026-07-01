@@ -60,10 +60,11 @@
   /* Camera panel */
   .pr-cam-stage{position:relative;width:100%;aspect-ratio:4/3;border-radius:var(--radius-lg);overflow:hidden;background:#0b0b10;border:1px solid var(--border)}
   .pr-cam-stage video,.pr-cam-stage canvas{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
-  /* Mirror the live feed + skeleton, like the dashboard (selfieMode on, CSS flip). */
+  /* Mirror the live feed + skeleton for a natural selfie view. Holistic runs
+     with selfieMode:false (the models need UNMIRRORED landmarks), so the drawn
+     skeleton is unmirrored and the canvas gets the same CSS flip as the video. */
   #pr-video{transform:scaleX(-1)}
-  /* NOTE: do NOT flip the skeleton canvas — selfieMode:true already mirrors the
-     landmarks to match the flipped video; flipping the canvas too double-mirrors it. */
+  #pr-output{transform:scaleX(-1)}
   .pr-cam-placeholder{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;color:var(--muted);font-size:14px;text-align:center;padding:18px}
   .pr-cam-placeholder svg{width:38px;height:38px;color:var(--faint)}
   .pr-live-badge{position:absolute;top:10px;left:10px;display:none;align-items:center;gap:6px;background:rgba(220,40,40,.9);color:#fff;font-size:11px;font-weight:700;letter-spacing:.04em;padding:4px 9px;border-radius:var(--radius-full);text-transform:uppercase;z-index:3}
@@ -689,7 +690,11 @@
           });
           holistic.setOptions({
             modelComplexity: 1,
-            selfieMode: true,
+            // selfieMode MUST stay false: true flips the image BEFORE the graph
+            // runs, feeding the models mirrored coords with swapped hands —
+            // measured ASL 66.5%→51%, ArSL 95%→10% (scripts/model_harness.py).
+            // The selfie view is done in CSS (video + skeleton canvas flipped).
+            selfieMode: false,
             smoothLandmarks: true,
             minDetectionConfidence: 0.5,
             minTrackingConfidence: 0.5,

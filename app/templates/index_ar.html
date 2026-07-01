@@ -139,8 +139,11 @@ html[data-theme="light"] .t-brand-name{filter:none}
 .d-vp{position:relative;border-radius:14px;overflow:hidden;background:var(--viewport);border:1px solid var(--border);
   aspect-ratio:4/3;max-height:min(52vh,460px);display:flex;align-items:center;justify-content:center;margin:0 20px}
 .d-vp video,.d-vp canvas{position:absolute;inset:0;width:100%;height:100%;object-fit:contain}
-/* Mirror the user's own camera feed for a natural selfie view (skeleton canvas stays unflipped) */
-#webcam,#s2sp-webcam,#meeting-local-video{transform:scaleX(-1)}
+/* Mirror the user's own camera feed for a natural selfie view. The skeleton
+   canvases are CSS-flipped too: Holistic now runs with selfieMode:false (the
+   models were trained on UNMIRRORED landmarks), so the drawn skeleton is
+   unmirrored and needs the same flip as the video. */
+#webcam,#s2sp-webcam,#meeting-local-video,#output_canvas,#s2sp-canvas{transform:scaleX(-1)}
 .d-vp-ph{display:flex;flex-direction:column;align-items:center;gap:12px;color:var(--faint);font-size:13.5px;text-align:center;padding:24px}
 .d-vp-ph svg{width:42px;height:42px;opacity:.4}
 .d-live{position:absolute;top:13px;inset-inline-start:13px;display:inline-flex;align-items:center;gap:7px;padding:5px 11px;
@@ -1817,7 +1820,11 @@ button.is-busy{opacity:.6;cursor:progress}
 
         holistic.setOptions({
           modelComplexity: 1,
-          selfieMode: true,
+          // selfieMode MUST stay false: true flips the image BEFORE the graph
+          // runs, feeding the models mirrored coords with swapped hands —
+          // measured ASL 66.5%→51%, ArSL 95%→10% (scripts/model_harness.py).
+          // The selfie view is done in CSS (video + skeleton canvas flipped).
+          selfieMode: false,
           smoothLandmarks: true,
           minDetectionConfidence: 0.5,
           minTrackingConfidence: 0.5,
@@ -4138,7 +4145,7 @@ button.is-busy{opacity:.6;cursor:progress}
 
         s2spHolistic.setOptions({
           modelComplexity: 1,
-          selfieMode: true,
+          selfieMode: false,  // must match training orientation — see the vision pipeline note
           smoothLandmarks: true,
           minDetectionConfidence: 0.5,
           minTrackingConfidence: 0.5,
