@@ -2013,6 +2013,12 @@ _STREAM_VOTE_BUFFER = 3        # was 5 — 2/3 fills in ~75ms vs 5-vote ~400ms
 _STREAM_STABILITY = 2          # was 3 — 2-of-3 agreement
 _STREAM_COOLDOWN = 8           # was 18 — ~400ms between detections (was ~900ms)
 _STREAM_MIN_SEQ = 6            # was 12 — first inference fires after 6 frames (~300ms)
+# The ArSL CNN-GRU uniform-resamples the buffer to 30 steps; 6 frames
+# stretched 5x is a near-static sequence on which the model still emits hot
+# confidences (>0.8 observed on noise), feeding the vote with junk. Give
+# Arabic a fuller window before the first inference (~750ms at 20fps).
+# ASL feeds raw variable-length frames and behaves fine at 6.
+_STREAM_MIN_SEQ_AR = 15
 # 0.025s = 40 inferences/s.  Client sends at 20fps so this never over-runs the
 # frame arrival rate; it just means we never throttle on this machine.
 _STREAM_MIN_INTERVAL = float(os.environ.get("STREAM_MIN_INTERVAL_S", "0.025"))
@@ -2096,7 +2102,9 @@ async def sign_frame(sid, data):
         return
     # Drop frames that arrive while an inference is still running, and wait until
     # we have a usable window. Dropping is fine — the rolling buffer stays fresh.
-    if st.busy or len(st.frames) < _STREAM_MIN_SEQ:
+    min_seq = (_STREAM_MIN_SEQ_AR if st.language in ("arabic", "ar", "egyptian", "eg")
+               else _STREAM_MIN_SEQ)
+    if st.busy or len(st.frames) < min_seq:
         return
     # Throttle inference cadence so a single CPU isn't pegged by the frame stream.
     # last_infer is stamped when the PREVIOUS inference finished (in the finally

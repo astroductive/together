@@ -1108,7 +1108,10 @@ button.t-nav-item[aria-label="Sign out"]:hover svg{color:var(--danger,#ef4444)}
   // Accuracy-tuned: more votes + higher agreement = far fewer false detections.
   // Mirrors the server stream constants (_STREAM_VOTE_BUFFER / _STREAM_STABILITY).
   const VOTE_BUFFER_SIZE = 3;    // 2-of-3 fills in ~75ms vs 5-vote ~400ms
-  const STABILITY_FRAMES = 3;
+  // 2-of-3, matching the server streaming path (_STREAM_STABILITY=2) and the
+  // comment above — this was 3 (unanimous), so on the HTTP fallback a single
+  // divergent prediction kept resetting progress and detections rarely landed.
+  const STABILITY_FRAMES = 2;
   const GLOBAL_COOLDOWN_FRM = 8;   // matches server _STREAM_COOLDOWN (~400ms at 20fps)
   const MIN_HAND_FRAMES = 1;      // start streaming on the very first hand frame
   const MAX_HAND_GAP_FRAMES = 3;  // faster gap detection (3 frames ≈ 150ms)
@@ -1761,6 +1764,9 @@ button.t-nav-item[aria-label="Sign out"]:hover svg{color:var(--danger,#ef4444)}
       if (mod === 'hs' && (!cameraOn || !_hsHandsPresent)) return;
       if (mod === 's2sp' && (!s2spCameraOn || !_s2spHandsPresent)) return;
       if (window._updateConfRing) _updateConfRing(d.confidence);
+      // Feed the stats tiles/sparkline too — they were only wired to the HTTP
+      // fallback, so on the primary streaming path they sat at '—' forever.
+      if (window._updateConfWidgets) _updateConfWidgets(d.confidence);
       if (window._setDetectState) _setDetectState('detecting', 'Detecting', mod);
     });
 
@@ -1797,7 +1803,12 @@ button.t-nav-item[aria-label="Sign out"]:hover svg{color:var(--danger,#ef4444)}
   function streamStart(module, language) {
     const s = ensureStreamSocket();
     if (!s) return false;
-    const videoId = module === 'speech' ? 's2sp-webcam' : 'webcam';
+    // In a meeting the vision pipeline runs on the meeting camera — read the
+    // dimensions from the element that is actually live (#webcam.videoWidth
+    // is 0 then, which sent the 640x480 default to the Arabic aspect fix).
+    const videoId = module === 'speech'
+      ? 's2sp-webcam'
+      : (inMeeting && meetingCamStream ? 'meeting-local-video' : 'webcam');
     const v = document.getElementById(videoId);
     s.emit('sign_start', {
       module, language,
@@ -4254,6 +4265,10 @@ button.t-nav-item[aria-label="Sign out"]:hover svg{color:var(--danger,#ef4444)}
             if (e.results[i].isFinal) {
               const text = e.results[i][0].transcript.trim();
               const roomId = currentMeetingRoom || document.getElementById('meeting-room-id').value.trim() || 'general';
+              // Local echo (the Whisper mic path already does this): without
+              // it the speaker never sees what was recognized and sent, so
+              // mis-transcriptions go uncaught.
+              renderMeetingSentence(text, userRole, true);
               socket.emit('translate_sentence', {
                 text,
                 room: roomId,

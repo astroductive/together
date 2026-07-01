@@ -25,6 +25,14 @@ class _FallbackMixin:
     def __init__(self, providers: list):
         # Drop Nones; keep order (primary first).
         self._providers = [p for p in providers if p is not None]
+        if not self._providers:
+            # A typo'd *_PROVIDER env value + *_FALLBACK=0 (production sets
+            # fallbacks off) otherwise builds an EMPTY chain that only fails
+            # at request time with a cryptic "tried []". Fail loudly at
+            # construction with the actionable cause instead.
+            print(f"[providers] WARNING: no usable providers for {type(self).__name__} "
+                  f"— check the *_PROVIDER env var spelling "
+                  f"(valid: LLM gemini|ollama, TTS gemini|pyttsx3, STT gemini|whisper).")
 
     @property
     def chain_names(self) -> list[str]:
