@@ -129,8 +129,10 @@
 
     <div class="pr-controls">
       <select class="pr-select" id="pr-lang" aria-label="لغة التدريب">
+        <!-- Arabic page: ArSL is the default (this used to default to ASL,
+             so an Arabic user was silently graded against the English model). -->
         <option value="english">ASL (الإنجليزية)</option>
-        <option value="arabic">ArSL (العربية)</option>
+        <option value="arabic" selected>ArSL (العربية)</option>
       </select>
       <button type="button" class="t-btn t-btn--ghost" id="pr-newround">جولة جديدة</button>
       <div class="spacer"></div>
@@ -265,7 +267,7 @@
         + (i === idx ? ' is-current' : '')
         + (t.status === 'done' ? ' is-done' : '')
         + (t.status === 'skip' ? ' is-skip' : '');
-      pill.textContent = cap(t.word);
+      pill.textContent = t.word_ar || cap(t.word);
       wrap.appendChild(pill);
     });
     const done = round.filter((t) => t.status === 'done').length;
@@ -310,8 +312,8 @@
     stopTargetPlayback();
     const myToken = ++targetToken;
 
-    $('pr-target-word').textContent = t.word ? cap(t.word) : '—';
-    $('pr-target-cat').textContent = t.category ? cap(t.category) : '';
+    $('pr-target-word').textContent = t.word ? (t.word_ar || cap(t.word)) : '—';
+    $('pr-target-cat').textContent = t.category_ar || (t.category ? cap(t.category) : '');
     $('pr-target-progress').textContent = round.length ? (idx + 1) + ' من ' + round.length : '';
     $('pr-target-noanim').style.display = 'none';
     drawIdleTarget();
@@ -788,7 +790,8 @@
     }
     clearBanner();
     round = pickRandom(list, ROUND_SIZE).map((w) => ({
-      word: w.word, category: w.category || 'general', status: 'pending',
+      word: w.word, word_ar: w.word_ar, category: w.category || 'general',
+      category_ar: w.category_ar, status: 'pending',
     }));
     idx = 0;
     graded = false;
@@ -802,8 +805,10 @@
       const res = await authFetch('/api/vocabulary');
       if (!res.ok) throw new Error('vocab ' + res.status);
       const data = await res.json();
-      VOCAB.english = (data.asl || []).map((w) => ({ word: w.word, category: w.category || 'general' }));
-      VOCAB.arabic = (data.arabic || []).map((w) => ({ word: w.word, category: w.category || 'general' }));
+      // word stays the English class key (grading + landmark lookup);
+      // word_ar/category_ar are what the Arabic UI displays.
+      VOCAB.english = (data.asl || []).map((w) => ({ word: w.word, word_ar: w.word_ar, category: w.category || 'general', category_ar: w.category_ar }));
+      VOCAB.arabic = (data.arabic || []).map((w) => ({ word: w.word, word_ar: w.word_ar, category: w.category || 'general', category_ar: w.category_ar }));
       newRound();
     } catch (err) {
       console.error('[Practice] vocabulary load failed:', err);
