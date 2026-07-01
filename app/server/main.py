@@ -1400,12 +1400,18 @@ def _basename(path: str) -> str:
 
 
 # Every directory a sign MP4 might live in (English + Arabic, with/without data/).
+# NOTE: BASE_DIR is <repo>/app (where static/ and templates/ live), but the
+# video folders sit at the REPO ROOT (<repo>/data/signs_videos, ...), one level
+# up — same layout as the models dir (_MODELS_DIR below). Rooting these at
+# BASE_DIR made every candidate directory nonexistent, so every video 404'd
+# and no "Watch video" button ever rendered, English and Arabic alike.
+_REPO_ROOT = os.path.dirname(BASE_DIR)
 _VIDEO_DIRS = [
-    os.path.join(BASE_DIR, "data", "signs_videos"),
-    os.path.join(BASE_DIR, "signs_videos"),
-    os.path.join(BASE_DIR, "data", "signs_videos_ar"),
-    os.path.join(BASE_DIR, "signs_videos_ar"),
-    os.path.join(BASE_DIR, "data", "signs_ar_videos"),
+    os.path.join(_REPO_ROOT, "data", "signs_videos"),
+    os.path.join(_REPO_ROOT, "signs_videos"),
+    os.path.join(_REPO_ROOT, "data", "signs_videos_ar"),
+    os.path.join(_REPO_ROOT, "signs_videos_ar"),
+    os.path.join(_REPO_ROOT, "data", "signs_ar_videos"),
 ]
 
 
