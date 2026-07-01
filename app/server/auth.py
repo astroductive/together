@@ -110,7 +110,13 @@ def rotate_refresh_token(old_token_str: str, db) -> tuple[int, str]:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not a refresh token.")
 
     jti = payload.get("jti")
-    user_id = int(payload["sub"])
+    try:
+        user_id = int(payload["sub"])
+    except (KeyError, TypeError, ValueError):
+        # A validly-signed token with a missing/non-numeric sub (e.g. minted by
+        # an older build) must be a 401, not an uncaught 500.
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED,
+                            detail="Malformed refresh token.")
 
     from db.repository import RefreshTokenRepository
     repo = RefreshTokenRepository(db)
@@ -155,6 +161,7 @@ class _SlidingWindowLimiter:
         now = _time.time()
         cutoff = now - self._window
         with self._lock:
+            self._maybe_evict(cutoff)
             recent = [t for t in self._hits[key] if t > cutoff]
             if len(recent) >= self._max:
                 self._hits[key] = recent
@@ -162,6 +169,18 @@ class _SlidingWindowLimiter:
             recent.append(now)
             self._hits[key] = recent
             return True
+
+    def _maybe_evict(self, cutoff: float) -> None:
+        """Amortized cleanup: keys whose hits all expired would otherwise
+        accumulate forever (one list per distinct client IP for the process
+        lifetime). Runs a full sweep every 512 allow() calls."""
+        self._calls = getattr(self, "_calls", 0) + 1
+        if self._calls % 512:
+            return
+        stale = [k for k, hits in self._hits.items()
+                 if not hits or hits[-1] <= cutoff]
+        for k in stale:
+            del self._hits[k]
 
 
 _auth_limiter = _SlidingWindowLimiter(max_requests=10, window_seconds=60)

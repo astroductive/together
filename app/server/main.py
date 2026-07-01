@@ -753,7 +753,7 @@ async def signup(
             )
         phone_verified = True
 
-    hashed = get_password_hash(password)
+    hashed = await run_in_threadpool(get_password_hash, password)
     new_user = User(
         full_name=full_name,
         email=email,
@@ -841,7 +841,12 @@ async def login(
         )
 
     user = db.query(User).filter(func.lower(User.email) == email).first()
-    if not user or not verify_password(password, user.hashed_password):
+    # Argon2id verification costs ~50-200ms CPU + 64MB — off the event loop,
+    # or every login briefly freezes live streaming and meeting signaling.
+    pw_ok = bool(user) and await run_in_threadpool(
+        verify_password, password, user.hashed_password
+    )
+    if not user or not pw_ok:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect email or password.",
@@ -850,7 +855,7 @@ async def login(
 
     # Transparently upgrade legacy bcrypt hashes to Argon2id on successful login.
     if needs_rehash(user.hashed_password):
-        user.hashed_password = get_password_hash(password)
+        user.hashed_password = await run_in_threadpool(get_password_hash, password)
 
     access_token = create_access_token(data={
         "sub":       user.email,
@@ -874,7 +879,11 @@ async def login(
         secure=is_secure,
         samesite="lax",
         max_age=REFRESH_TOKEN_EXPIRE_DAYS * 86400,
-        path="/api/auth/refresh",
+        # Path must cover BOTH /api/auth/refresh and /api/auth/logout: with the
+        # old /api/auth/refresh path the browser never sent the cookie to
+        # logout, so the revoke branch there was dead code and refresh tokens
+        # outlived the session.
+        path="/api/auth",
     )
     return response
 
@@ -922,7 +931,7 @@ async def refresh_token_endpoint(
         secure=is_secure,
         samesite="lax",
         max_age=REFRESH_TOKEN_EXPIRE_DAYS * 86400,
-        path="/api/auth/refresh",
+        path="/api/auth",  # see login: must reach /api/auth/logout too
     )
     return response
 
@@ -949,6 +958,9 @@ async def logout(
             pass  # Expired / malformed tokens are fine — cookie will be cleared anyway
 
     response = _JSONResponse(content={"detail": "Logged out."})
+    response.delete_cookie(key="refresh_token", path="/api/auth")
+    # Sessions created before the path change carry a cookie scoped to the old
+    # path — clear that one too so logout leaves no refresh cookie behind.
     response.delete_cookie(key="refresh_token", path="/api/auth/refresh")
     return response
 
@@ -995,7 +1007,8 @@ async def update_me(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Enter your current password to set a new one.",
             )
-        if not verify_password(payload.current_password, user.hashed_password):
+        if not await run_in_threadpool(
+                verify_password, payload.current_password, user.hashed_password):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Current password is incorrect.",
@@ -1005,7 +1018,8 @@ async def update_me(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="New password must be at least 8 characters long.",
             )
-        user.hashed_password = get_password_hash(payload.new_password.strip())
+        user.hashed_password = await run_in_threadpool(
+            get_password_hash, payload.new_password.strip())
 
     db.commit()
     db.refresh(user)
@@ -2153,5 +2167,12 @@ async def sign_frame(sid, data):
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8000))
-    uvicorn.run(socket_app, host="0.0.0.0", port=port, reload=False)
+    # Behind Render's proxy every request reaches uvicorn from the proxy's IP;
+    # without trusting X-Forwarded-For, request.client.host is the proxy and
+    # the per-IP rate limiters collapse into ONE shared bucket (one user's
+    # bursts 429 everyone). The app is only reachable through the proxy, so
+    # trusting forwarded headers is correct there; override if self-hosting.
+    uvicorn.run(socket_app, host="0.0.0.0", port=port, reload=False,
+                proxy_headers=True,
+                forwarded_allow_ips=os.environ.get("FORWARDED_ALLOW_IPS", "*"))
 

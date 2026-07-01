@@ -39,4 +39,8 @@ if __name__ == "__main__":
         port=8000,
         reload=False,
         workers=1,
+        # Trust the platform proxy's X-Forwarded-For so per-IP rate limiting
+        # sees real client IPs (see app/server/main.py entry point).
+        proxy_headers=True,
+        forwarded_allow_ips=os.environ.get("FORWARDED_ALLOW_IPS", "*"),
     )
