@@ -124,7 +124,7 @@ html[data-theme="light"] .t-brand-name{filter:none}
 .t-topbar .t-sub{font-family:var(--font-mono);font-size:10.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--faint)}
 #main-content{padding:0!important;flex:1;min-height:0;overflow:hidden;background:transparent!important}
 .t-scope.t-app{background:transparent}
-.t-main{height:100vh;overflow:hidden}
+.t-main{height:100vh;height:100dvh;overflow:hidden}
 
 /* ── Panel visibility ── */
 .d-panel{display:none}.d-panel.active{display:flex;flex-direction:column;flex:1;min-height:0;overflow-y:auto}
@@ -231,7 +231,7 @@ html[data-theme="light"] .t-brand-name{filter:none}
 
 /* ── Mobile bottom nav ── */
 .d-mob-nav{display:none;position:fixed;bottom:0;inset-inline-start:0;inset-inline-end:0;
-  background:var(--sidebar);border-top:1px solid var(--border);padding:8px 0 env(safe-area-inset-bottom,8px);
+  background:var(--sidebar);border-top:1px solid var(--border);padding:8px 0 calc(8px + env(safe-area-inset-bottom,0px));
   z-index:60;box-shadow:0 -8px 24px rgba(0,0,0,.08)}
 @media(max-width:860px){.d-mob-nav{display:flex}.t-sidebar{display:none}}
 .d-mob-nav a{flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;padding:6px 4px;
@@ -290,8 +290,14 @@ html[data-theme="light"] .d-blob{opacity:calc(.38*var(--intensity)+.04)}
 .d-meet-caption-box{background:var(--glass-bg);backdrop-filter:blur(var(--blur-sm)) saturate(130%);border-color:var(--glass-border)}
 
 /* ══ Sidebar collapse ══ */
+/* Desktop only: these (0,2,0) selectors otherwise override ui.css's
+   @media(max-width:860px) .t-app{grid-template-columns:1fr} (0,1,0), leaving
+   phones with a reserved 256px column for a sidebar that display:none'd —
+   the whole dashboard rendered squeezed into the empty first column. */
+@media(min-width:861px){
 .t-scope.t-app{grid-template-columns:256px 1fr;transition:grid-template-columns .25s cubic-bezier(.4,0,.2,1)}
 .t-scope.t-app.sb-collapsed{grid-template-columns:74px 1fr}
+}
 .t-sidebar{transition:width .25s;overflow:hidden}
 a.t-user{text-decoration:none;color:inherit;cursor:pointer;transition:border-color .15s,background .15s}
 a.t-user:hover{border-color:var(--accent);background:var(--accent-soft)}
@@ -323,6 +329,7 @@ a.t-user:hover{border-color:var(--accent);background:var(--accent-soft)}
   border-radius:6px;background:var(--accent-soft);border:1px solid color-mix(in srgb,var(--accent) 25%,transparent);
   color:var(--accent);cursor:pointer;font-size:13px;line-height:1}
 .d-log-item:hover .d-log-replay{display:flex}
+@media(hover:none){.d-log-replay{display:flex}}
 .d-log-replay:hover{background:var(--accent);color:#fff}
 /* ══ Mini usage widget ══ */
 .d-usage-card{display:flex;flex-direction:column;gap:0}
@@ -379,6 +386,12 @@ a.t-user:hover{border-color:var(--accent);background:var(--accent-soft)}
 button.is-busy{opacity:.6;cursor:progress}
 /* ════ MOBILE OPTIMIZATION (consolidated) ════ */
 @media (max-width:860px){
+  /* iOS Safari zooms the page when a focused control's font-size < 16px —
+     inside this overflow:hidden 100dvh shell that zoom breaks the layout. */
+  .t-input,.d-lang-sel,select,textarea{font-size:16px}
+  /* 44px-ish touch targets for the topbar toggles */
+  .t-toggle button{width:38px;height:36px}
+  .t-lang a,.t-lang button{padding:9px 14px}
   .d-panel.active{padding-bottom:calc(64px + env(safe-area-inset-bottom,0px))}
   .d-col,.d-meet{padding-bottom:calc(64px + env(safe-area-inset-bottom,0px))}
   .d-meet{padding-left:16px;padding-right:16px;padding-top:18px}
@@ -389,7 +402,8 @@ button.is-busy{opacity:.6;cursor:progress}
   .d-vp{margin-left:16px;margin-right:16px;width:auto;max-height:min(60vh,420px)}
 }
 @media (max-width:600px){
-  .d-meet-videos{grid-template-columns:1fr}
+  .d-meet-videos{grid-template-columns:1fr;max-height:none}
+  .d-meet-videos .d-meet-vid-wrap{aspect-ratio:16/10}
   #meeting-composer .t-input{min-width:0;flex:1 1 140px}
 }
 @media (max-width:480px){
@@ -404,7 +418,7 @@ button.is-busy{opacity:.6;cursor:progress}
 <a href="#main-content" class="t-skip-link">تخطّي إلى المحتوى</a>
 <div id="debug-overlay"></div>
 
-<div class="t-scope t-app" id="app" dir="rtl" lang="ar" style="height:100vh;overflow:hidden">
+<div class="t-scope t-app" id="app" dir="rtl" lang="ar" style="height:100vh;height:100dvh;overflow:hidden">
   <!-- ── Sidebar ── -->
   <aside class="t-sidebar" id="sidebar">
     <div class="t-brand-row">
@@ -1618,8 +1632,8 @@ button.is-busy{opacity:.6;cursor:progress}
     } else {
       s.style.display = 'none';
     }
-    p.className = mobileQuickActions.primary.kind === 'secondary' ? 'btn btn-secondary' : 'btn btn-primary';
-    s.className = mobileQuickActions.secondary.kind === 'primary' ? 'btn btn-primary' : 'btn btn-secondary';
+    p.className = mobileQuickActions.primary.kind === 'secondary' ? 't-btn t-btn--ghost' : 't-btn t-btn--accent';
+    s.className = mobileQuickActions.secondary.kind === 'primary' ? 't-btn t-btn--accent' : 't-btn t-btn--ghost';
   }
 
   function runMobileQuickAction(which) {

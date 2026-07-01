@@ -177,6 +177,10 @@
       '.dx-fab:hover{transform:translateY(-1px);border-color:var(--accent,#1f8a82)}',
       '.dx-fab--kbd{position:fixed;inset-block-end:18px;inset-inline-start:18px;z-index:30}',
       '.dx-fab--wide{width:auto;padding:0 12px;font-size:13px;font-weight:600}',
+      /* On phones the fixed bottom nav (~56-64px + safe area, z-index 60) covers
+         anything parked at the very bottom edge — lift the cluster above it and
+         drop the keyboard-shortcuts FAB (no keyboard on touch). */
+      '@media(max-width:860px){.dx-cluster{inset-block-end:calc(76px + env(safe-area-inset-bottom,0px))}.dx-spm-chip{inset-block-end:calc(124px + env(safe-area-inset-bottom,0px))}.dx-fab--kbd{display:none}}',
       /* generic modal / overlay */
       '.dx-overlay{position:fixed;inset:0;z-index:90;display:none;align-items:center;justify-content:center;background:var(--scrim,rgba(4,4,8,.65));padding:18px}',
       '.dx-overlay.dx-open{display:flex}',
