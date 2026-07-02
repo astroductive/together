@@ -90,7 +90,68 @@
       </button>
     </div>
   </div>
+  <button type="button" class="lp-nav-burger" aria-label="Menu" aria-expanded="false" aria-controls="lp-mobile-menu">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 6h18M3 12h18M3 18h18"/></svg>
+  </button>
 </nav>
+<div class="lp-mobile-menu" id="lp-mobile-menu" role="navigation" aria-label="Mobile navigation">
+  <div class="lp-mm-head">Products</div>
+  <a class="lp-mm-link" href="/products/handscript">HandScript — Sign → Text</a>
+  <a class="lp-mm-link" href="/products/voicebridge">VoiceBridge — Sign → Speech</a>
+  <a class="lp-mm-link" href="/products/signtype">SignType — Text → Sign</a>
+  <a class="lp-mm-link" href="/products/talkside">TalkSide — Speech → Sign</a>
+  <a class="lp-mm-link" href="/products/signline">SignLine — Live Meeting</a>
+  <div class="lp-mm-head">Languages</div>
+  <a class="lp-mm-link" href="/languages/asl">ASL — American Sign Language</a>
+  <a class="lp-mm-link" href="/languages/arsl">ArSL — Arabic Sign Language</a>
+  <div class="lp-mm-head">More</div>
+  <a class="lp-mm-link" href="/resources">Resources</a>
+  <a class="lp-mm-link" href="/about">About Us</a>
+  <a class="lp-mm-link" href="/partnership">Partnership</a>
+  <a class="lp-mm-link" href="/contact">Contact Us</a>
+  <a class="lp-mm-link" href="/demo">Book a Demo</a>
+  <a class="lp-mm-link" href="/?lang=ar" lang="ar" dir="rtl">العربية</a>
+</div>
+<style>
+/* Mobile nav: below 760px the inline links are hidden (per-page rules hide
+   them at 600-760px; this unifies at 760) and the burger + slide-down menu
+   take over — previously the links simply vanished with NO replacement, so
+   Products/Languages/Resources/Team were unreachable from a phone. */
+.lp-nav-burger{display:none;align-items:center;justify-content:center;width:42px;height:42px;flex:none;
+  border:1px solid var(--border);border-radius:12px;background:var(--surface);color:var(--text);cursor:pointer}
+.lp-nav-burger svg{width:20px;height:20px}
+.lp-mobile-menu{display:none;position:fixed;top:60px;inset-inline:0;z-index:99;max-height:calc(100dvh - 60px);
+  overflow-y:auto;flex-direction:column;padding:10px 16px calc(18px + env(safe-area-inset-bottom,0px));
+  background:var(--bg);border-bottom:1px solid var(--border);box-shadow:var(--shadow-lg,0 24px 48px rgba(0,0,0,.35))}
+.lp-mobile-menu.is-open{display:flex}
+.lp-mm-head{font-size:11px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--faint);
+  padding:14px 6px 6px;border-bottom:1px solid var(--border);margin-bottom:4px}
+.lp-mm-link{display:block;padding:11px 8px;border-radius:10px;font-size:15px;font-weight:600;
+  color:var(--text);text-decoration:none}
+.lp-mm-link:hover{background:var(--surface)}
+@media(max-width:760px){
+  .lp-nav .lp-nav-links{display:none}
+  .lp-nav-burger{display:inline-flex}
+}
+</style>
+<script>
+/* Burger toggle for the mobile marketing menu */
+(function(){
+  var burger = document.querySelector('.lp-nav-burger');
+  var menu = document.getElementById('lp-mobile-menu');
+  if (!burger || !menu) return;
+  function close(){ menu.classList.remove('is-open'); burger.setAttribute('aria-expanded','false'); }
+  burger.addEventListener('click', function(e){
+    e.stopPropagation();
+    var open = menu.classList.toggle('is-open');
+    burger.setAttribute('aria-expanded', open ? 'true' : 'false');
+  });
+  document.addEventListener('click', function(e){
+    if (menu.classList.contains('is-open') && !menu.contains(e.target) && e.target !== burger) close();
+  });
+  document.addEventListener('keydown', function(e){ if (e.key === 'Escape') close(); });
+})();
+</script>
 <script>
 /* Dropdown click-toggle + close-on-outside for lp-nav */
 (function(){
