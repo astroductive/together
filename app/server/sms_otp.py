@@ -164,7 +164,10 @@ def send_code(phone: str, name: str | None = None, lang: str | None = None) -> d
             _store.pop(phone, None)
         return {"ok": False, "error": f"Could not reach the WhatsApp provider: {exc}"}
 
-    if resp.status_code in (200, 201):
+    if 200 <= resp.status_code < 300:
+        # Any 2xx is a successful hand-off (e.g. 202 Accepted from a queueing
+        # gateway). Treating those as failure popped the stored code while the
+        # user still received it — the code they typed was then rejected.
         return {"ok": True, "error": None}
 
     # Failed to send → drop the stored code so it can't be checked.

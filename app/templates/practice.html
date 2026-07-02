@@ -8,9 +8,9 @@
 <link rel="stylesheet" href="/static/css/ui.css?v=phase6-1">
 <script src="/static/js/theme.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@mediapipe/holistic@0.5.1675471629/holistic.js"></script>
-<script src="https://unpkg.com/@mediapipe/camera_utils/camera_utils.js"></script>
-<script src="https://unpkg.com/@mediapipe/drawing_utils/drawing_utils.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils@0.3.1675466124/drawing_utils.js"></script>
 <script src="/static/js/socket.io.js"></script>
+<script src="/static/js/sign-diag.js"></script>
 <style>
   html{background:var(--bg)!important}
   body{background:transparent}
@@ -59,10 +59,11 @@
   /* Camera panel */
   .pr-cam-stage{position:relative;width:100%;aspect-ratio:4/3;border-radius:var(--radius-lg);overflow:hidden;background:#0b0b10;border:1px solid var(--border)}
   .pr-cam-stage video,.pr-cam-stage canvas{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
-  /* Mirror the live feed + skeleton, like the dashboard (selfieMode on, CSS flip). */
+  /* Mirror the live feed + skeleton for a natural selfie view. Holistic runs
+     with selfieMode:false (the models need UNMIRRORED landmarks), so the drawn
+     skeleton is unmirrored and the canvas gets the same CSS flip as the video. */
   #pr-video{transform:scaleX(-1)}
-  /* NOTE: do NOT flip the skeleton canvas — selfieMode:true already mirrors the
-     landmarks to match the flipped video; flipping the canvas too double-mirrors it. */
+  #pr-output{transform:scaleX(-1)}
   .pr-cam-placeholder{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;color:var(--muted);font-size:14px;text-align:center;padding:18px}
   .pr-cam-placeholder svg{width:38px;height:38px;color:var(--faint)}
   .pr-live-badge{position:absolute;top:10px;left:10px;display:none;align-items:center;gap:6px;background:rgba(220,40,40,.9);color:#fff;font-size:11px;font-weight:700;letter-spacing:.04em;padding:4px 9px;border-radius:var(--radius-full);text-transform:uppercase;z-index:3}
@@ -500,11 +501,13 @@
     });
     streamSocket.on('sign_conf', (d) => {
       if (!d || d.module === 'speech') return;
+      if (window.SignDiag) SignDiag.event(d.module || 'vision', 'sign_conf', d);
       if (!cameraOn || !_handsPresent || graded) return;
       setPill('detecting', 'Detecting', 'detecting');
     });
     streamSocket.on('sign_detected', (d) => {
       if (!d || !d.word || d.module === 'speech') return;
+      if (window.SignDiag) SignDiag.event(d.module || 'vision', 'sign_detected', d);
       if (!cameraOn) return;
       handleDetectedSign(d.word, d.confidence || 0, d.raw);
     });
@@ -549,6 +552,7 @@
   // ── MediaPipe results callback ───────────────────────────────────────
   function onHolisticResults(results) {
     _holisticBusy = false;
+    if (window.SignDiag) SignDiag.frame(results);
     const canvas = $('pr-output');
     if (!canvas) return;
     canvas.width = results.image.width;
@@ -605,6 +609,7 @@
       }
       try {
         const single = preparePayload([frame], language)[0];
+        if (window.SignDiag) SignDiag.payload('vision', single, { path: 'socket', language });
         s.emit('sign_frame', { module: 'vision', frame: single });
       } catch (e) { console.warn('[Practice] sign_frame emit failed:', e); }
       return;
@@ -625,6 +630,7 @@
       const w = v ? (v.videoWidth || 640) : 640;
       const h = v ? (v.videoHeight || 480) : 480;
       const payloadFrames = preparePayload(frames, language);
+      if (window.SignDiag) SignDiag.payload('vision', payloadFrames, { path: 'http', language, w, h });
       const res = await authFetch('/api/translate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -688,7 +694,11 @@
           });
           holistic.setOptions({
             modelComplexity: 1,
-            selfieMode: true,
+            // selfieMode MUST stay false: true flips the image BEFORE the graph
+            // runs, feeding the models mirrored coords with swapped hands —
+            // measured ASL 66.5%→51%, ArSL 95%→10% (scripts/model_harness.py).
+            // The selfie view is done in CSS (video + skeleton canvas flipped).
+            selfieMode: false,
             smoothLandmarks: true,
             minDetectionConfidence: 0.5,
             minTrackingConfidence: 0.5,
@@ -702,35 +712,31 @@
         return;
       }
 
-      if (typeof window.Camera === 'undefined') {
-        showBanner('MediaPipe Camera helper failed to load. Live grading is unavailable. Refresh to retry.');
-        stopCamera();
-        return;
-      }
-
+      // Drive Holistic from the stream we ALREADY acquired (rAF loop, like
+      // the dashboard). The camera_utils Camera helper opened a SECOND
+      // getUserMedia stream and replaced video.srcObject, orphaning the
+      // first — camera light stayed on after Stop, and phones that refuse
+      // two concurrent captures failed with NotReadableError.
+      video.play().catch(() => {});
       let lastFrameMs = 0;
       const FRAME_INTERVAL = 1000 / 20;   // ~20fps inference, like the dashboard
-      mpCamera = new window.Camera(video, {
-        onFrame: async () => {
-          const now = performance.now();
-          if (now - lastFrameMs < FRAME_INTERVAL) return;
-          if (_holisticBusy) return;
+      const runFrame = async () => {
+        if (!cameraOn || video.srcObject !== stream) return;
+        const now = performance.now();
+        if (now - lastFrameMs >= FRAME_INTERVAL &&
+            video.readyState >= 2 && holistic && !_holisticBusy) {
           lastFrameMs = now;
           _holisticBusy = true;
-          try { if (holistic) await holistic.send({ image: video }); }
+          try { await holistic.send({ image: video }); }
           catch (e) { console.error('[Practice] Holistic send error:', e); _holisticBusy = false; }
-        },
-        width: 480, height: 360,
-      });
-      mpCamera.start().catch((e) => {
-        console.error('[Practice] Camera start failed:', e);
-        showBanner('The camera could not be started. Check that no other app is using it, then retry.');
-        stopCamera();
-      });
+        }
+        requestAnimationFrame(runFrame);
+      };
+      requestAnimationFrame(runFrame);
     };
 
     navigator.mediaDevices.getUserMedia({
-      video: { width: { ideal: 480 }, height: { ideal: 360 }, frameRate: { ideal: 15, max: 20 } },
+      video: { facingMode: 'user', width: { ideal: 480 }, height: { ideal: 360 }, frameRate: { ideal: 15, max: 20 } },
     })
       .then(handleStream)
       .catch((err) => {

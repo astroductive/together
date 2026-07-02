@@ -77,10 +77,18 @@ self.addEventListener('fetch', (event) => {
   }
 
   // Navigations: network-first, fall back to cached shell when offline.
+  // Successful navigations are cached as we go — without that put() the
+  // fallback below could never hit (nothing ever cached '/dashboard' or the
+  // visited page) and the installed PWA showed the browser error page offline.
   if (req.mode === 'navigate') {
     event.respondWith(
-      fetch(req).catch(() =>
-        caches.match(req).then((hit) => hit || caches.match('/dashboard'))
+      caches.open(CACHE).then((cache) =>
+        fetch(req).then((res) => {
+          if (res && res.status === 200) cache.put(req, res.clone()).catch(() => {});
+          return res;
+        }).catch(() =>
+          cache.match(req).then((hit) => hit || cache.match('/dashboard'))
+        )
       )
     );
     return;

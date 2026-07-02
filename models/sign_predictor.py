@@ -231,6 +231,13 @@ class SignLanguagePredictor:
         (aspect ratio correction, Z-zeroing, normalization, interpolation),
         and predicts the sign using the PyTorch model.
         """
+        # Bound memory and work: the multi-window ensemble below only ever reads
+        # the last 60 frames, so older frames cannot influence the prediction.
+        # Trim BEFORE materializing the float32 array — without a cap a client
+        # that accumulates frames without clearing allocates unbounded
+        # (N,543,3) copies (the ASL engine caps at 128; this path had no cap).
+        if hasattr(landmarks, "__len__") and len(landmarks) > 60:
+            landmarks = landmarks[-60:]
         frames = np.array(landmarks, dtype=np.float32)
         frames = np.nan_to_num(frames, nan=0.0)
         

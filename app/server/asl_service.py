@@ -179,7 +179,24 @@ class ASLService(SignDB):
             self.exact_match_map = sign_db.exact_match_map
             print("[ASLService] Reusing loaded SignDB.")
         else:
-            super().__init__()
+            try:
+                super().__init__()
+            except Exception as e:
+                # SignDB needs Postgres, but sign RECOGNITION (predict_sign)
+                # does not. Without this fallback a DB outage made
+                # get_asl_engine() return None forever and silently disabled
+                # BOTH recognition paths — even though TFLite is DB-free.
+                # Degrade to recognition-only: match_word()/get_landmarks()
+                # return None while the word set is empty (text-to-sign lookup
+                # comes back when the DB does, via the lazy retry in main).
+                print(f"[ASLService] SignDB unavailable ({e}); starting "
+                      f"recognition-only (sign lookup disabled until the DB is back).")
+                self.util = None
+                self.model = None
+                self.words = []
+                self._word_set = set()
+                self.skip_semantic_match = set()
+                self.exact_match_map = {}
 
         print("[ASLService] Loading TFLite Gesture Model...")
         warnings.filterwarnings(

@@ -77,7 +77,9 @@ def test_dashboard_loads_runtime_libraries(tpl):
     html = render(tpl)
     for needle in (
         "holistic.js",
-        "camera_utils",
+        # camera_utils was deliberately dropped: frames are driven by an
+        # in-page rAF loop off the single getUserMedia stream (the helper
+        # opened a second, leaked stream). drawing_utils stays (skeleton).
         "drawing_utils",
         "/static/js/socket.io.js",
         "Object.defineProperty",   # Emscripten getter shim

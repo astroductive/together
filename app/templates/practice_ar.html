@@ -9,9 +9,9 @@
 <link rel="stylesheet" href="/static/css/ui.css?v=phase6-1">
 <script src="/static/js/theme.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@mediapipe/holistic@0.5.1675471629/holistic.js"></script>
-<script src="https://unpkg.com/@mediapipe/camera_utils/camera_utils.js"></script>
-<script src="https://unpkg.com/@mediapipe/drawing_utils/drawing_utils.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils@0.3.1675466124/drawing_utils.js"></script>
 <script src="/static/js/socket.io.js"></script>
+<script src="/static/js/sign-diag.js"></script>
 <style>
   html{background:var(--bg)!important}
   body{background:transparent}
@@ -60,17 +60,18 @@
   /* Camera panel */
   .pr-cam-stage{position:relative;width:100%;aspect-ratio:4/3;border-radius:var(--radius-lg);overflow:hidden;background:#0b0b10;border:1px solid var(--border)}
   .pr-cam-stage video,.pr-cam-stage canvas{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
-  /* Mirror the live feed + skeleton, like the dashboard (selfieMode on, CSS flip). */
+  /* Mirror the live feed + skeleton for a natural selfie view. Holistic runs
+     with selfieMode:false (the models need UNMIRRORED landmarks), so the drawn
+     skeleton is unmirrored and the canvas gets the same CSS flip as the video. */
   #pr-video{transform:scaleX(-1)}
-  /* NOTE: do NOT flip the skeleton canvas — selfieMode:true already mirrors the
-     landmarks to match the flipped video; flipping the canvas too double-mirrors it. */
+  #pr-output{transform:scaleX(-1)}
   .pr-cam-placeholder{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;color:var(--muted);font-size:14px;text-align:center;padding:18px}
   .pr-cam-placeholder svg{width:38px;height:38px;color:var(--faint)}
-  .pr-live-badge{position:absolute;top:10px;left:10px;display:none;align-items:center;gap:6px;background:rgba(220,40,40,.9);color:#fff;font-size:11px;font-weight:700;letter-spacing:.04em;padding:4px 9px;border-radius:var(--radius-full);text-transform:uppercase;z-index:3}
+  .pr-live-badge{position:absolute;top:10px;inset-inline-start:10px;display:none;align-items:center;gap:6px;background:rgba(220,40,40,.9);color:#fff;font-size:11px;font-weight:700;letter-spacing:.04em;padding:4px 9px;border-radius:var(--radius-full);text-transform:uppercase;z-index:3}
   .pr-live-badge::before{content:"";width:7px;height:7px;border-radius:50%;background:#fff;animation:pr-pulse 1.1s infinite}
   @keyframes pr-pulse{0%,100%{opacity:1}50%{opacity:.3}}
 
-  .pr-detect-pill{position:absolute;bottom:10px;left:10px;right:10px;display:flex;align-items:center;justify-content:center;gap:8px;font-size:13px;font-weight:650;padding:8px 12px;border-radius:var(--radius-full);background:var(--surface-2);color:var(--muted);border:1px solid var(--border);z-index:3;backdrop-filter:blur(6px)}
+  .pr-detect-pill{position:absolute;bottom:10px;inset-inline-start:10px;inset-inline-end:10px;display:flex;align-items:center;justify-content:center;gap:8px;font-size:13px;font-weight:650;padding:8px 12px;border-radius:var(--radius-full);background:var(--surface-2);color:var(--muted);border:1px solid var(--border);z-index:3;backdrop-filter:blur(6px)}
   .pr-detect-pill.is-detecting{background:rgba(31,138,130,.16);color:var(--accent);border-color:rgba(31,138,130,.35)}
   .pr-detect-pill.is-correct{background:rgba(40,170,90,.18);color:#1f9d57;border-color:rgba(40,170,90,.4)}
   .pr-detect-pill.is-error{background:rgba(220,70,70,.14);color:var(--danger);border-color:rgba(220,70,70,.35)}
@@ -127,8 +128,10 @@
 
     <div class="pr-controls">
       <select class="pr-select" id="pr-lang" aria-label="لغة التدريب">
+        <!-- Arabic page: ArSL is the default (this used to default to ASL,
+             so an Arabic user was silently graded against the English model). -->
         <option value="english">ASL (الإنجليزية)</option>
-        <option value="arabic">ArSL (العربية)</option>
+        <option value="arabic" selected>ArSL (العربية)</option>
       </select>
       <button type="button" class="t-btn t-btn--ghost" id="pr-newround">جولة جديدة</button>
       <div class="spacer"></div>
@@ -263,7 +266,7 @@
         + (i === idx ? ' is-current' : '')
         + (t.status === 'done' ? ' is-done' : '')
         + (t.status === 'skip' ? ' is-skip' : '');
-      pill.textContent = cap(t.word);
+      pill.textContent = t.word_ar || cap(t.word);
       wrap.appendChild(pill);
     });
     const done = round.filter((t) => t.status === 'done').length;
@@ -308,8 +311,8 @@
     stopTargetPlayback();
     const myToken = ++targetToken;
 
-    $('pr-target-word').textContent = t.word ? cap(t.word) : '—';
-    $('pr-target-cat').textContent = t.category ? cap(t.category) : '';
+    $('pr-target-word').textContent = t.word ? (t.word_ar || cap(t.word)) : '—';
+    $('pr-target-cat').textContent = t.category_ar || (t.category ? cap(t.category) : '');
     $('pr-target-progress').textContent = round.length ? (idx + 1) + ' من ' + round.length : '';
     $('pr-target-noanim').style.display = 'none';
     drawIdleTarget();
@@ -501,11 +504,13 @@
     });
     streamSocket.on('sign_conf', (d) => {
       if (!d || d.module === 'speech') return;
+      if (window.SignDiag) SignDiag.event(d.module || 'vision', 'sign_conf', d);
       if (!cameraOn || !_handsPresent || graded) return;
       setPill('detecting', 'جارٍ الكشف', 'detecting');
     });
     streamSocket.on('sign_detected', (d) => {
       if (!d || !d.word || d.module === 'speech') return;
+      if (window.SignDiag) SignDiag.event(d.module || 'vision', 'sign_detected', d);
       if (!cameraOn) return;
       handleDetectedSign(d.word, d.confidence || 0, d.raw);
     });
@@ -550,6 +555,7 @@
   // ── MediaPipe results callback ───────────────────────────────────────
   function onHolisticResults(results) {
     _holisticBusy = false;
+    if (window.SignDiag) SignDiag.frame(results);
     const canvas = $('pr-output');
     if (!canvas) return;
     canvas.width = results.image.width;
@@ -606,6 +612,7 @@
       }
       try {
         const single = preparePayload([frame], language)[0];
+        if (window.SignDiag) SignDiag.payload('vision', single, { path: 'socket', language });
         s.emit('sign_frame', { module: 'vision', frame: single });
       } catch (e) { console.warn('[Practice] sign_frame emit failed:', e); }
       return;
@@ -626,6 +633,7 @@
       const w = v ? (v.videoWidth || 640) : 640;
       const h = v ? (v.videoHeight || 480) : 480;
       const payloadFrames = preparePayload(frames, language);
+      if (window.SignDiag) SignDiag.payload('vision', payloadFrames, { path: 'http', language, w, h });
       const res = await authFetch('/api/translate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -689,7 +697,11 @@
           });
           holistic.setOptions({
             modelComplexity: 1,
-            selfieMode: true,
+            // selfieMode MUST stay false: true flips the image BEFORE the graph
+            // runs, feeding the models mirrored coords with swapped hands —
+            // measured ASL 66.5%→51%, ArSL 95%→10% (scripts/model_harness.py).
+            // The selfie view is done in CSS (video + skeleton canvas flipped).
+            selfieMode: false,
             smoothLandmarks: true,
             minDetectionConfidence: 0.5,
             minTrackingConfidence: 0.5,
@@ -703,35 +715,31 @@
         return;
       }
 
-      if (typeof window.Camera === 'undefined') {
-        showBanner('تعذّر تحميل مساعد الكاميرا في MediaPipe. التقييم المباشر غير متاح. أعد التحميل للمحاولة مجددًا.');
-        stopCamera();
-        return;
-      }
-
+      // Drive Holistic from the stream we ALREADY acquired (rAF loop, like
+      // the dashboard). The camera_utils Camera helper opened a SECOND
+      // getUserMedia stream and replaced video.srcObject, orphaning the
+      // first — camera light stayed on after Stop, and phones that refuse
+      // two concurrent captures failed with NotReadableError.
+      video.play().catch(() => {});
       let lastFrameMs = 0;
       const FRAME_INTERVAL = 1000 / 20;   // ~20fps inference, like the dashboard
-      mpCamera = new window.Camera(video, {
-        onFrame: async () => {
-          const now = performance.now();
-          if (now - lastFrameMs < FRAME_INTERVAL) return;
-          if (_holisticBusy) return;
+      const runFrame = async () => {
+        if (!cameraOn || video.srcObject !== stream) return;
+        const now = performance.now();
+        if (now - lastFrameMs >= FRAME_INTERVAL &&
+            video.readyState >= 2 && holistic && !_holisticBusy) {
           lastFrameMs = now;
           _holisticBusy = true;
-          try { if (holistic) await holistic.send({ image: video }); }
+          try { await holistic.send({ image: video }); }
           catch (e) { console.error('[Practice] Holistic send error:', e); _holisticBusy = false; }
-        },
-        width: 480, height: 360,
-      });
-      mpCamera.start().catch((e) => {
-        console.error('[Practice] Camera start failed:', e);
-        showBanner('تعذّر تشغيل الكاميرا. تأكّد من عدم استخدام تطبيق آخر لها، ثم أعد المحاولة.');
-        stopCamera();
-      });
+        }
+        requestAnimationFrame(runFrame);
+      };
+      requestAnimationFrame(runFrame);
     };
 
     navigator.mediaDevices.getUserMedia({
-      video: { width: { ideal: 480 }, height: { ideal: 360 }, frameRate: { ideal: 15, max: 20 } },
+      video: { facingMode: 'user', width: { ideal: 480 }, height: { ideal: 360 }, frameRate: { ideal: 15, max: 20 } },
     })
       .then(handleStream)
       .catch((err) => {
@@ -781,7 +789,8 @@
     }
     clearBanner();
     round = pickRandom(list, ROUND_SIZE).map((w) => ({
-      word: w.word, category: w.category || 'general', status: 'pending',
+      word: w.word, word_ar: w.word_ar, category: w.category || 'general',
+      category_ar: w.category_ar, status: 'pending',
     }));
     idx = 0;
     graded = false;
@@ -795,8 +804,10 @@
       const res = await authFetch('/api/vocabulary');
       if (!res.ok) throw new Error('vocab ' + res.status);
       const data = await res.json();
-      VOCAB.english = (data.asl || []).map((w) => ({ word: w.word, category: w.category || 'general' }));
-      VOCAB.arabic = (data.arabic || []).map((w) => ({ word: w.word, category: w.category || 'general' }));
+      // word stays the English class key (grading + landmark lookup);
+      // word_ar/category_ar are what the Arabic UI displays.
+      VOCAB.english = (data.asl || []).map((w) => ({ word: w.word, word_ar: w.word_ar, category: w.category || 'general', category_ar: w.category_ar }));
+      VOCAB.arabic = (data.arabic || []).map((w) => ({ word: w.word, word_ar: w.word_ar, category: w.category || 'general', category_ar: w.category_ar }));
       newRound();
     } catch (err) {
       console.error('[Practice] vocabulary load failed:', err);

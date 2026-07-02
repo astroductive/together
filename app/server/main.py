@@ -205,7 +205,13 @@ def _warm_engines():
             t0 = _t.perf_counter()
             ar = get_arabic_engine()
             if ar is not None:
-                dummy_lm = [[[0.0, 0.0, 0.0]] * 59] * 10   # 10 frames × 59 landmarks
+                # The dummy MUST contain non-zero hand landmarks: an all-zeros
+                # frame is rejected by the hand-presence gate in
+                # predict_sign_from_landmarks BEFORE any torch forward pass
+                # (verified: 0 model calls on zeros, 1 on this), which made the
+                # warm-up a no-op and left the first real Arabic user paying
+                # the first-inference cost.
+                dummy_lm = [[[0.5, 0.5, 0.0]] * 59] * 10   # 10 frames × 59 landmarks
                 ar.predict_sign_from_landmarks(dummy_lm, 640, 480)
             print(f"[warm] Arabic engine ready in {(_t.perf_counter()-t0)*1000:.0f} ms")
         except Exception as e:
@@ -239,6 +245,16 @@ async def validation_exception_handler(request: _Request, exc: RequestValidation
 # (comma-separated list, e.g. "https://example.com,https://www.example.com").
 _raw_origins = os.environ.get("ALLOWED_ORIGINS", "http://localhost:8000,http://127.0.0.1:8000")
 _cors_origins = [o.strip() for o in _raw_origins.split(",") if o.strip()]
+
+# The same list gates Socket.IO handshakes (engine.io rejects any other
+# Origin with HTTP 400 "not an accepted origin"), so a deploy where
+# ALLOWED_ORIGINS was never set silently loses ALL socket traffic — live
+# streaming and meeting signaling — while plain HTTP keeps working. Render
+# injects its public URL as RENDER_EXTERNAL_URL; include it automatically so
+# the app accepts its own origin without manual configuration.
+_render_url = (os.environ.get("RENDER_EXTERNAL_URL") or "").strip().rstrip("/")
+if _render_url and _render_url not in _cors_origins:
+    _cors_origins.append(_render_url)
 
 app.add_middleware(
     CORSMiddleware,
@@ -737,7 +753,7 @@ async def signup(
             )
         phone_verified = True
 
-    hashed = get_password_hash(password)
+    hashed = await run_in_threadpool(get_password_hash, password)
     new_user = User(
         full_name=full_name,
         email=email,
@@ -825,7 +841,12 @@ async def login(
         )
 
     user = db.query(User).filter(func.lower(User.email) == email).first()
-    if not user or not verify_password(password, user.hashed_password):
+    # Argon2id verification costs ~50-200ms CPU + 64MB — off the event loop,
+    # or every login briefly freezes live streaming and meeting signaling.
+    pw_ok = bool(user) and await run_in_threadpool(
+        verify_password, password, user.hashed_password
+    )
+    if not user or not pw_ok:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect email or password.",
@@ -834,7 +855,7 @@ async def login(
 
     # Transparently upgrade legacy bcrypt hashes to Argon2id on successful login.
     if needs_rehash(user.hashed_password):
-        user.hashed_password = get_password_hash(password)
+        user.hashed_password = await run_in_threadpool(get_password_hash, password)
 
     access_token = create_access_token(data={
         "sub":       user.email,
@@ -858,7 +879,11 @@ async def login(
         secure=is_secure,
         samesite="lax",
         max_age=REFRESH_TOKEN_EXPIRE_DAYS * 86400,
-        path="/api/auth/refresh",
+        # Path must cover BOTH /api/auth/refresh and /api/auth/logout: with the
+        # old /api/auth/refresh path the browser never sent the cookie to
+        # logout, so the revoke branch there was dead code and refresh tokens
+        # outlived the session.
+        path="/api/auth",
     )
     return response
 
@@ -906,7 +931,7 @@ async def refresh_token_endpoint(
         secure=is_secure,
         samesite="lax",
         max_age=REFRESH_TOKEN_EXPIRE_DAYS * 86400,
-        path="/api/auth/refresh",
+        path="/api/auth",  # see login: must reach /api/auth/logout too
     )
     return response
 
@@ -933,6 +958,9 @@ async def logout(
             pass  # Expired / malformed tokens are fine — cookie will be cleared anyway
 
     response = _JSONResponse(content={"detail": "Logged out."})
+    response.delete_cookie(key="refresh_token", path="/api/auth")
+    # Sessions created before the path change carry a cookie scoped to the old
+    # path — clear that one too so logout leaves no refresh cookie behind.
     response.delete_cookie(key="refresh_token", path="/api/auth/refresh")
     return response
 
@@ -979,7 +1007,8 @@ async def update_me(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Enter your current password to set a new one.",
             )
-        if not verify_password(payload.current_password, user.hashed_password):
+        if not await run_in_threadpool(
+                verify_password, payload.current_password, user.hashed_password):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Current password is incorrect.",
@@ -989,7 +1018,8 @@ async def update_me(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="New password must be at least 8 characters long.",
             )
-        user.hashed_password = get_password_hash(payload.new_password.strip())
+        user.hashed_password = await run_in_threadpool(
+            get_password_hash, payload.new_password.strip())
 
     db.commit()
     db.refresh(user)
@@ -1022,7 +1052,9 @@ from typing import List as _List, Optional as _Optional
 
 class TranslateRequest(_BaseModel):
     # Rolling window sent from the browser: [N_frames, 543, 3]
-    # N can be 1..60; the backend pads/trims to 60 automatically.
+    # N is variable; the ASL engine feeds the raw sequence (padding to a
+    # fixed length was measured to LOWER accuracy) and only trims very long
+    # windows (128 ASL / 60 ArSL).
     # We use Optional[float] because missing landmarks are sent as null.
     frames: _List[_List[_List[_Optional[float]]]]
     language: _Optional[str] = "english"
@@ -1149,6 +1181,44 @@ def _with_server_timing(payload: dict, response: Response, infer_ms: float) -> d
     return payload
 
 
+# SIGN_DEBUG=1 logs a one-line summary of exactly what reaches each model
+# (shape, missing-landmark encoding, per-hand presence) so a live session can
+# be compared against the offline contract without a debugger. Off by default;
+# pure observability. Pairs with the browser-side SignDiag HUD (?diag=1).
+SIGN_DEBUG = os.environ.get("SIGN_DEBUG", "0") == "1"
+
+
+def _debug_payload_summary(frames, language, w, h, source):
+    if not SIGN_DEBUG:
+        return
+    try:
+        import numpy as _np
+        arr = _np.array(frames, dtype=_np.float32)
+        if arr.ndim == 2:  # a single frame
+            arr = arr[None, ...]
+        n = arr.shape[0]
+        if arr.ndim == 3 and arr.shape[1] == 543:
+            lh, rh = arr[:, 468:489], arr[:, 522:543]
+        elif arr.ndim == 3 and arr.shape[1] == 59:
+            lh, rh = arr[:, :21], arr[:, 38:59]
+        else:
+            print(f"[SignDebug:{source}] lang={language} UNEXPECTED shape={tuple(arr.shape)}")
+            return
+
+        def _present(part):
+            flat = part.reshape(n, -1)
+            return int(_np.sum(~_np.all(_np.isnan(flat) | (flat == 0.0), axis=1)))
+
+        nan_pct = float(_np.mean(_np.isnan(arr))) * 100.0
+        zero_pct = float(_np.mean(arr == 0.0)) * 100.0
+        print(f"[SignDebug:{source}] lang={language} w={w} h={h} frames={n} "
+              f"shape={tuple(arr.shape)} NaN={nan_pct:.1f}% zeros={zero_pct:.1f}% "
+              f"lh_present={_present(lh)}/{n} rh_present={_present(rh)}/{n} "
+              f"x_range=({_np.nanmin(arr[..., 0]):.3f},{_np.nanmax(arr[..., 0]):.3f})")
+    except Exception as e:  # noqa: BLE001 — diagnostics must never break inference
+        print(f"[SignDebug:{source}] summary failed: {e}")
+
+
 @app.post("/api/translate")
 async def translate_sign(
     body: TranslateRequest,
@@ -1158,6 +1228,7 @@ async def translate_sign(
 ):
     """Accepts a rolling window of landmark frames, runs TFLite (ASL) or PyTorch (Arabic) inference."""
     lang = (body.language or "english").lower().strip()
+    _debug_payload_summary(body.frames, lang, body.w, body.h, "http")
     if lang in ["arabic", "ar", "egyptian", "eg"]:
         engine = get_arabic_engine()
         if engine is None:
@@ -1166,10 +1237,17 @@ async def translate_sign(
         w = body.w if body.w is not None else 640
         h = body.h if body.h is not None else 480
         # Run blocking PyTorch inference in a worker thread to keep the event loop free.
+        # Malformed frames raise inside the Arabic predictor (the ASL engine catches
+        # internally and returns empty) — match the English contract: an unusable
+        # payload is an empty result, not a 500. The socket path already does this.
         with Timer("infer.arabic") as _t:
-            prediction, confidence = await run_in_threadpool(
-                engine.predict_sign_from_landmarks, body.frames, w, h
-            )
+            try:
+                prediction, confidence = await run_in_threadpool(
+                    engine.predict_sign_from_landmarks, body.frames, w, h
+                )
+            except Exception as e:
+                print(f"[/api/translate] Arabic inference error on malformed payload: {e}")
+                prediction, confidence = None, 0.0
         if prediction:
             arabic_prediction = ARABIC_TRANSLATIONS.get(prediction.lower(), prediction)
             try:
@@ -1338,12 +1416,18 @@ def _basename(path: str) -> str:
 
 
 # Every directory a sign MP4 might live in (English + Arabic, with/without data/).
+# NOTE: BASE_DIR is <repo>/app (where static/ and templates/ live), but the
+# video folders sit at the REPO ROOT (<repo>/data/signs_videos, ...), one level
+# up — same layout as the models dir (_MODELS_DIR below). Rooting these at
+# BASE_DIR made every candidate directory nonexistent, so every video 404'd
+# and no "Watch video" button ever rendered, English and Arabic alike.
+_REPO_ROOT = os.path.dirname(BASE_DIR)
 _VIDEO_DIRS = [
-    os.path.join(BASE_DIR, "data", "signs_videos"),
-    os.path.join(BASE_DIR, "signs_videos"),
-    os.path.join(BASE_DIR, "data", "signs_videos_ar"),
-    os.path.join(BASE_DIR, "signs_videos_ar"),
-    os.path.join(BASE_DIR, "data", "signs_ar_videos"),
+    os.path.join(_REPO_ROOT, "data", "signs_videos"),
+    os.path.join(_REPO_ROOT, "signs_videos"),
+    os.path.join(_REPO_ROOT, "data", "signs_videos_ar"),
+    os.path.join(_REPO_ROOT, "signs_videos_ar"),
+    os.path.join(_REPO_ROOT, "data", "signs_ar_videos"),
 ]
 
 
@@ -1555,34 +1639,46 @@ async def get_batch_arabic_sign_landmarks(
     if ar_db is None:
         raise HTTPException(status_code=503, detail="Arabic sign database not ready.")
 
-    # Translate each word from Arabic to English
-    translated_words = [translate_arabic_to_english(w) for w in body.words]
-    
-    # Flatten multi-word translations
-    all_english_words = []
-    for tw in translated_words:
-        for part in tw.split():
-            cleaned = re.sub(r"[^a-z0-9]", "", part.lower().strip())
-            if cleaned:
-                all_english_words.append(cleaned)
+    # Everything below blocks (per-word Gemini translation calls, SBERT encode,
+    # Postgres + npz reads). The English twin already runs it in the threadpool
+    # (main.py /api/signs/batch); running it inline here stalled the single
+    # event loop — freezing Socket.IO streaming AND meeting signaling for the
+    # duration of the LLM round-trips.
+    def _sync():
+        # Translate each word from Arabic to English
+        translated_words = [translate_arabic_to_english(w) for w in body.words]
 
-    found = []
-    missing = []
-    prev_matched = None
+        # Flatten multi-word translations
+        all_english_words = []
+        for tw in translated_words:
+            for part in tw.split():
+                cleaned = re.sub(r"[^a-z0-9]", "", part.lower().strip())
+                if cleaned:
+                    all_english_words.append(cleaned)
 
-    for w in all_english_words:
-        lms = ar_db.get_landmarks(w)
-        if lms:
-            matched = ar_db.match_word(w)
-            # Skip consecutive duplicates
-            if matched == prev_matched:
-                continue
-            found.append({"word": w, "landmarks": lms, "frame_count": len(lms)})
-            prev_matched = matched
-        else:
-            missing.append(w)
+        found = []
+        missing = []
+        prev_matched = None
 
-    return {"found": found, "missing": missing}
+        for w in all_english_words:
+            lms = ar_db.get_landmarks(w)
+            if lms:
+                matched = ar_db.match_word(w)
+                # Skip consecutive duplicates
+                if matched == prev_matched:
+                    continue
+                # video_url parity with the English batch endpoint.
+                video_url = resolve_video_url(matched or w, lang="ar")
+                found.append({"word": w, "landmarks": lms, "frame_count": len(lms),
+                              "video_url": video_url})
+                prev_matched = matched
+            else:
+                missing.append(w)
+
+        return {"found": found, "missing": missing}
+
+    with Timer("signs.batch_ar"):
+        return await run_in_threadpool(_sync)
 
 
 @app.get("/api/signs_ar/{word}")
@@ -1700,6 +1796,68 @@ async def get_vocabulary(current_user: dict = Depends(get_current_user)):
     return _load_vocabulary()
 
 
+# ── WebRTC ICE configuration (STUN + optional Cloudflare TURN) ──
+# Without a TURN relay, two peers behind symmetric NAT / carrier-grade NAT
+# (most phone↔laptop pairs on different networks) can exchange offers all day
+# and never pass media. The client asks this endpoint for iceServers before
+# creating peer connections. When Cloudflare Calls TURN credentials are
+# configured we mint SHORT-LIVED credentials server-side (the API token never
+# reaches the browser or git); otherwise we fall back to public STUN, which
+# preserves today's behavior (same-network / permissive-NAT calls).
+_STUN_FALLBACK = [
+    {"urls": "stun:stun.l.google.com:19302"},
+    {"urls": "stun:stun1.l.google.com:19302"},
+]
+_TURN_KEY_ID = os.environ.get("CLOUDFLARE_TURN_KEY_ID", "").strip()
+_TURN_API_TOKEN = os.environ.get("CLOUDFLARE_TURN_API_TOKEN", "").strip()
+_TURN_TTL = int(os.environ.get("TURN_TTL_SECONDS", "86400"))
+_turn_cache = {"expires": 0.0, "ice_servers": None}
+_turn_cache_lock = Lock()
+
+
+def _mint_ice_servers():
+    """Blocking: fetch short-lived TURN credentials from Cloudflare (cached)."""
+    now = time.time()
+    with _turn_cache_lock:
+        if _turn_cache["ice_servers"] and now < _turn_cache["expires"]:
+            return _turn_cache["ice_servers"]
+    resp = requests.post(
+        f"https://rtc.live.cloudflare.com/v1/turn/keys/{_TURN_KEY_ID}/credentials/generate-ice-servers",
+        headers={"Authorization": f"Bearer {_TURN_API_TOKEN}",
+                 "Content-Type": "application/json"},
+        json={"ttl": _TURN_TTL},
+        timeout=10,
+    )
+    resp.raise_for_status()
+    ice_servers = resp.json().get("iceServers")
+    if not ice_servers:
+        raise ValueError("Cloudflare TURN response had no iceServers")
+    # Keep STUN alongside TURN so candidate gathering still produces srflx
+    # candidates quickly even if the relay is slow to answer.
+    if isinstance(ice_servers, dict):
+        ice_servers = [ice_servers]
+    ice_servers = ice_servers + _STUN_FALLBACK
+    with _turn_cache_lock:
+        # Refresh at 80% of the TTL so clients never receive nearly-expired creds.
+        _turn_cache["ice_servers"] = ice_servers
+        _turn_cache["expires"] = now + _TURN_TTL * 0.8
+    return ice_servers
+
+
+@app.get("/api/webrtc-config")
+async def webrtc_config(current_user: dict = Depends(get_current_user)):
+    """ICE servers for meeting peer connections (STUN + TURN when configured)."""
+    if not (_TURN_KEY_ID and _TURN_API_TOKEN):
+        return {"iceServers": _STUN_FALLBACK, "turn": False}
+    try:
+        with Timer("webrtc.mint_ice"):
+            ice_servers = await run_in_threadpool(_mint_ice_servers)
+        return {"iceServers": ice_servers, "turn": True}
+    except Exception as e:
+        print(f"[webrtc-config] TURN credential mint failed ({e}); STUN fallback")
+        return {"iceServers": _STUN_FALLBACK, "turn": False}
+
+
 # ═══════════════════════════════════════════════════════════════
 # SOCKET.IO — WebRTC signaling & meeting relay
 # ═══════════════════════════════════════════════════════════════
@@ -1708,6 +1866,12 @@ rooms: dict = {}  # Map sid -> room_id
 # Max participants per meeting room. Mesh WebRTC scales to small groups; keep
 # this modest (each peer holds N-1 connections).
 MEETING_ROOM_CAP = int(os.environ.get("MEETING_ROOM_CAP", "6"))
+
+# Serializes the check-then-commit in join_room: socketio runs handlers
+# concurrently (async_handlers=True), so two simultaneous joins could both
+# pass the cap check before either records itself in `rooms`.
+import asyncio as _asyncio
+_join_lock = _asyncio.Lock()
 
 @sio.on("connect")
 async def on_connect(sid, environ, auth=None):
@@ -1735,15 +1899,26 @@ async def on_disconnect(sid):
 async def join_room(sid, data):
     room_id = data.get("room", "general")
 
-    # Existing participants BEFORE this peer joins (the mesh the joiner connects to).
-    existing = [s for s, r in rooms.items() if r == room_id]
-    if len(existing) >= MEETING_ROOM_CAP:
-        await sio.emit("room_full", {"room": room_id}, to=sid)
-        print(f"[WS] Rejecting {sid} from room '{room_id}' (room full, cap={MEETING_ROOM_CAP})")
-        return
+    async with _join_lock:
+        # A socket can only be in ONE meeting room: joining a new room while
+        # still registered in another must announce the departure to the old
+        # room, or its members keep a ghost tile for this sid forever.
+        prev = rooms.get(sid)
+        if prev and prev != room_id:
+            await sio.leave_room(sid, prev)
+            await sio.emit("peer_left", {"sid": sid}, room=prev)
+            rooms.pop(sid, None)
+            print(f"[WS] {sid} implicitly left room '{prev}' to join '{room_id}'")
 
-    await sio.enter_room(sid, room_id)
-    rooms[sid] = room_id
+        # Existing participants BEFORE this peer joins (the mesh the joiner connects to).
+        existing = [s for s, r in rooms.items() if r == room_id]
+        if len(existing) >= MEETING_ROOM_CAP:
+            await sio.emit("room_full", {"room": room_id}, to=sid)
+            print(f"[WS] Rejecting {sid} from room '{room_id}' (room full, cap={MEETING_ROOM_CAP})")
+            return
+
+        rooms[sid] = room_id  # commit inside the lock — cap check stays exact
+        await sio.enter_room(sid, room_id)
     # Tell the joiner who is already here so it can initiate a connection to each
     # (the newcomer is the deterministic offerer → avoids glare). Then notify the
     # existing peers that a new peer arrived (they will answer the incoming offer).
@@ -1755,7 +1930,11 @@ async def join_room(sid, data):
 async def leave_room(sid, data):
     room_id = data.get("room", "general")
     await sio.leave_room(sid, room_id)
-    rooms.pop(sid, None)
+    # Only clear the registry entry if it actually points at this room — a
+    # stale leave for a room the client already moved on from must not evict
+    # its CURRENT room membership.
+    if rooms.get(sid) == room_id:
+        rooms.pop(sid, None)
     await sio.emit("peer_left", {"sid": sid}, room=room_id, skip_sid=sid)
     print(f"[WS] {sid} left room '{room_id}'")
 
@@ -1807,8 +1986,15 @@ async def webrtc_ice_candidate(sid, data):
 
 @sio.on("translate_sentence")
 async def translate_sentence(sid, data):
-    room = data.get("room", "general")
-    await sio.emit("remote_sentence", data, room=room, skip_sid=sid)
+    room = data.get("room", "general") if isinstance(data, dict) else "general"
+    # Only relay into the room this socket actually joined (a stale client
+    # can't caption a room it already left), and stamp the sender server-side
+    # so captions are attributable without trusting the client payload.
+    if rooms.get(sid) != room:
+        return
+    payload = dict(data)
+    payload["sender_sid"] = sid
+    await sio.emit("remote_sentence", payload, room=room, skip_sid=sid)
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -1829,13 +2015,19 @@ _STREAM_VOTE_BUFFER = 3        # was 5 — 2/3 fills in ~75ms vs 5-vote ~400ms
 _STREAM_STABILITY = 2          # was 3 — 2-of-3 agreement
 _STREAM_COOLDOWN = 8           # was 18 — ~400ms between detections (was ~900ms)
 _STREAM_MIN_SEQ = 6            # was 12 — first inference fires after 6 frames (~300ms)
+# The ArSL CNN-GRU uniform-resamples the buffer to 30 steps; 6 frames
+# stretched 5x is a near-static sequence on which the model still emits hot
+# confidences (>0.8 observed on noise), feeding the vote with junk. Give
+# Arabic a fuller window before the first inference (~750ms at 20fps).
+# ASL feeds raw variable-length frames and behaves fine at 6.
+_STREAM_MIN_SEQ_AR = 15
 # 0.025s = 40 inferences/s.  Client sends at 20fps so this never over-runs the
 # frame arrival rate; it just means we never throttle on this machine.
 _STREAM_MIN_INTERVAL = float(os.environ.get("STREAM_MIN_INTERVAL_S", "0.025"))
 
 
 class _StreamState:
-    __slots__ = ("frames", "votes", "cooldown", "last_pred", "last_conf", "language", "w", "h", "busy", "last_infer")
+    __slots__ = ("frames", "votes", "cooldown", "last_pred", "last_conf", "language", "w", "h", "busy", "last_infer", "dbg_n")
 
     def __init__(self, language: str, w: int, h: int):
         self.frames = _deque(maxlen=_STREAM_SEQ_LENGTH)
@@ -1848,6 +2040,7 @@ class _StreamState:
         self.h = h
         self.busy = False
         self.last_infer = 0.0
+        self.dbg_n = 0  # frames received; drives the throttled SIGN_DEBUG summary
 
 
 # keyed by (sid, module) so a client can run vision + speech panels independently
@@ -1895,6 +2088,10 @@ async def sign_frame(sid, data):
         return
 
     st.frames.append(frame)
+    st.dbg_n += 1
+    if SIGN_DEBUG and (st.dbg_n == 1 or st.dbg_n % 100 == 0):
+        _debug_payload_summary([frame], st.language, st.w, st.h,
+                               f"socket:{module}:frame#{st.dbg_n}")
 
     # Per-frame cooldown tick (mirrors the script's global_cooldown decrement)
     if st.cooldown > 0:
@@ -1907,7 +2104,9 @@ async def sign_frame(sid, data):
         return
     # Drop frames that arrive while an inference is still running, and wait until
     # we have a usable window. Dropping is fine — the rolling buffer stays fresh.
-    if st.busy or len(st.frames) < _STREAM_MIN_SEQ:
+    min_seq = (_STREAM_MIN_SEQ_AR if st.language in ("arabic", "ar", "egyptian", "eg")
+               else _STREAM_MIN_SEQ)
+    if st.busy or len(st.frames) < min_seq:
         return
     # Throttle inference cadence so a single CPU isn't pegged by the frame stream.
     # last_infer is stamped when the PREVIOUS inference finished (in the finally
@@ -1978,5 +2177,12 @@ async def sign_frame(sid, data):
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8000))
-    uvicorn.run(socket_app, host="0.0.0.0", port=port, reload=False)
+    # Behind Render's proxy every request reaches uvicorn from the proxy's IP;
+    # without trusting X-Forwarded-For, request.client.host is the proxy and
+    # the per-IP rate limiters collapse into ONE shared bucket (one user's
+    # bursts 429 everyone). The app is only reachable through the proxy, so
+    # trusting forwarded headers is correct there; override if self-hosting.
+    uvicorn.run(socket_app, host="0.0.0.0", port=port, reload=False,
+                proxy_headers=True,
+                forwarded_allow_ips=os.environ.get("FORWARDED_ALLOW_IPS", "*"))
 

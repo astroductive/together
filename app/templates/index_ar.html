@@ -84,9 +84,9 @@
   }
 </script>
 <script src="https://cdn.jsdelivr.net/npm/@mediapipe/holistic@0.5.1675471629/holistic.js"></script>
-<script src="https://unpkg.com/@mediapipe/camera_utils/camera_utils.js"></script>
-<script src="https://unpkg.com/@mediapipe/drawing_utils/drawing_utils.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils@0.3.1675466124/drawing_utils.js"></script>
 <script src="/static/js/socket.io.js"></script>
+<script src="/static/js/sign-diag.js"></script>
 {% endblock %}
 
 
@@ -123,7 +123,7 @@ html[data-theme="light"] .t-brand-name{filter:none}
 .t-topbar .t-sub{font-family:var(--font-mono);font-size:10.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--faint)}
 #main-content{padding:0!important;flex:1;min-height:0;overflow:hidden;background:transparent!important}
 .t-scope.t-app{background:transparent}
-.t-main{height:100vh;overflow:hidden}
+.t-main{height:100vh;height:100dvh;overflow:hidden}
 
 /* ── Panel visibility ── */
 .d-panel{display:none}.d-panel.active{display:flex;flex-direction:column;flex:1;min-height:0;overflow-y:auto}
@@ -139,8 +139,11 @@ html[data-theme="light"] .t-brand-name{filter:none}
 .d-vp{position:relative;border-radius:14px;overflow:hidden;background:var(--viewport);border:1px solid var(--border);
   aspect-ratio:4/3;max-height:min(52vh,460px);display:flex;align-items:center;justify-content:center;margin:0 20px}
 .d-vp video,.d-vp canvas{position:absolute;inset:0;width:100%;height:100%;object-fit:contain}
-/* Mirror the user's own camera feed for a natural selfie view (skeleton canvas stays unflipped) */
-#webcam,#s2sp-webcam,#meeting-local-video{transform:scaleX(-1)}
+/* Mirror the user's own camera feed for a natural selfie view. The skeleton
+   canvases are CSS-flipped too: Holistic now runs with selfieMode:false (the
+   models were trained on UNMIRRORED landmarks), so the drawn skeleton is
+   unmirrored and needs the same flip as the video. */
+#webcam,#s2sp-webcam,#meeting-local-video,#output_canvas,#s2sp-canvas{transform:scaleX(-1)}
 .d-vp-ph{display:flex;flex-direction:column;align-items:center;gap:12px;color:var(--faint);font-size:13.5px;text-align:center;padding:24px}
 .d-vp-ph svg{width:42px;height:42px;opacity:.4}
 .d-live{position:absolute;top:13px;inset-inline-start:13px;display:inline-flex;align-items:center;gap:7px;padding:5px 11px;
@@ -227,7 +230,7 @@ html[data-theme="light"] .t-brand-name{filter:none}
 
 /* ── Mobile bottom nav ── */
 .d-mob-nav{display:none;position:fixed;bottom:0;inset-inline-start:0;inset-inline-end:0;
-  background:var(--sidebar);border-top:1px solid var(--border);padding:8px 0 env(safe-area-inset-bottom,8px);
+  background:var(--sidebar);border-top:1px solid var(--border);padding:8px 0 calc(8px + env(safe-area-inset-bottom,0px));
   z-index:60;box-shadow:0 -8px 24px rgba(0,0,0,.08)}
 @media(max-width:860px){.d-mob-nav{display:flex}.t-sidebar{display:none}}
 .d-mob-nav a{flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;padding:6px 4px;
@@ -286,8 +289,14 @@ html[data-theme="light"] .d-blob{opacity:calc(.38*var(--intensity)+.04)}
 .d-meet-caption-box{background:var(--glass-bg);backdrop-filter:blur(var(--blur-sm)) saturate(130%);border-color:var(--glass-border)}
 
 /* ══ Sidebar collapse ══ */
+/* Desktop only: these (0,2,0) selectors otherwise override ui.css's
+   @media(max-width:860px) .t-app{grid-template-columns:1fr} (0,1,0), leaving
+   phones with a reserved 256px column for a sidebar that display:none'd —
+   the whole dashboard rendered squeezed into the empty first column. */
+@media(min-width:861px){
 .t-scope.t-app{grid-template-columns:256px 1fr;transition:grid-template-columns .25s cubic-bezier(.4,0,.2,1)}
 .t-scope.t-app.sb-collapsed{grid-template-columns:74px 1fr}
+}
 .t-sidebar{transition:width .25s;overflow:hidden}
 a.t-user{text-decoration:none;color:inherit;cursor:pointer;transition:border-color .15s,background .15s}
 a.t-user:hover{border-color:var(--accent);background:var(--accent-soft)}
@@ -319,6 +328,7 @@ a.t-user:hover{border-color:var(--accent);background:var(--accent-soft)}
   border-radius:6px;background:var(--accent-soft);border:1px solid color-mix(in srgb,var(--accent) 25%,transparent);
   color:var(--accent);cursor:pointer;font-size:13px;line-height:1}
 .d-log-item:hover .d-log-replay{display:flex}
+@media(hover:none){.d-log-replay{display:flex}}
 .d-log-replay:hover{background:var(--accent);color:#fff}
 /* ══ Mini usage widget ══ */
 .d-usage-card{display:flex;flex-direction:column;gap:0}
@@ -375,6 +385,12 @@ a.t-user:hover{border-color:var(--accent);background:var(--accent-soft)}
 button.is-busy{opacity:.6;cursor:progress}
 /* ════ MOBILE OPTIMIZATION (consolidated) ════ */
 @media (max-width:860px){
+  /* iOS Safari zooms the page when a focused control's font-size < 16px —
+     inside this overflow:hidden 100dvh shell that zoom breaks the layout. */
+  .t-input,.d-lang-sel,select,textarea{font-size:16px}
+  /* 44px-ish touch targets for the topbar toggles */
+  .t-toggle button{width:38px;height:36px}
+  .t-lang a,.t-lang button{padding:9px 14px}
   .d-panel.active{padding-bottom:calc(64px + env(safe-area-inset-bottom,0px))}
   .d-col,.d-meet{padding-bottom:calc(64px + env(safe-area-inset-bottom,0px))}
   .d-meet{padding-left:16px;padding-right:16px;padding-top:18px}
@@ -385,7 +401,8 @@ button.is-busy{opacity:.6;cursor:progress}
   .d-vp{margin-left:16px;margin-right:16px;width:auto;max-height:min(60vh,420px)}
 }
 @media (max-width:600px){
-  .d-meet-videos{grid-template-columns:1fr}
+  .d-meet-videos{grid-template-columns:1fr;max-height:none}
+  .d-meet-videos .d-meet-vid-wrap{aspect-ratio:16/10}
   #meeting-composer .t-input{min-width:0;flex:1 1 140px}
 }
 @media (max-width:480px){
@@ -400,7 +417,7 @@ button.is-busy{opacity:.6;cursor:progress}
 <a href="#main-content" class="t-skip-link">تخطّي إلى المحتوى</a>
 <div id="debug-overlay"></div>
 
-<div class="t-scope t-app" id="app" dir="rtl" lang="ar" style="height:100vh;overflow:hidden">
+<div class="t-scope t-app" id="app" dir="rtl" lang="ar" style="height:100vh;height:100dvh;overflow:hidden">
   <!-- ── Sidebar ── -->
   <aside class="t-sidebar" id="sidebar">
     <div class="t-brand-row">
@@ -1047,7 +1064,10 @@ button.is-busy{opacity:.6;cursor:progress}
   // Accuracy-tuned: more votes + higher agreement = far fewer false detections.
   // Mirrors the server stream constants (_STREAM_VOTE_BUFFER / _STREAM_STABILITY).
   const VOTE_BUFFER_SIZE = 3;
-  const STABILITY_FRAMES = 3;
+  // 2-of-3, matching the server streaming path (_STREAM_STABILITY=2) and the
+  // comment above — this was 3 (unanimous), so on the HTTP fallback a single
+  // divergent prediction kept resetting progress and detections rarely landed.
+  const STABILITY_FRAMES = 2;
   const GLOBAL_COOLDOWN_FRM = 8;
   const MIN_HAND_FRAMES = 1;
   const MAX_HAND_GAP_FRAMES = 3;
@@ -1109,12 +1129,14 @@ button.is-busy{opacity:.6;cursor:progress}
       if (langSelect1) {
         langSelect1.value = 'arabic';
         langSelect1.style.display = 'inline-block';
-        if (langSelect1.options[0]) langSelect1.options[0].style.display = 'none'; // Hide English
+        // Hide only an actual English option: the AR markup ships arabic as
+        // the sole option, so blindly hiding options[0] blanked the select.
+        if (langSelect1.options[0] && langSelect1.options[0].value === 'english') langSelect1.options[0].style.display = 'none';
       }
       if (langSelect2) {
         langSelect2.value = 'arabic';
         langSelect2.style.display = 'inline-block';
-        if (langSelect2.options[0]) langSelect2.options[0].style.display = 'none'; // Hide English
+        if (langSelect2.options[0] && langSelect2.options[0].value === 'english') langSelect2.options[0].style.display = 'none'; // see above
       }
 
       // 2. Inject CSS rules for RTL and Thmanyah font-family
@@ -1614,8 +1636,8 @@ button.is-busy{opacity:.6;cursor:progress}
     } else {
       s.style.display = 'none';
     }
-    p.className = mobileQuickActions.primary.kind === 'secondary' ? 'btn btn-secondary' : 'btn btn-primary';
-    s.className = mobileQuickActions.secondary.kind === 'primary' ? 'btn btn-primary' : 'btn btn-secondary';
+    p.className = mobileQuickActions.primary.kind === 'secondary' ? 't-btn t-btn--ghost' : 't-btn t-btn--accent';
+    s.className = mobileQuickActions.secondary.kind === 'primary' ? 't-btn t-btn--accent' : 't-btn t-btn--ghost';
   }
 
   function runMobileQuickAction(which) {
@@ -1691,15 +1713,20 @@ button.is-busy{opacity:.6;cursor:progress}
 
     streamSocket.on('sign_conf', (d) => {
       if (!d) return;
+      if (window.SignDiag) SignDiag.event(d.module, 'sign_conf', d);
       const mod = d.module === 'speech' ? 's2sp' : 'hs';
       if (mod === 'hs' && (!cameraOn || !_hsHandsPresent)) return;
       if (mod === 's2sp' && (!s2spCameraOn || !_s2spHandsPresent)) return;
       if (window._updateConfRing) _updateConfRing(d.confidence);
+      // Feed the stats tiles/sparkline too — they were only wired to the HTTP
+      // fallback, so on the primary streaming path they sat at '—' forever.
+      if (window._updateConfWidgets) _updateConfWidgets(d.confidence);
       if (window._setDetectState) _setDetectState('detecting', 'يرصد', mod);
     });
 
     streamSocket.on('sign_detected', (d) => {
       if (!d || !d.word) return;
+      if (window.SignDiag) SignDiag.event(d.module, 'sign_detected', d);
       if (d.module === 'speech') {
         if (s2spCameraOn) {
           if (window._setDetectState) _setDetectState('locked', 'مؤكّد', 's2sp');
@@ -1728,7 +1755,12 @@ button.is-busy{opacity:.6;cursor:progress}
   function streamStart(module, language) {
     const s = ensureStreamSocket();
     if (!s) return false;
-    const videoId = module === 'speech' ? 's2sp-webcam' : 'webcam';
+    // In a meeting the vision pipeline runs on the meeting camera — read the
+    // dimensions from the element that is actually live (#webcam.videoWidth
+    // is 0 then, which sent the 640x480 default to the Arabic aspect fix).
+    const videoId = module === 'speech'
+      ? 's2sp-webcam'
+      : (inMeeting && meetingCamStream ? 'meeting-local-video' : 'webcam');
     const v = document.getElementById(videoId);
     s.emit('sign_start', {
       module, language,
@@ -1817,7 +1849,11 @@ button.is-busy{opacity:.6;cursor:progress}
 
         holistic.setOptions({
           modelComplexity: 1,
-          selfieMode: true,
+          // selfieMode MUST stay false: true flips the image BEFORE the graph
+          // runs, feeding the models mirrored coords with swapped hands —
+          // measured ASL 66.5%→51%, ArSL 95%→10% (scripts/model_harness.py).
+          // The selfie view is done in CSS (video + skeleton canvas flipped).
+          selfieMode: false,
           smoothLandmarks: true,
           minDetectionConfidence: 0.5,
           minTrackingConfidence: 0.5,
@@ -1852,30 +1888,32 @@ button.is-busy{opacity:.6;cursor:progress}
         };
         requestAnimationFrame(runFrame);
       } else {
-        console.log("[Camera] Initializing MediaPipe Camera helper...");
-        if (!window.Camera) {
-          console.error("[Camera] MediaPipe Camera helper not loaded.");
-          setStatus('Library Error', false);
-          return;
-        }
-
+        // Drive Holistic from the stream we ALREADY acquired (same rAF pattern
+        // as the in-meeting branch above). The camera_utils Camera helper is
+        // gone: its start() opened a SECOND getUserMedia stream and replaced
+        // video.srcObject, orphaning the first stream — the camera light
+        // stayed on after Stop, and phones that refuse two concurrent
+        // captures failed with NotReadableError.
+        video.play().catch(() => {});
         let _lastFrameMs = 0;
         const _FRAME_INTERVAL = 1000 / 20; // 20fps — fills the server buffer ~33% faster
-        mpCamera = new window.Camera(video, {
-          onFrame: async () => {
-            const now = performance.now();
-            if (now - _lastFrameMs < _FRAME_INTERVAL) return;
-            if (_holisticBusy) return;
+        const runSoloFrame = async () => {
+          // Stop when the camera is off, a meeting takes over, or a NEWER
+          // stream replaced this one (restart spawns its own loop).
+          if (!cameraOn || inMeeting || video.srcObject !== stream) return;
+          const now = performance.now();
+          if (now - _lastFrameMs >= _FRAME_INTERVAL &&
+              video.readyState >= 2 && holistic && !_holisticBusy) {
             _lastFrameMs = now;
             _holisticBusy = true;
             // Must clear the guard if send() rejects (WASM abort / transient error),
             // otherwise the loop early-returns forever and the camera freezes.
-            try { if (holistic) await holistic.send({ image: video }); }
+            try { await holistic.send({ image: video }); }
             catch (e) { console.error("[Camera] Holistic send error:", e); _holisticBusy = false; }
-          },
-          width: 480, height: 360,
-        });
-        mpCamera.start().then(() => console.log("[Camera] MediaPipe Camera started."));
+          }
+          requestAnimationFrame(runSoloFrame);
+        };
+        requestAnimationFrame(runSoloFrame);
       }
 
     };
@@ -1884,7 +1922,7 @@ button.is-busy{opacity:.6;cursor:progress}
       handleStream(meetingCamStream);
     } else {
       navigator.mediaDevices.getUserMedia({
-        video: { width: { ideal: 480 }, height: { ideal: 360 }, frameRate: { ideal: 15, max: 20 } }
+        video: { facingMode: 'user', width: { ideal: 480 }, height: { ideal: 360 }, frameRate: { ideal: 15, max: 20 } }
       })
         .then(handleStream)
         .catch(err => {
@@ -1960,6 +1998,7 @@ button.is-busy{opacity:.6;cursor:progress}
 
   function onHolisticResults(results) {
     _holisticBusy = false; // WASM has finished — safe to send the next frame
+    if (window.SignDiag) SignDiag.frame(results);
     // Native <video> shows the smooth feed underneath (CSS-mirrored); the
     // canvas only paints the skeleton so display is independent of inference.
     const canvas = document.getElementById('output_canvas');
@@ -2027,6 +2066,7 @@ button.is-busy{opacity:.6;cursor:progress}
         streamLang.vision = language;
       }
       const single = preparePayload([frame], language)[0];
+      if (window.SignDiag) SignDiag.payload('vision', single, { path: 'socket', language });
       s.emit('sign_frame', { module: 'vision', frame: single });
       return;
     }
@@ -2094,6 +2134,7 @@ button.is-busy{opacity:.6;cursor:progress}
       const h = videoEl ? (videoEl.videoHeight || 480) : 480;
 
       const payloadFrames = preparePayload(frames, language);
+      if (window.SignDiag) SignDiag.payload('vision', payloadFrames, { path: 'http', language, w, h });
       const res = await authFetch('/api/translate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -2815,6 +2856,26 @@ button.is-busy{opacity:.6;cursor:progress}
   // Newcomer is the deterministic OFFERER to every peer already in the room
   // (driven by room_peers). Existing peers, on new_peer, create the connection
   // and WAIT for the newcomer's offer. This removes glare without sid-compare.
+  // ICE servers for the mesh. Refreshed from /api/webrtc-config on every
+  // meeting join: with Cloudflare TURN configured the server mints
+  // short-lived relay credentials; STUN-only is the fallback so a failed
+  // fetch degrades to the previous behavior instead of blocking the join.
+  let rtcIceServers = [
+    { urls: 'stun:stun.l.google.com:19302' },
+    { urls: 'stun:stun1.l.google.com:19302' }
+  ];
+  async function refreshIceServers() {
+    try {
+      const res = await authFetch('/api/webrtc-config');
+      if (!res.ok) return;
+      const data = await res.json();
+      if (data && Array.isArray(data.iceServers) && data.iceServers.length) {
+        rtcIceServers = data.iceServers;
+        console.log('[WebRTC] ICE config loaded (turn=' + !!data.turn + ')');
+      }
+    } catch (e) { console.warn('[WebRTC] ICE config fetch failed; using STUN only', e); }
+  }
+
   function createPeer(remoteSid, isOfferer) {
     if (!remoteSid || remoteSid === (socket && socket.id)) return null;
     let entry = peers[remoteSid];
@@ -2822,13 +2883,7 @@ button.is-busy{opacity:.6;cursor:progress}
     // duplicate room_peers/new_peer/offer event.
     if (entry && entry.pc && entry.pc.signalingState !== 'closed') return entry;
 
-    const config = {
-      iceServers: [
-        { urls: 'stun:stun.l.google.com:19302' },
-        { urls: 'stun:stun1.l.google.com:19302' }
-      ]
-    };
-    const pc = new RTCPeerConnection(config);
+    const pc = new RTCPeerConnection({ iceServers: rtcIceServers });
     entry = peers[remoteSid] = { pc, iceBuffer: [], makingOffer: false };
 
     pc.onicecandidate = (e) => {
@@ -2845,9 +2900,12 @@ button.is-busy{opacity:.6;cursor:progress}
 
     pc.onconnectionstatechange = () => {
       const st = pc.connectionState;
+      console.log('[WebRTC]', remoteSid, 'connection:', st);
       // A transient 'disconnected' may recover; only tear down on failed/closed.
       if (st === 'failed' || st === 'closed') removePeer(remoteSid);
     };
+    pc.oniceconnectionstatechange = () =>
+      console.log('[WebRTC]', remoteSid, 'ice:', pc.iceConnectionState);
 
     // Add local camera tracks if we have them.
     if (meetingCamStream) {
@@ -2858,11 +2916,12 @@ button.is-busy{opacity:.6;cursor:progress}
 
     let offerCreated = false;
     const sendOffer = async () => {
+      // Fail loudly if signaling is down: silently marking the peer
+      // negotiated while the offer never left this tab wedges the pair.
+      if (!socket || !socket.connected) throw new Error('signaling socket not connected');
       const offer = await pc.createOffer();
       await pc.setLocalDescription(offer);
-      if (socket && socket.connected) {
-        socket.emit('webrtc_offer', { sdp: offer, room: currentMeetingRoom, target_sid: remoteSid });
-      }
+      socket.emit('webrtc_offer', { sdp: offer, room: currentMeetingRoom, target_sid: remoteSid });
       entry.negotiated = true;
     };
     const makeOffer = async () => {
@@ -2935,6 +2994,7 @@ button.is-busy{opacity:.6;cursor:progress}
     video = document.createElement('video');
     video.id = videoId;
     video.autoplay = true;
+    video.muted = true;   // streams are video-only; muted keeps autoplay allowed everywhere
     video.playsInline = true;
     video.setAttribute('playsinline', '');
     video.style.cssText = 'width:100%;height:100%;object-fit:cover';
@@ -3474,6 +3534,7 @@ button.is-busy{opacity:.6;cursor:progress}
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
         video: {
+          facingMode: 'user',   // guarantee the front camera on phones
           width: { ideal: 640 },
           height: { ideal: 480 },
           frameRate: { ideal: 24, max: 30 }
@@ -3666,6 +3727,9 @@ button.is-busy{opacity:.6;cursor:progress}
 
 
   async function joinMeeting() {
+    // Load ICE servers BEFORE joining: room_peers can arrive immediately
+    // after join_room and createPeer needs the TURN credentials by then.
+    await refreshIceServers();
     try {
       if (socket) {
         try {
@@ -3691,6 +3755,7 @@ button.is-busy{opacity:.6;cursor:progress}
       const syncMeetingConnection = () => {
         if (!socket || !socket.connected || roomJoined) return;
         roomJoined = true;
+        inMeeting = true;
         socket.emit('join_room', { room: roomId });
         socket.emit('announce_presence', {
           room: roomId,
@@ -3717,6 +3782,12 @@ button.is-busy{opacity:.6;cursor:progress}
           if (socket !== currentSocket) return;
           inMeeting = false;
           setMeetingUiState(false);
+          // The server forgot this sid: every peer connection is orphaned and
+          // the auto-reconnect arrives with a NEW sid. Tear down the mesh and
+          // unlatch roomJoined so the 'connect' handler re-joins the room —
+          // previously a reconnected tab sat in the meeting UI receiving nothing.
+          Object.keys(peers).forEach(removePeer);
+          roomJoined = false;
         });
 
         socket.on('connect_error', (err) => {
@@ -3829,8 +3900,12 @@ button.is-busy{opacity:.6;cursor:progress}
         });
 
         socket.on('webrtc_ice_candidate', async (data) => {
-          const entry = data && peers[data.sender_sid];
-          if (!entry || !data.candidate) return;
+          const sid = data && data.sender_sid;
+          if (!sid || !data.candidate) return;
+          // Mirror the offer handler: create the peer if a candidate beats
+          // the offer here, so it is buffered instead of dropped.
+          const entry = peers[sid] || createPeer(sid, false);
+          if (!entry) return;
           if (entry.pc.remoteDescription && entry.pc.remoteDescription.type) {
             try {
               await entry.pc.addIceCandidate(new RTCIceCandidate(data.candidate));
@@ -3953,7 +4028,9 @@ button.is-busy{opacity:.6;cursor:progress}
 
     inMeeting = false;
     currentMeetingRoom = 'general';
-    document.getElementById('meeting-room-id').value = currentMeetingRoom;
+    // Leave the input empty: writing 'general' back gets sanitized to
+    // 'GENER' (A-Z, max 5) on the next join and lands in the wrong room.
+    document.getElementById('meeting-room-id').value = '';
     document.getElementById('remote-sentence').textContent = 'No messages yet.';
     document.getElementById('remote-sentence').style.color = 'var(--gray-500)';
     const _histEl = document.getElementById('meeting-caption-history');
@@ -4110,7 +4187,7 @@ button.is-busy{opacity:.6;cursor:progress}
     }
 
     navigator.mediaDevices.getUserMedia({
-      video: { width: { ideal: 480 }, height: { ideal: 360 }, frameRate: { ideal: 15, max: 20 } }
+      video: { facingMode: 'user', width: { ideal: 480 }, height: { ideal: 360 }, frameRate: { ideal: 15, max: 20 } }
     }).then(stream => {
       console.log("[Camera] Stream acquired.");
       if (!s2spCameraOn) {
@@ -4138,7 +4215,7 @@ button.is-busy{opacity:.6;cursor:progress}
 
         s2spHolistic.setOptions({
           modelComplexity: 1,
-          selfieMode: true,
+          selfieMode: false,  // must match training orientation — see the vision pipeline note
           smoothLandmarks: true,
           minDetectionConfidence: 0.5,
           minTrackingConfidence: 0.5,
@@ -4146,23 +4223,25 @@ button.is-busy{opacity:.6;cursor:progress}
         s2spHolistic.onResults(onS2SpHolisticResults);
       }
 
-      console.log("[Camera] Initializing MediaPipe Camera helper (S2SP)...");
-      if (!window.Camera) return;
+      // Drive S2SP Holistic from the stream we ALREADY acquired — the Camera
+      // helper opened a second getUserMedia stream and leaked the first
+      // (see the Sign-to-Text camera path for the full story).
+      video.play().catch(() => {});
       let _s2spLastMs = 0;
-      s2spMpCamera = new window.Camera(video, {
-        onFrame: async () => {
-          const now = performance.now();
-          if (now - _s2spLastMs < 1000/20) return;
-          if (_s2spHolisticBusy) return;
+      const runS2SpFrame = async () => {
+        if (!s2spCameraOn || video.srcObject !== stream) return;
+        const now = performance.now();
+        if (now - _s2spLastMs >= 1000/20 && video.readyState >= 2 &&
+            s2spHolistic && !_s2spHolisticBusy) {
           _s2spLastMs = now;
           _s2spHolisticBusy = true;
           // Clear the guard on a rejected send() or the S2SP camera freezes.
-          try { if (s2spHolistic) await s2spHolistic.send({ image: video }); }
+          try { await s2spHolistic.send({ image: video }); }
           catch (e) { console.error("[Camera] S2SP holistic send error:", e); _s2spHolisticBusy = false; }
-        },
-        width: 480, height: 360,
-      });
-      s2spMpCamera.start().then(() => console.log("[Camera] S2SP MediaPipe Camera started."));
+        }
+        requestAnimationFrame(runS2SpFrame);
+      };
+      requestAnimationFrame(runS2SpFrame);
     }).catch(err => {
       console.error("[Camera] Error:", err);
       s2spCameraOn = false;
@@ -4214,6 +4293,7 @@ button.is-busy{opacity:.6;cursor:progress}
 
   function onS2SpHolisticResults(results) {
     _s2spHolisticBusy = false; // WASM finished — safe to send next frame
+    if (window.SignDiag) SignDiag.frame(results);
     const canvas = document.getElementById('s2sp-canvas');
     canvas.width = results.image.width;
     canvas.height = results.image.height;
@@ -4270,6 +4350,7 @@ button.is-busy{opacity:.6;cursor:progress}
         streamLang.speech = s2spLanguage;
       }
       const single = preparePayload([frame], s2spLanguage)[0];
+      if (window.SignDiag) SignDiag.payload('speech', single, { path: 'socket', language: s2spLanguage });
       ss.emit('sign_frame', { module: 'speech', frame: single });
       return;
     }
@@ -4293,6 +4374,7 @@ button.is-busy{opacity:.6;cursor:progress}
       const h = videoEl ? (videoEl.videoHeight || 480) : 480;
 
       const payloadFrames = preparePayload(frames, language);
+      if (window.SignDiag) SignDiag.payload('speech', payloadFrames, { path: 'http', language, w, h });
       const res = await authFetch('/api/translate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
