@@ -2066,22 +2066,19 @@ button.t-nav-item[aria-label="Sign out"]:hover svg{color:var(--danger,#ef4444)}
     const handsPresent = !!(rawLh || rawRh);
     _hsHandsPresent = handsPresent;
 
-    if (rawLh) { _lhLmSmooth = _emaLandmarks(_lhLmSmooth, rawLh); _lhLastSeen = _lhLmSmooth; }
-    if (rawRh) { _rhLmSmooth = _emaLandmarks(_rhLmSmooth, rawRh); _rhLastSeen = _rhLmSmooth; }
-
-    let lhDraw, rhDraw;
-    if (handsPresent) {
-      _lmGrace = LM_GRACE_FRAMES;
-      lhDraw = _lhLmSmooth;
-      rhDraw = _rhLmSmooth;
-    } else if (_lmGrace > 0) {
-      _lmGrace--;
-      lhDraw = _lhLastSeen;
-      rhDraw = _rhLastSeen;
-    } else {
-      _lhLmSmooth = null; _rhLmSmooth = null;
-      lhDraw = null; rhDraw = null;
-    }
+    // PER-HAND grace: each hand clears independently a few frames after ITS
+    // tracking drops. The old shared grace only cleared when BOTH hands were
+    // gone, so a lowered hand stayed frozen on the canvas as a ghost for as
+    // long as the other hand was up. (Display only — the model payload uses
+    // the raw per-frame results, never these smoothed copies.)
+    if (rawLh) { _lhLmSmooth = _emaLandmarks(_lhLmSmooth, rawLh); _lhGrace = LM_GRACE_FRAMES; }
+    else if (_lhGrace > 0) { _lhGrace--; }
+    else { _lhLmSmooth = null; }
+    if (rawRh) { _rhLmSmooth = _emaLandmarks(_rhLmSmooth, rawRh); _rhGrace = LM_GRACE_FRAMES; }
+    else if (_rhGrace > 0) { _rhGrace--; }
+    else { _rhLmSmooth = null; }
+    const lhDraw = _lhLmSmooth;
+    const rhDraw = _rhLmSmooth;
 
     // Draw skeleton overlay
     if (window.drawConnectors && window.HAND_CONNECTIONS) {
@@ -4874,8 +4871,7 @@ const _signsSparkPts = []; // running count per 5-sign bucket for sparkline
 let _signsSparkBucket = 0;
 // MediaPipe landmark smoothing — grace frames + EMA
 let _lhLmSmooth = null, _rhLmSmooth = null;
-let _lhLastSeen = null, _rhLastSeen = null;
-let _lmGrace = 0;
+let _lhGrace = 0, _rhGrace = 0;
 const LM_GRACE_FRAMES = 3;
 const LM_ALPHA = 0.65; // EMA weight for previous frame
 
