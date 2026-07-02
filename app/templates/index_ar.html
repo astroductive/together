@@ -985,7 +985,14 @@ button.is-busy{opacity:.6;cursor:progress}
     console.error(errorMsg, event.reason);
     showDebugError(errorMsg + (event.reason && event.reason.stack ? '\n' + event.reason.stack : ''));
   };
+  // The red banner is a DEVELOPMENT aid: enable with ?debug=1 or
+  // localStorage debugBanner=1. Errors still go to the console for everyone —
+  // end users were seeing a full-width red banner for ANY runtime error,
+  // including ones thrown by browser extensions and third-party CDN scripts.
+  const _debugBannerOn = /[?&]debug=1\b/.test(location.search) ||
+    (function () { try { return localStorage.getItem('debugBanner') === '1'; } catch (_) { return false; } })();
   function showDebugError(msg) {
+    if (!_debugBannerOn) return;
     let errorBanner = document.getElementById('debug-error-banner');
     if (!errorBanner) {
       errorBanner = document.createElement('div');
@@ -1159,52 +1166,6 @@ button.is-busy{opacity:.6;cursor:progress}
           direction: rtl !important;
           text-align: right !important;
         }
-        .sidebar {
-          right: 0 !important;
-          left: auto !important;
-          direction: ltr !important;
-          border-right: none !important;
-          border-left: 1px solid rgba(255, 255, 255, 0.14) !important;
-        }
-        .dash-main {
-          margin-right: 220px !important;
-          margin-left: 0 !important;
-        }
-        @media (max-width: 1100px) {
-          .dash-main {
-            margin-right: 76px !important;
-            margin-left: 0 !important;
-          }
-          .sidebar-item svg {
-            margin-left: 0 !important;
-            margin-right: 0 !important;
-          }
-          .sidebar-item {
-            justify-content: center !important;
-            padding: 11px 0 !important;
-          }
-        }
-        @media (max-width: 768px) {
-          .dash-main {
-            margin-right: 0 !important;
-          }
-        }
-        .sidebar-item svg {
-          margin-right: 14px;
-          margin-left: 0;
-        }
-        .sidebar-item {
-          flex-direction: row-reverse;
-        }
-        .card-header, .dash-topbar, .meet-hero, .meet-room-bar, .meet-video-header, .meet-controls {
-          flex-direction: row-reverse !important;
-        }
-        .text-input-row {
-          flex-direction: row-reverse !important;
-        }
-        .transcription-box {
-          flex-direction: row-reverse !important;
-        }
       `;
       document.head.appendChild(style);
 
@@ -1215,221 +1176,17 @@ button.is-busy{opacity:.6;cursor:progress}
       moduleMap.speech2sign.title = 'تحويل الكلام إلى إشارة';
       moduleMap.meeting.title = 'SignLine';
 
-      // 4. Translate sidebar items
-      const navVision = document.getElementById('nav-vision');
-      if (navVision) navVision.querySelector('.sidebar-label').textContent = 'الترجمة إلى نص';
-      const navSpeech = document.getElementById('nav-speech');
-      if (navSpeech) navSpeech.querySelector('.sidebar-label').textContent = 'الترجمة إلى كلام';
-      const navText2sign = document.getElementById('nav-text2sign');
-      if (navText2sign) navText2sign.querySelector('.sidebar-label').textContent = 'تحويل النص إلى إشارة';
-      const navSpeech2sign = document.getElementById('nav-speech2sign');
-      if (navSpeech2sign) navSpeech2sign.querySelector('.sidebar-label').textContent = 'تحويل الكلام إلى إشارة';
-      const navMeeting = document.getElementById('nav-meeting');
-      if (navMeeting) navMeeting.querySelector('.sidebar-label').textContent = 'SignLine';
-
-      // Sign out button sidebar
-      const sbSignout = document.querySelector('.sidebar-user button');
-      if (sbSignout) sbSignout.querySelector('.sidebar-label').textContent = 'تسجيل الخروج';
-      const topSignout = document.getElementById('topbar-signout');
-      if (topSignout) topSignout.textContent = 'تسجيل الخروج';
-
-      // User Role mapping translation
+      // 4. Translate the sidebar role label (the only survivor of the old
+      // legacy DOM-translation pass: parts of it targeted selectors that no
+      // longer exist — the first missing one threw, so none of it ever ran
+      // and the try/catch at the call site logged 'Localization pass skipped'
+      // on every load. The rest of the Arabic copy is baked into the markup.)
       const roleEl = document.getElementById('sb-role');
       if (roleEl) {
-        if (roleEl.textContent.toLowerCase().includes('speaker')) roleEl.textContent = 'متحدث';
-        else roleEl.textContent = 'أصم / ضعيف سمع';
+        roleEl.textContent = roleEl.textContent.toLowerCase().includes('speaker')
+          ? 'متحدث' : 'أصم / ضعيف سمع';
       }
 
-      // 5. Translate text inside pages
-      // -- Vision Panel --
-      const pVision = document.getElementById('panel-vision');
-      if (pVision) {
-        const cardTitle = pVision.querySelector('.card-title');
-        if (cardTitle) {
-          for (let node of cardTitle.childNodes) {
-            if (node.nodeType === Node.TEXT_NODE && node.nodeValue.trim()) {
-              node.nodeValue = ' الكاميرا المباشرة';
-            }
-          }
-        }
-        const camBtn = document.getElementById('cam-btn');
-        if (camBtn) camBtn.textContent = 'تشغيل الكاميرا';
-        
-        const placeholder = document.getElementById('cam-placeholder');
-        if (placeholder) {
-          placeholder.querySelector('p').textContent = 'ستظهر تغذية الكاميرا هنا';
-        }
-
-        const liveBadge = document.getElementById('live-badge');
-        if (liveBadge) liveBadge.textContent = '● مباشر';
-
-        const transcriptionBox = pVision.querySelector('.transcription-box');
-        if (transcriptionBox) {
-          transcriptionBox.querySelector('.label').textContent = 'النص المترجم';
-          transcriptionBox.querySelector('.transcription-placeholder').textContent = 'بانتظار الإشارة...';
-          const kbdTip = transcriptionBox.querySelector('div[style*="font-size:10.5px"]');
-          if (kbdTip) kbdTip.style.display = 'none';
-          const actionBtn = transcriptionBox.querySelector('.action-btn');
-          if (actionBtn) actionBtn.style.display = 'none';
-        }
-
-        const logCard = pVision.querySelector('.dash-card:nth-of-type(2)') || pVision.querySelector('div[style*="flex-direction:column"] .dash-card');
-        if (logCard) {
-          logCard.querySelector('.card-title').textContent = 'سجل الجلسة';
-          const log = document.getElementById('session-log');
-          if (log && log.querySelector('p')) log.querySelector('p').textContent = 'لم يتم الكشف عن إشارات بعد.';
-        }
-      }
-
-      // -- Speech Panel --
-      const pSpeech = document.getElementById('panel-speech');
-      if (pSpeech) {
-        const cardTitle = pSpeech.querySelector('.card-title');
-        if (cardTitle) {
-          for (let node of cardTitle.childNodes) {
-            if (node.nodeType === Node.TEXT_NODE && node.nodeValue.trim()) {
-              node.nodeValue = ' الكاميرا المباشرة';
-            }
-          }
-        }
-        const camBtn = document.getElementById('s2sp-cam-btn');
-        if (camBtn) camBtn.textContent = 'تشغيل الكاميرا';
-
-        const placeholder = document.getElementById('s2sp-placeholder');
-        if (placeholder) {
-          placeholder.querySelector('p').textContent = 'ستظهر تغذية الكاميرا هنا';
-        }
-
-        const liveBadge = document.getElementById('s2sp-badge');
-        if (liveBadge) liveBadge.textContent = '● مباشر';
-
-        const boxes = pSpeech.querySelectorAll('.transcription-box, div[style*="background:var(--gray-50)"]');
-        if (boxes[0]) {
-          boxes[0].querySelector('.label').textContent = 'الإشارات المكتشفة';
-          boxes[0].querySelector('.transcription-placeholder').textContent = 'تظهر الإشارات هنا...';
-          const kbdTip = boxes[0].querySelector('div[style*="font-size:10.5px"]');
-          if (kbdTip) kbdTip.style.display = 'none';
-          const actionBtn = boxes[0].querySelector('.action-btn');
-          if (actionBtn) actionBtn.style.display = 'none';
-        }
-
-        if (boxes[1]) {
-          boxes[1].querySelector('.label').textContent = 'الجملة المنطوقة';
-          boxes[1].querySelector('span').textContent = 'بانتظار الإشارات...';
-        }
-
-        const logCard = pSpeech.querySelector('.dash-card:nth-of-type(2)') || pSpeech.querySelector('div[style*="flex-direction:column"] .dash-card');
-        if (logCard) {
-          logCard.querySelector('.card-title').textContent = 'سجل الجمل';
-          const log = document.getElementById('s2sp-log');
-          if (log && log.querySelector('p')) log.querySelector('p').textContent = 'لم يتم نطق أي جمل بعد.';
-        }
-      }
-
-      // -- Text to Sign Panel --
-      const pText2Sign = document.getElementById('panel-text2sign');
-      if (pText2Sign) {
-        const cardTitle = pText2Sign.querySelector('.card-title');
-        if (cardTitle) {
-          for (let node of cardTitle.childNodes) {
-            if (node.nodeType === Node.TEXT_NODE && node.nodeValue.trim()) {
-              node.nodeValue = ' إدخال النص';
-            }
-          }
-        }
-        const input = document.getElementById('text2sign-input');
-        if (input) input.placeholder = 'اكتب النص للترجمة إلى لغة الإشارة...';
-
-        const placeholder = document.getElementById('avatar-placeholder');
-        if (placeholder) {
-          placeholder.querySelector('p').textContent = 'سيقوم الأفاتار بتمثيل النص هنا';
-        }
-
-        const historyCard = pText2Sign.querySelector('.dash-card:nth-of-type(2)');
-        if (historyCard) {
-          historyCard.querySelector('.card-title').textContent = 'الترجمات الأخيرة';
-          const log = document.getElementById('t2s-history');
-          if (log && log.querySelector('p')) log.querySelector('p').textContent = 'لا توجد ترجمات بعد.';
-        }
-      }
-
-      // -- Speech to Sign Panel --
-      const pSpeech2Sign = document.getElementById('panel-speech2sign');
-      if (pSpeech2Sign) {
-        const cardTitle = pSpeech2Sign.querySelector('.card-title');
-        if (cardTitle) {
-          for (let node of cardTitle.childNodes) {
-            if (node.nodeType === Node.TEXT_NODE && node.nodeValue.trim()) {
-              node.nodeValue = ' إدخال الميكروفون';
-            }
-          }
-        }
-        const micBtn = document.getElementById('mic-btn');
-        if (micBtn) micBtn.textContent = 'بدء الاستماع';
-
-        const micStatus = document.getElementById('mic-status');
-        if (micStatus) micStatus.textContent = 'انقر على "بدء الاستماع" للبدء';
-
-        const recognizedSpeech = pSpeech2Sign.querySelector('.transcription-box');
-        if (recognizedSpeech) {
-          recognizedSpeech.querySelector('.label').textContent = 'الكلام المستوعب';
-          recognizedSpeech.querySelector('.transcription-placeholder').textContent = 'بانتظار...';
-        }
-
-        const avatarCard = pSpeech2Sign.querySelector('.dash-card:nth-of-type(2)');
-        if (avatarCard) {
-          avatarCard.querySelector('.card-title').textContent = 'أفاتار الإشارة';
-          avatarCard.querySelector('.viewport-placeholder p').textContent = 'مخرج الأفاتار';
-        }
-      }
-
-      // -- Live Meeting Panel --
-      const pMeeting = document.getElementById('panel-meeting');
-      if (pMeeting) {
-        pMeeting.querySelector('.meet-title').textContent = 'SignLine';
-        pMeeting.querySelector('.meet-subtitle').textContent = 'ابدأ مكالمة جديدة أو أدخل رمز الاجتماع. شارك الرابط وتعاون مع ترجمة فورية للغة الإشارة.';
-        document.getElementById('meeting-status-pill').textContent = 'غير متصل';
-
-        const btns = pMeeting.querySelectorAll('.btn');
-        if (btns[0]) btns[0].textContent = 'اجتماع جديد';
-        if (btns[1]) btns[1].textContent = 'انضمام';
-        const input = document.getElementById('meeting-room-id');
-        if (input) input.placeholder = 'أدخل رمز الاجتماع';
-
-        pMeeting.querySelector('.meet-code-label').textContent = 'رمز الاجتماع الحالي';
-        const copyBtn = document.getElementById('copy-link-btn');
-        if (copyBtn) copyBtn.textContent = 'نسخ رابط الاجتماع';
-        const leaveBtn = document.getElementById('leave-btn');
-        if (leaveBtn) leaveBtn.textContent = 'مغادرة المكالمة';
-
-        pMeeting.querySelector('.meet-video-title').textContent = 'ساحة الاجتماع';
-        document.getElementById('meeting-stage-label').textContent = 'بانتظار الانضمام';
-        pMeeting.querySelector('.meeting-avatar-corner .label').textContent = 'أفاتار المتحدث';
-        document.getElementById('meeting-video-placeholder').textContent = 'انضم إلى الغرفة لبدء تلقي التعليقات المباشرة';
-
-        document.getElementById('meeting-cam-btn').textContent = '📷 إيقاف الكاميرا';
-        document.getElementById('meeting-mic-btn').textContent = '🔇 إيقاف الميكروفون';
-        document.getElementById('meeting-sign-btn').textContent = '🤟 إيقاف مدخل الإشارة';
-
-        document.getElementById('meeting-caption-label').textContent = 'التعليقات المباشرة من المشاركين';
-        document.getElementById('remote-sentence').textContent = 'لا توجد رسائل بعد.';
-        const _histReset = document.getElementById('meeting-caption-history');
-        if (_histReset) { _histReset.innerHTML = '<div class="d-meet-remote-text" style="color:var(--faint);font-size:12px">لا توجد رسائل بعد.</div>'; }
-        const meetInput = document.getElementById('meeting-text-input');
-        if (meetInput) meetInput.placeholder = 'اكتب رسالة لتحويلها للمشارك الأصم';
-        pMeeting.querySelector('.meeting-composer button').textContent = 'إرسال';
-        document.getElementById('meeting-speech-out-btn').textContent = '🔇 التعليقات فقط';
-      }
-
-      // 6. Translate select options for mobile selection dropdown
-      const mobSelect = document.getElementById('mobile-module-select');
-      if (mobSelect) {
-        mobSelect.options[0].text = 'الترجمة إلى نص';
-        mobSelect.options[1].text = 'الترجمة إلى كلام';
-        mobSelect.options[2].text = 'تحويل النص إلى إشارة';
-        mobSelect.options[3].text = 'تحويل الكلام إلى إشارة';
-        mobSelect.options[4].text = 'SignLine';
-      }
     } else {
       // Force English/ASL and hide dropdowns
       const langSelect1 = document.getElementById('cam-language-select');
@@ -4628,10 +4385,16 @@ button.is-busy{opacity:.6;cursor:progress}
   // ── STARTUP: Check engine health ───────────────────────────
   // ═══════════════════════════════════════════════════════════
   (async function checkHealth() {
+    // Hoisted: the warm-up block below also reads it. The old block-scoped
+    // `const signs` shadowed the OUTER session-log array only inside the
+    // first try, so `warmedData.signs_loaded || signs` down there fell back
+    // to the ARRAY and printed it into the status line.
+    let signsLoaded = 0;
     try {
       const res = await authFetch('/api/health');
       const data = await res.json();
-      const signs = data.signs_loaded || 0;
+      signsLoaded = data.signs_loaded || 0;
+      const signs = signsLoaded;
       if (data.status === 'ok' && data.models_ready) {
         setStatus(`AI Ready · ${signs} signs`, false);
       } else if (data.status === 'ok' && !data.models_ready) {
@@ -4661,7 +4424,7 @@ button.is-busy{opacity:.6;cursor:progress}
       const warmed = await authFetch('/api/health');
       const warmedData = await warmed.json();
       if (warmedData.status === 'ok' && warmedData.models_ready) {
-        setStatus(`AI Ready · ${warmedData.signs_loaded || signs} signs`, false);
+        setStatus(`AI Ready · ${warmedData.signs_loaded || signsLoaded} signs`, false);
       }
       console.log('[Warmup] Health warm-up completed.');
     } catch (_) { } finally {

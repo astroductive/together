@@ -1023,7 +1023,14 @@ button.t-nav-item[aria-label="Sign out"]:hover svg{color:var(--danger,#ef4444)}
     console.error(errorMsg, event.reason);
     showDebugError(errorMsg + (event.reason && event.reason.stack ? '\n' + event.reason.stack : ''));
   };
+  // The red banner is a DEVELOPMENT aid: enable with ?debug=1 or
+  // localStorage debugBanner=1. Errors still go to the console for everyone —
+  // end users were seeing a full-width red banner for ANY runtime error,
+  // including ones thrown by browser extensions and third-party CDN scripts.
+  const _debugBannerOn = /[?&]debug=1\b/.test(location.search) ||
+    (function () { try { return localStorage.getItem('debugBanner') === '1'; } catch (_) { return false; } })();
   function showDebugError(msg) {
+    if (!_debugBannerOn) return;
     let errorBanner = document.getElementById('debug-error-banner');
     if (!errorBanner) {
       errorBanner = document.createElement('div');
@@ -4823,10 +4830,16 @@ button.t-nav-item[aria-label="Sign out"]:hover svg{color:var(--danger,#ef4444)}
   // ── STARTUP: Check engine health ───────────────────────────
   // ═══════════════════════════════════════════════════════════
   (async function checkHealth() {
+    // Hoisted: the warm-up block below also reads it. The old block-scoped
+    // `const signs` shadowed the OUTER session-log array only inside the
+    // first try, so `warmedData.signs_loaded || signs` down there fell back
+    // to the ARRAY and printed it into the status line.
+    let signsLoaded = 0;
     try {
       const res = await authFetch('/api/health');
       const data = await res.json();
-      const signs = data.signs_loaded || 0;
+      signsLoaded = data.signs_loaded || 0;
+      const signs = signsLoaded;
       if (data.status === 'ok' && data.models_ready) {
         setStatus(`AI Ready · ${signs} signs`, false);
       } else if (data.status === 'ok' && !data.models_ready) {
@@ -4856,7 +4869,7 @@ button.t-nav-item[aria-label="Sign out"]:hover svg{color:var(--danger,#ef4444)}
       const warmed = await authFetch('/api/health');
       const warmedData = await warmed.json();
       if (warmedData.status === 'ok' && warmedData.models_ready) {
-        setStatus(`AI Ready · ${warmedData.signs_loaded || signs} signs`, false);
+        setStatus(`AI Ready · ${warmedData.signs_loaded || signsLoaded} signs`, false);
       }
       console.log('[Warmup] Health warm-up completed.');
     } catch (_) { } finally {
