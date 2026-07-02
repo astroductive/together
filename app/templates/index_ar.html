@@ -1996,6 +1996,52 @@ button.is-busy{opacity:.6;cursor:progress}
   // wait for 30 frames of context before inference
   // rolling window of landmark frames
 
+
+  // ── Rest-pose gate ─────────────────────────────────────────
+  // Suppresses inference while every tracked hand is BOTH below shoulder level
+  // and nearly motionless for ~1s. Resting hands stay tracked by MediaPipe and
+  // the model confidently misreads the idle posture — verified live: a hand
+  // resting near the bottom of frame produced sustained false detections at
+  // 0.74–0.87 confidence. Stillness is measured on the wrist; the gate fails
+  // OPEN whenever pose/shoulders are missing so it can never block real
+  // signing. Thresholds derived from the captured live session (resting wrist
+  // moved <0.01/frame; signing moves far more).
+  function makeRestGate() {
+    const BELOW_MARGIN = 0.03;   // wrist must sit this far below the shoulder line
+    const STILL_EPS = 0.012;     // max mean per-frame wrist movement (normalized)
+    const STILL_FRAMES = 14;     // ~1s at typical 12–18fps
+    let prev = null, still = 0, resting = false;
+    return {
+      update(results) {
+        const pose = results.poseLandmarks;
+        const lh = results.leftHandLandmarks, rh = results.rightHandLandmarks;
+        if (!pose || !pose[11] || !pose[12] || (!lh && !rh)) {
+          prev = null; still = 0; resting = false; return false;
+        }
+        const shoulderY = Math.max(pose[11].y, pose[12].y);
+        let below = true, motion = 0, n = 0;
+        const cur = {};
+        [['l', lh], ['r', rh]].forEach(([k, hand]) => {
+          if (!hand || !hand[0]) return;
+          const w = hand[0];   // wrist landmark
+          cur[k] = { x: w.x, y: w.y };
+          if (w.y < shoulderY + BELOW_MARGIN) below = false;  // hand up in signing space
+          if (prev && prev[k]) { motion += Math.abs(w.x - prev[k].x) + Math.abs(w.y - prev[k].y); n++; }
+        });
+        prev = cur;
+        if (below && n > 0 && (motion / n) < STILL_EPS) still++;
+        else still = 0;
+        resting = still >= STILL_FRAMES;
+        return resting;
+      },
+      reset() { prev = null; still = 0; resting = false; },
+      get resting() { return resting; },
+    };
+  }
+  const _visionRestGate = makeRestGate();
+  const _s2spRestGate = makeRestGate();
+  let _hsNoHandsFrames = 0, _s2spNoHandsFrames = 0;
+
   function onHolisticResults(results) {
     _holisticBusy = false; // WASM has finished — safe to send the next frame
     if (window.SignDiag) SignDiag.frame(results);
@@ -2045,14 +2091,33 @@ button.is-busy{opacity:.6;cursor:progress}
     _hsHandsPresent = handsPresent;
     if (window._setDetectState) {
       if (handsPresent && streaming('vision')) {
+        _hsNoHandsFrames = 0;
         _setDetectState('detecting', 'يرصد', 'hs');
       } else if (!handsPresent) {
-        _setDetectState('idle', 'خامل', 'hs');
+        // After ~2s without hands, tell the user WHY nothing is happening.
+        _hsNoHandsFrames++;
+        _setDetectState('idle', _hsNoHandsFrames > 30 ? 'لا تُرى أيدٍ' : 'خامل', 'hs');
       }
     }
 
     // Skip inference during cooldown or before enough hand frames
     if (globalCooldown > 0 || consecutiveHand < MIN_HAND_FRAMES) return;
+
+    // Rest-pose gate: resting hands are not signing — pause streaming so the
+    // idle posture cannot vote phantom words in. Entering rest also flushes
+    // the buffers, exactly like a true hand gap.
+    const _wasRestingV = _visionRestGate.resting;
+    if (_visionRestGate.update(results)) {
+      if (!_wasRestingV) {
+        frameBuffer = []; voteBuffer = [];
+        streamReset('vision');
+        if (window.SignDiag) SignDiag.event('vision', 'rest_gate_on', {});
+      }
+      if (window._setDetectState) _setDetectState('idle', 'استراحة — التعرف متوقف', 'hs');
+      return;
+    } else if (_wasRestingV) {
+      if (window.SignDiag) SignDiag.event('vision', 'rest_gate_off', {});
+    }
 
     const frame = buildLandmarkFrame(results);
 
@@ -4330,13 +4395,29 @@ button.is-busy{opacity:.6;cursor:progress}
     _s2spHandsPresent = handsPresent;
     if (window._setDetectState) {
       if (handsPresent && streaming('speech')) {
+        _s2spNoHandsFrames = 0;
         _setDetectState('detecting', 'يرصد', 's2sp');
       } else if (!handsPresent) {
-        _setDetectState('idle', 'خامل', 's2sp');
+        _s2spNoHandsFrames++;
+        _setDetectState('idle', _s2spNoHandsFrames > 30 ? 'لا تُرى أيدٍ' : 'خامل', 's2sp');
       }
     }
 
     if (s2spGlobalCooldown > 0 || s2spConsecHand < MIN_HAND_FRAMES) return;
+
+    // Rest-pose gate (see the Sign-to-Text pipeline for rationale).
+    const _wasRestingS = _s2spRestGate.resting;
+    if (_s2spRestGate.update(results)) {
+      if (!_wasRestingS) {
+        s2spFrameBuffer = []; s2spVoteBuffer = [];
+        streamReset('speech');
+        if (window.SignDiag) SignDiag.event('speech', 'rest_gate_on', {});
+      }
+      if (window._setDetectState) _setDetectState('idle', 'استراحة — التعرف متوقف', 's2sp');
+      return;
+    } else if (_wasRestingS) {
+      if (window.SignDiag) SignDiag.event('speech', 'rest_gate_off', {});
+    }
 
     const frame = buildLandmarkFrame(results);
 
