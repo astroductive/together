@@ -60,9 +60,8 @@ colorblind ΔE, contrast): the teal/sand pair passes all checks with CVD ΔE ≈
   listen/hear and cut/scissors are near-identical signs — which is exactly what
   a credible confusion analysis should show.
   Suggested caption: *"Figure 5.3: ASL confusion analysis on the cross-dataset
-  SignASL evaluation (250 clips, one per class): (a) misclassifications ranked
-  by the model's confidence in the wrong sign; (b) signs attracting the most
-  false predictions."*
+  SignASL evaluation (250 clips, one per class): misclassifications ranked by
+  the model's confidence in the wrong sign."*
   Bonus real stats from the same run, citable in §5.2: Top-5 accuracy **0.780**;
   40.9% of errors keep the true sign within the top 5; median confidence is
   **0.776 for correct vs 0.183 for wrong** predictions — direct empirical
