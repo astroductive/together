@@ -44,7 +44,25 @@ colorblind ΔE, contrast): the teal/sand pair passes all checks with CVD ΔE ≈
 - **Figure 5.2 (ArSL confusion matrix):** call
   `plot_confusion_matrix(matrix, labels, outfile)` with the real 20×20 matrix —
   single-hue teal sequential ramp instead of the green colormap.
-- **Figure 5.3:** ⚠ see the review note — its sign pairs (walk/run, cold/winter,
-  father/grandfather…) are not classes of the 250-word GISLR vocabulary and the
-  counts exceed what either described test set could produce. Re-derive this
-  chart from the real evaluation output before restyling it.
+- **Figure 5.3: RE-DERIVED FROM REAL DATA** — `fig5_3_confusion_analysis.png`.
+  The original chart's pairs (walk/run, cold/winter, father/grandfather…) are
+  not classes of the 250-word GISLR vocabulary and its counts were impossible
+  for either described test set. The replacement comes from an actual re-run of
+  the cross-dataset SignASL evaluation (`rerun_signasl_eval.py`, per-clip dump
+  in `signasl_eval_rows.json`): **Top-1 0.628 on 250 clips** — within one clip
+  of the thesis's 62.4% (MediaPipe-version variance). Because this eval has one
+  clip per class, pair *counts* cannot exceed 1, so panel (a) ranks pairs by the
+  model's **confidence in the wrong sign** (because→for 0.91, home→head 0.85,
+  listen→hear 0.83, chin→thirsty 0.79 … including the mutual cut↔scissors
+  confusion), and panel (b) shows **prediction sinks** (arm attracts 7 false
+  predictions; clean 4). These pairs are visually/semantically plausible —
+  listen/hear and cut/scissors are near-identical signs — which is exactly what
+  a credible confusion analysis should show.
+  Suggested caption: *"Figure 5.3: ASL confusion analysis on the cross-dataset
+  SignASL evaluation (250 clips, one per class): (a) misclassifications ranked
+  by the model's confidence in the wrong sign; (b) signs attracting the most
+  false predictions."*
+  Bonus real stats from the same run, citable in §5.2: Top-5 accuracy **0.780**;
+  40.9% of errors keep the true sign within the top 5; median confidence is
+  **0.776 for correct vs 0.183 for wrong** predictions — direct empirical
+  justification for the confidence gate in §4.6.

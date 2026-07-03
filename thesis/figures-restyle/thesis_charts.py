@@ -299,6 +299,85 @@ def plot_training_curves(epochs, train, val, ylabel, outfile,
     plt.close(fig)
 
 
+# ══════════════════════════════════════════════════════════════════════════
+# Figure 5.3 — ASL confusion analysis, RE-DERIVED from a real re-run of the
+# cross-dataset SignASL evaluation (scripts/model_baseline_report.py pipeline;
+# per-clip dump in signasl_eval_rows.json; Top-1 0.628 on 250 clips, within
+# one clip of the thesis's 62.4%).
+#   (a) most CONFIDENTLY confused pairs — with one clip per class, pair counts
+#       cannot exceed 1, so the honest ranking is the model's confidence in
+#       the wrong sign;
+#   (b) prediction sinks — signs attracting the most false predictions.
+# ══════════════════════════════════════════════════════════════════════════
+def rounded_hbar(ax, y, width, height, color, round_frac=0.035):
+    r = min(round_frac * (ax.get_xlim()[1] - ax.get_xlim()[0]), width * 0.4)
+    rh = min(height * 0.35, height / 2)
+    y0, y1 = y - height / 2, y + height / 2
+    verts = [
+        (0, y0), (width - r, y0),
+        (width, y0), (width, y0 + rh),
+        (width, y1 - rh), (width, y1),
+        (width - r, y1),
+        (0, y1), (0, y0),
+    ]
+    codes = [Path.MOVETO, Path.LINETO,
+             Path.CURVE3, Path.CURVE3,
+             Path.LINETO, Path.CURVE3,
+             Path.CURVE3, Path.LINETO, Path.CLOSEPOLY]
+    ax.add_patch(PathPatch(Path(verts, codes), facecolor=color,
+                           edgecolor="none", zorder=3))
+
+
+def fig5_3():
+    import json
+    from collections import Counter
+    apply_thesis_style()
+    rows = json.load(open(os.path.join(OUT, "signasl_eval_rows.json")))
+    rows = [r for r in rows if not r.get("failed")]
+    errs = [r for r in rows if not r["correct"]]
+
+    top_conf = sorted(errs, key=lambda r: -r["conf"])[:10]
+    sinks = Counter(r["pred"] for r in errs).most_common(8)
+
+    fig, (a1, a2) = plt.subplots(1, 2, figsize=(9.6, 4.0),
+                                 gridspec_kw={"width_ratios": [1.15, 1]})
+
+    # (a) most confidently confused pairs
+    a1.set_xlim(0, 1.02)
+    ys = np.arange(len(top_conf))[::-1]
+    for r, yy in zip(top_conf, ys):
+        rounded_hbar(a1, yy, r["conf"], 0.58, TEAL)
+        a1.text(r["conf"] + 0.015, yy, f"{r['conf']:.2f}", va="center",
+                fontsize=8.5, color=INK, fontweight="bold")
+    a1.set_yticks(ys)
+    a1.set_yticklabels([f"{r['true']} → {r['pred']}" for r in top_conf],
+                       fontsize=9, color=INK)
+    a1.set_xlabel("Model confidence in the wrong sign")
+    a1.set_title("(a) Most confidently confused pairs", fontsize=10.5, color=INK)
+    _despine(a1); a1.xaxis.grid(True); a1.yaxis.grid(False)
+    a1.set_ylim(-0.6, len(top_conf) - 0.4)
+
+    # (b) prediction sinks
+    a2.set_xlim(0, max(v for _, v in sinks) * 1.18)
+    ys = np.arange(len(sinks))[::-1]
+    for (name, v), yy in zip(sinks, ys):
+        rounded_hbar(a2, yy, v, 0.58, SAND)
+        a2.text(v + 0.12, yy, str(v), va="center", fontsize=9,
+                color=INK, fontweight="bold")
+    a2.set_yticks(ys)
+    a2.set_yticklabels([n for n, _ in sinks], fontsize=9.5, color=INK)
+    a2.set_xlabel("False predictions attracted")
+    a2.set_title("(b) Signs attracting the most errors", fontsize=10.5, color=INK)
+    a2.set_xticks(range(0, max(v for _, v in sinks) + 2, 2))
+    _despine(a2); a2.xaxis.grid(True); a2.yaxis.grid(False)
+    a2.set_ylim(-0.6, len(sinks) - 0.4)
+
+    fig.tight_layout(w_pad=2.5)
+    fig.savefig(os.path.join(OUT, "fig5_3_confusion_analysis.png"),
+                bbox_inches="tight")
+    plt.close(fig)
+
+
 def plot_confusion_matrix(matrix, labels, outfile, annotate_min=1):
     """Re-export Figure 5.2 (ArSL 20×20 confusion matrix) in the thesis style.
     `matrix` is the REAL confusion matrix (rows = true, cols = predicted).
