@@ -112,6 +112,17 @@ def paste_fit(img, path, box, border=False, pad=0):
     return (px, py, px + nw, py + nh)
 
 
+def paste_eq(img, path, box):
+    """Contain-fit a transparent equation PNG (keeps alpha)."""
+    x0, y0, x1, y1 = box
+    pic = Image.open(path).convert("RGBA")
+    r = min((x1 - x0) / pic.width, (y1 - y0) / pic.height)
+    pic = pic.resize((int(pic.width * r), int(pic.height * r)), Image.LANCZOS)
+    px = x0 + ((x1 - x0) - pic.width) // 2
+    py = y0 + ((y1 - y0) - pic.height) // 2
+    img.paste(pic, (px, py), pic)
+
+
 def logo(img, path, cx, cy, height):
     pic = Image.open(path).convert("RGBA")
     r = height / pic.height
@@ -258,36 +269,46 @@ def slide_stat(meta):
 
 
 def slide_content(meta):
-    """bullets left / image right — or image bottom/full via meta['layout']."""
+    """bullets left / image right — or image bottom/full via meta['layout'].
+    meta['eq'] = path to a rendered equation PNG -> cream panel above the footer."""
     img, d = base()
     ytop = header(d, meta["kicker"], meta["title"], meta["n"])
     lay = meta.get("layout", "right")
     items = meta.get("bullets", [])
     imgs = meta.get("images", [])
     border = meta.get("border", False)
+    bot = H - 90
+    if meta.get("eq"):
+        eq_pic = Image.open(meta["eq"])
+        ph = min(230, max(130, int(eq_pic.height / eq_pic.width * (W - 2 * M) ) + 44))
+        panel_top = H - 90 - ph
+        d.rounded_rectangle([M, panel_top, W - M, H - 90], radius=14, fill=CREAM)
+        paste_eq(img, meta["eq"], (M + 30, panel_top + 14, W - M - 30, H - 104))
+        bot = panel_top - 20
     if lay == "full" and imgs:
-        paste_fit(img, imgs[0], (M, ytop + 10, W - M, H - 90), border=border)
+        paste_fit(img, imgs[0], (M, ytop + 10, W - M, bot), border=border)
     elif lay == "bottom":
         if items:
             bullets(d, items, (M, ytop + 6, W - M, ytop + 210), meta["n"],
                     size=meta.get("bsize", 32))
-        bx = (M, ytop + 220, W - M, H - 90)
+        iy = ytop + (220 if items else 10)
         if len(imgs) == 2:
-            paste_fit(img, imgs[0], (M, ytop + 220, W // 2 - 20, H - 90), border=border)
-            paste_fit(img, imgs[1], (W // 2 + 20, ytop + 220, W - M, H - 90), border=border)
+            paste_fit(img, imgs[0], (M, iy, W // 2 - 20, bot), border=border)
+            paste_fit(img, imgs[1], (W // 2 + 20, iy, W - M, bot), border=border)
         elif imgs:
-            paste_fit(img, imgs[0], bx, border=border)
+            paste_fit(img, imgs[0], (M, iy, W - M, bot), border=border)
     else:  # right
         split = meta.get("split", 0.44)
         bx1 = M + int((W - 2 * M) * split)
         if items:
-            bullets(d, items, (M, ytop + 26, bx1 - 40, H - 110), meta["n"],
+            bullets(d, items, (M, ytop + 26, bx1 - 40, bot - 20), meta["n"],
                     size=meta.get("bsize", 34))
         if len(imgs) == 2:
-            paste_fit(img, imgs[0], (bx1, ytop + 10, W - M, ytop + 10 + (H - 110 - ytop) // 2 - 8), border=border)
-            paste_fit(img, imgs[1], (bx1, ytop + (H - 110 - ytop) // 2 + 8, W - M, H - 100), border=border)
+            mid = ytop + 10 + (bot - 10 - ytop) // 2
+            paste_fit(img, imgs[0], (bx1, ytop + 10, W - M, mid - 8), border=border)
+            paste_fit(img, imgs[1], (bx1, mid + 8, W - M, bot - 10), border=border)
         elif imgs:
-            paste_fit(img, imgs[0], (bx1, ytop + 10, W - M, H - 100), border=border)
+            paste_fit(img, imgs[0], (bx1, ytop + 10, W - M, bot - 10), border=border)
     if meta.get("note_strip"):
         d.rounded_rectangle([M, H - 175, W - M, H - 100], radius=12, fill=CREAM)
         fit_text(d, (M + 30, H - 160, W - M - 30, H - 112), meta["note_strip"],

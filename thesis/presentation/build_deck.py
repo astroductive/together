@@ -18,6 +18,10 @@ def A(name):
     return hits[0]
 
 
+def EQ(name):
+    return os.path.join(ASSETS, "eq", name + ".png")
+
+
 S = []  # slides
 N = []  # notes
 
@@ -278,7 +282,7 @@ add({"type": "content", "kicker": "ASL model", "title": "Google ISLR: the traini
     "detail on the right: the exported TFLite graph takes raw landmarks and performs all "
     "preprocessing internally, so the browser sends coordinates and nothing else.")
 
-add({"type": "content", "kicker": "ASL model", "title": "Preprocessing: 543 points → 708 features",
+add({"type": "content", "kicker": "ASL model", "title": "Preprocessing: 543 points → 708 features", "eq": EQ("eq23"),
      "section": "ASL model", "layout": "bottom", "bsize": 30, "images": [A("Figure4_2")],
      "bullets": [
         ("Select & center.", "118 informative landmarks (lips, hands, upper body); drop z; center on the nose."),
@@ -290,7 +294,7 @@ add({"type": "content", "kicker": "ASL model", "title": "Preprocessing: 543 poin
     "Then we append first- and second-order motion — velocity and acceleration — giving 708 "
     "features per frame. Motion features matter because a sign is a trajectory, not a pose.")
 
-add({"type": "content", "kicker": "ASL model", "title": "Macro architecture: Conv1D × 3 + Transformer, twice",
+add({"type": "content", "kicker": "ASL model", "title": "Macro architecture: Conv1D × 3 + Transformer, twice", "eq": EQ("eq24"),
      "section": "ASL model", "layout": "right", "split": 0.42, "images": [A("Figure4_3")],
      "bullets": [
         ("Stem.", "Linear projection of 708 features to a 192-d representation."),
@@ -303,7 +307,7 @@ add({"type": "content", "kicker": "ASL model", "title": "Macro architecture: Con
     "long-range structure of a sign, and we alternate them — three convolution blocks then a "
     "transformer block, repeated twice — before pooling into a 250-way classifier.")
 
-add({"type": "content", "kicker": "ASL model", "title": "Inside a Conv1D block — causal by construction",
+add({"type": "content", "kicker": "ASL model", "title": "Inside a Conv1D block — causal by construction", "eq": EQ("eq25"),
      "section": "ASL model", "layout": "bottom", "bsize": 29,
      "images": [A("Figure4_4"), A("Figure4_7")],
      "bullets": [
@@ -316,7 +320,7 @@ add({"type": "content", "kicker": "ASL model", "title": "Inside a Conv1D block �
     "shown lower right — which guarantees the model never looks at future frames. That is "
     "what lets the same network run on a live stream without behavioral drift.")
 
-add({"type": "content", "kicker": "ASL model", "title": "Efficient Channel Attention: focus for almost nothing",
+add({"type": "content", "kicker": "ASL model", "title": "Efficient Channel Attention: focus for almost nothing", "eq": EQ("eq26"),
      "section": "ASL model", "layout": "bottom", "bsize": 30, "images": [A("Figure4_5")],
      "bullets": [
         ("Squeeze.", "Global-average-pool each of the 384 channels to a single value."),
@@ -327,7 +331,7 @@ add({"type": "content", "kicker": "ASL model", "title": "Efficient Channel Atten
     "output to reweight them. It costs a few hundred parameters and consistently sharpens "
     "which feature channels the network trusts at each moment.")
 
-add({"type": "content", "kicker": "ASL model", "title": "Transformer block + a three-tower ensemble",
+add({"type": "content", "kicker": "ASL model", "title": "Transformer block + a three-tower ensemble", "eq": EQ("eq27"),
      "section": "ASL model", "layout": "right", "split": 0.42, "images": [A("Figure4_6")],
      "bullets": [
         ("Attention.", "Multi-head self-attention: H = 4 heads, d_k = 48, pre-norm residuals."),
@@ -351,7 +355,7 @@ add({"type": "content", "kicker": "ASL model", "title": "Augmentation: train for
     "flips cover left-handed signers; affine jitter and cutout simulate camera angle and "
     "occlusion. Every effect we expect from a real webcam is manufactured during training.")
 
-add({"type": "content", "kicker": "ASL model", "title": "Training: heavy regularization for 250 classes",
+add({"type": "content", "kicker": "ASL model", "title": "Training: heavy regularization for 250 classes", "eq": EQ("eq29"),
      "section": "ASL model", "layout": "bottom", "bsize": 30, "images": [A("Figure4_9")],
      "bullets": [
         ("Optimizer.", "RAdam + Lookahead, cosine decay from 4e-3, 400 epochs, label smoothing ε = 0.1."),
@@ -389,7 +393,7 @@ add({"type": "cards", "kicker": "ArSL model", "title": "Balaha ArSL-20: small, b
     "measure honest generalization. The architecture must respect the data budget: a "
     "transformer here would simply memorize.")
 
-add({"type": "content", "kicker": "ArSL model", "title": "Preprocessing: invariance in four steps",
+add({"type": "content", "kicker": "ArSL model", "title": "Preprocessing: invariance in four steps", "eq": EQ("eq33"),
      "section": "ArSL model", "layout": "bottom", "bsize": 30, "images": [A("Figure4_11")],
      "bullets": [
         ("59 landmarks.", "17 upper-body pose points + 21 per hand; z zeroed — phone depth is noise."),
@@ -401,13 +405,12 @@ add({"type": "content", "kicker": "ArSL model", "title": "Preprocessing: invaria
     "every clip is resampled to exactly thirty frames, so the network always sees a thirty-by-"
     "one-seventy-seven tensor.")
 
-add({"type": "content", "kicker": "ArSL model", "title": "A compact CNN-GRU, sized to the data",
+add({"type": "content", "kicker": "ArSL model", "title": "A compact CNN-GRU, sized to the data", "eq": EQ("eq34"),
      "section": "ArSL model", "layout": "right", "split": 0.4, "images": [A("Figure4_12")],
      "bullets": [
-        ("Convolutions.", "Two 1-D blocks (177→128→128, kernel 3) with BatchNorm + ReLU."),
-        ("Recurrence.", "Two-layer bidirectional GRU, 64 hidden units, dropout 0.3."),
-        ("Head.", "128 → 64 → 20 with dropout 0.5 and softmax."),
-        ("~At inference.", "Soft-max averaged over 30/45/60-frame windows; accept above τ = 0.45."),
+        ("Convolutions.", "Two 1-D blocks (177→128→128, k=3), BatchNorm + ReLU."),
+        ("Recurrence.", "2-layer BiGRU, 64 hidden units, dropout 0.3."),
+        ("Head.", "128 → 64 → 20, dropout 0.5, softmax."),
      ]},
     "[Speaker 3 — 40s] The model is a deliberately compact hybrid: two small convolution "
     "blocks learn local motion patterns, and a two-layer bidirectional GRU models the "
@@ -415,7 +418,7 @@ add({"type": "content", "kicker": "ArSL model", "title": "A compact CNN-GRU, siz
     "sixty frames — and average their probabilities before a confidence gate, which smooths "
     "out any single bad window.")
 
-add({"type": "content", "kicker": "ArSL model", "title": "Why bidirectional recurrence",
+add({"type": "content", "kicker": "ArSL model", "title": "Why bidirectional recurrence", "eq": EQ("eq35"),
      "section": "ArSL model", "layout": "bottom", "images": [A("Figure4_13")],
      "bullets": [
         ("Full context.", "Forward and backward passes are concatenated — every prediction sees the whole sign."),
@@ -794,6 +797,23 @@ add({"type": "table", "kicker": "Backup — for Q&A", "title": "Full training co
     "[Backup — not presented] Complete training configurations for both models, kept for "
     "committee questions. Everything here matches Chapter 4 of the thesis exactly; if asked "
     "about any single value, the relevant thesis section is 4.2.4 for ASL and 4.3.4 for ArSL.")
+
+import re as _re
+
+
+def _strip_cites(o):
+    if isinstance(o, str):
+        return _re.sub(r"\s*\[\d+\](\s*[–-]\s*\[\d+\])?(,\s*\[\d+\])*", "", o)
+    if isinstance(o, tuple):
+        return tuple(_strip_cites(x) for x in o)
+    if isinstance(o, list):
+        return [_strip_cites(x) for x in o]
+    if isinstance(o, dict):
+        return {k: (v if k in ("images", "eq") else _strip_cites(v)) for k, v in o.items()}
+    return o
+
+
+S = [_strip_cites(m) for m in S]
 
 assert len(S) == 70, f"slide count = {len(S)}"
 
