@@ -54,8 +54,9 @@ colorblind ΔE, contrast): the teal/sand pair passes all checks with CVD ΔE ≈
   clip per class, pair *counts* cannot exceed 1, so panel (a) ranks pairs by the
   model's **confidence in the wrong sign** (because→for 0.91, home→head 0.85,
   listen→hear 0.83, chin→thirsty 0.79 … including the mutual cut↔scissors
-  confusion), and panel (b) shows **prediction sinks** (arm attracts 7 false
-  predictions; clean 4). These pairs are visually/semantically plausible —
+  confusion), (The prediction-sinks panel — arm attracting 7 false predictions, clean 4 —
+  was dropped from the final figure at the team's request; the data remains in
+  `signasl_eval_rows.json` and the stats below stay citable.) These pairs are visually/semantically plausible —
   listen/hear and cut/scissors are near-identical signs — which is exactly what
   a credible confusion analysis should show.
   Suggested caption: *"Figure 5.3: ASL confusion analysis on the cross-dataset
@@ -66,3 +67,15 @@ colorblind ΔE, contrast): the teal/sand pair passes all checks with CVD ΔE ≈
   40.9% of errors keep the true sign within the top 5; median confidence is
   **0.776 for correct vs 0.183 for wrong** predictions — direct empirical
   justification for the confidence gate in §4.6.
+
+## Final deliverables
+
+- `Together_Graduation_Thesis_restyled.pdf` — the thesis with all 9 restyled
+  figures patched in and the old figure images **scrubbed from the file**
+  (forensically verified: no original figure bytes remain; all 260 hyperlinks
+  intact). Fig 5.3 is the single-panel confidence-ranked version.
+- `Together_Graduation_Thesis_restyled.docx` — an editable Word reconstruction
+  converted from that PDF (pdf2docx). Layout is a faithful approximation; the
+  TOC/List-of-Figures are static text (no live fields) and styles are per-run
+  rather than named styles. Fine for editing text and figures going forward;
+  if the original authoring .docx resurfaces, prefer it as the source of truth.
