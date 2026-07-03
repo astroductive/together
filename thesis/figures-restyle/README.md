@@ -33,12 +33,14 @@ colorblind ΔE, contrast): the teal/sand pair passes all checks with CVD ΔE ≈
 
 ## Re-exporting the remaining figures in the same style
 
-- **Figures 4.10 / 4.16 (training curves):** call
-  `plot_training_curves(epochs, train, val, ylabel, outfile, final_annotation="val ≈ 0.80")`
-  from your training notebook with the real history arrays. This fixes the
-  current inconsistency where 4.10 uses orange/blue and 4.16 green/red for the
-  same two series (train = sand, validation = teal, everywhere), and the clipped
-  top tick on 4.10b.
+- **Figures 4.10 / 4.16 (training curves): DONE** — `fig4_10a/b_asl_*.png` and
+  `fig4_16a/b_arsl_*.png` were produced by **digitizing the published curves out
+  of the thesis PDF** (axis-tick calibration + color-mask curve tracing;
+  extracted data in `digitized_curves.json`, accuracy ±1–2% of a pixel) and
+  re-rendering them in this style. Same real shape — train = sand,
+  validation = teal everywhere — fixing the orange/blue vs green/red flip and
+  4.10b's clipped top tick. If you ever re-train, prefer re-exporting from the
+  real history with `plot_training_curves(...)`.
 - **Figure 5.2 (ArSL confusion matrix):** call
   `plot_confusion_matrix(matrix, labels, outfile)` with the real 20×20 matrix —
   single-hue teal sequential ramp instead of the green colormap.
