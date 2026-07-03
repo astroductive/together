@@ -263,7 +263,92 @@ def fig_f18():
     plt.close(fig)
 
 
-for fn in (fig_f5, fig_f6, fig_f15, fig_f16, fig_f17, fig_f18):
+# ───────────────────────── F14 ER diagram (on-brand rebuild) ─────────────
+def fig_f14():
+    fig, ax = plt.subplots(figsize=(13, 8.6))
+    ax.set_xlim(0, 13); ax.set_ylim(0, 9); ax.axis("off")
+
+    def badge(bx, by, txt, fc):
+        w = 0.46; h = 0.30
+        ax.add_patch(FancyBboxPatch((bx, by - h / 2), w, h,
+                     boxstyle="round,pad=0.01,rounding_size=0.06",
+                     linewidth=0, facecolor=fc))
+        ax.text(bx + w / 2, by, txt, ha="center", va="center",
+                fontsize=7.6, color="white", fontweight="bold")
+
+    def entity(x, top, w, title, hfc, hec, fields):
+        header_h = 0.64; row_h = 0.52
+        total_h = header_h + row_h * len(fields)
+        bottom = top - total_h
+        ax.add_patch(FancyBboxPatch((x, bottom), w, total_h,
+                     boxstyle="round,pad=0.02,rounding_size=0.10",
+                     linewidth=1.7, edgecolor=hec, facecolor="white"))
+        ax.add_patch(FancyBboxPatch((x + 0.04, top - header_h), w - 0.08, header_h - 0.03,
+                     boxstyle="round,pad=0.01,rounding_size=0.08",
+                     linewidth=0, facecolor=hfc))
+        ax.text(x + w / 2, top - header_h / 2, title, ha="center", va="center",
+                fontsize=12, fontweight="bold", color="#11233a")
+        cx_type, cx_name, cx_key, cx_note = x + 0.20, x + 1.10, x + 2.55, x + 3.15
+        for i, (name, typ, key, note) in enumerate(fields):
+            ry = top - header_h - row_h * (i + 0.5)
+            if i > 0:
+                ax.plot([x + 0.08, x + w - 0.08], [top - header_h - row_h * i] * 2,
+                        color="#d7dee6", lw=0.8)
+            ax.text(cx_type, ry, typ, ha="left", va="center", fontsize=8.6,
+                    color="#5b6b7d", style="italic")
+            ax.text(cx_name, ry, name, ha="left", va="center", fontsize=9.3,
+                    color="#11233a", fontweight="bold" if key else "normal")
+            if key:
+                badge(cx_key, ry, key, {"PK": AMBER_E, "FK": BLUE_E, "UK": PURP_E}.get(key, GREY_E))
+            if note:
+                ax.text(cx_note, ry, note, ha="left", va="center", fontsize=8.2, color="#44506a")
+        return dict(bottom=bottom, top=top, cx=x + w / 2)
+
+    users = entity(0.3, 8.55, 5.6, "users", BLUE, BLUE_E, [
+        ("id", "int", "PK", ""),
+        ("full_name", "str", "", "nullable"),
+        ("email", "str", "UK", "unique, indexed"),
+        ("hashed_password", "str", "", "Argon2id"),
+        ("role", "str", "", "default 'Speaker'"),
+        ("created_at", "datetime", "", ""),
+    ])
+    refresh = entity(0.3, 4.05, 5.6, "refresh_tokens", PURP, PURP_E, [
+        ("id", "int", "PK", ""),
+        ("jti", "str", "UK", "unique, indexed"),
+        ("user_id", "int", "FK", "→ users.id, indexed"),
+        ("revoked", "bool", "", "default false"),
+        ("expires_at", "datetime", "", ""),
+        ("created_at", "datetime", "", ""),
+    ])
+    signs = entity(6.6, 8.55, 6.2, "signs", GREEN, GREEN_E, [
+        ("id", "int", "PK", ""),
+        ("word", "str", "", "indexed"),
+        ("language", "str", "", "'en' | 'ar', indexed"),
+        ("video_filename", "str", "", "nullable"),
+        ("landmark_file", "str", "", "path to .npz on disk"),
+        ("frame_count", "int", "", ""),
+        ("embedding", "vector", "", "pgvector(384), HNSW cosine"),
+    ])
+
+    # relationship: users 1 —— ∞ refresh_tokens
+    ax.plot([users["cx"], refresh["cx"]], [users["bottom"], refresh["top"]],
+            color=GREY_E, lw=1.7)
+    ax.text(users["cx"] + 0.14, users["bottom"] - 0.20, "1", fontsize=11,
+            color=GREY_E, fontweight="bold")
+    ax.text(refresh["cx"] + 0.14, refresh["top"] + 0.18, "∞", fontsize=13,
+            color=GREY_E, fontweight="bold")
+    ax.text(users["cx"] + 0.22, (users["bottom"] + refresh["top"]) / 2, "has",
+            fontsize=9.6, color="#11233a", style="italic")
+    ax.text(signs["cx"], signs["bottom"] - 0.34,
+            "signs is standalone (no foreign key); raw landmark sequences live on disk as .npz",
+            ha="center", fontsize=8.2, color="#5b6b7d", style="italic")
+
+    fig.tight_layout()
+    fig.savefig(os.path.join(OUT, "F14_er.png"), bbox_inches="tight")
+    plt.close(fig)
+
+
+for fn in (fig_f5, fig_f6, fig_f14, fig_f15, fig_f16, fig_f17, fig_f18):
     fn()
     print("done", fn.__name__)
 print("ALL FIGURES GENERATED")
