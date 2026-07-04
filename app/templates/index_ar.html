@@ -83,8 +83,8 @@
     };
   }
 </script>
-<script src="https://cdn.jsdelivr.net/npm/@mediapipe/holistic@0.5.1675471629/holistic.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils@0.3.1675466124/drawing_utils.js"></script>
+<script src="/static/vendor/mediapipe/holistic/holistic.js"></script>
+<script src="/static/vendor/mediapipe/drawing_utils/drawing_utils.js"></script>
 <script src="/static/js/socket.io.js"></script>
 <script src="/static/js/sign-diag.js"></script>
 {% endblock %}
@@ -1605,26 +1605,7 @@ button.is-busy{opacity:.6;cursor:progress}
         return;
       }
 
-      // 1. ADD THIS WRAPPER
-      if (!holistic) {
-        holistic = new Holistic({
-          locateFile: file => `https://cdn.jsdelivr.net/npm/@mediapipe/holistic@0.5.1675471629/${file}`
-        });
-
-        holistic.setOptions({
-          modelComplexity: 1,
-          // selfieMode MUST stay false: true flips the image BEFORE the graph
-          // runs, feeding the models mirrored coords with swapped hands —
-          // measured ASL 66.5%→51%, ArSL 95%→10% (scripts/model_harness.py).
-          // The selfie view is done in CSS (video + skeleton canvas flipped).
-          selfieMode: false,
-          smoothLandmarks: true,
-          minDetectionConfidence: 0.5,
-          minTrackingConfidence: 0.5,
-        });
-
-        holistic.onResults(onHolisticResults);
-      }
+      ensureHolistic();  // created + pre-warmed at page load; no-op here normally
 
       if (inMeeting && meetingCamStream && stream === meetingCamStream) {
         console.log("[Camera] Reusing meeting stream frame loop...");
@@ -1672,7 +1653,8 @@ button.is-busy{opacity:.6;cursor:progress}
             _holisticBusy = true;
             // Must clear the guard if send() rejects (WASM abort / transient error),
             // otherwise the loop early-returns forever and the camera freezes.
-            try { await holistic.send({ image: video }); }
+            const _t0 = performance.now();
+            try { await holistic.send({ image: video }); _recordMpLatency(performance.now() - _t0); }
             catch (e) { console.error("[Camera] Holistic send error:", e); _holisticBusy = false; }
           }
           requestAnimationFrame(runSoloFrame);
@@ -1760,6 +1742,72 @@ button.is-busy{opacity:.6;cursor:progress}
   // wait for 30 frames of context before inference
   // rolling window of landmark frames
 
+
+  // ── Holistic lifecycle: shared creation + page-load pre-warm ──
+  // WASM fetch + graph JIT cost seconds and used to happen on the FIRST
+  // CAMERA FRAME — i.e. while the user's hand was already raised (measured
+  // 5-10s to first skeleton). Creating the engine and pushing one blank
+  // frame through it during page idle makes Start Camera near-instant.
+  let _mpComplexity = 1;
+  function ensureHolistic() {
+    if (holistic || !window.Holistic) return holistic;
+    holistic = new Holistic({
+      locateFile: file => `/static/vendor/mediapipe/holistic/${file}`
+    });
+    holistic.setOptions({
+      modelComplexity: _mpComplexity, // full model; auto-drops to lite when the machine can't keep up
+      // selfieMode MUST stay false: true flips the image BEFORE the graph
+      // runs, feeding the models mirrored coords with swapped hands —
+      // measured ASL 66.5%→51%, ArSL 95%→10% (scripts/model_harness.py).
+      // The selfie view is done in CSS (video + skeleton canvas flipped).
+      selfieMode: false,
+      smoothLandmarks: true,
+      minDetectionConfidence: 0.5,
+      minTrackingConfidence: 0.5,
+    });
+    holistic.onResults(onHolisticResults);
+    return holistic;
+  }
+
+  let _mpWarmed = false;
+  function prewarmHolistic() {
+    if (_mpWarmed || cameraOn || !window.Holistic) return;
+    const h = ensureHolistic();
+    if (!h) return;
+    _mpWarmed = true;
+    const c = document.createElement('canvas');
+    c.width = 320; c.height = 180;
+    c.getContext('2d').fillRect(0, 0, 320, 180);
+    _holisticBusy = true;
+    h.send({ image: c }).catch(() => {}).finally(() => { _holisticBusy = false; });
+    console.log('[Camera] Holistic pre-warm started (WASM + graph init off the user timeline)');
+  }
+  if ('requestIdleCallback' in window) requestIdleCallback(() => prewarmHolistic(), { timeout: 4000 });
+  else setTimeout(prewarmHolistic, 1500);
+
+  // Adaptive performance: if this machine can't run the FULL model near
+  // real-time (median >140ms/frame ≈ <7fps — the owner's machine measured
+  // ~140-190ms), drop BOTH pipelines to the lite model once. Denser frames
+  // help the recognition models and skeleton tracking far more than the
+  // small landmark-precision loss costs.
+  const _mpLat = [];
+  let _mpDowngraded = false;
+  function _recordMpLatency(ms) {
+    if (_mpDowngraded) return;
+    _mpLat.push(ms);
+    if (_mpLat.length < 30) return;
+    const sorted = [..._mpLat].sort((a, b) => a - b);
+    const median = sorted[15];
+    _mpLat.length = 0;
+    if (median > 140) {
+      _mpDowngraded = true;
+      _mpComplexity = 0;
+      try { if (holistic) holistic.setOptions({ modelComplexity: 0 }); } catch (_) {}
+      try { if (s2spHolistic) s2spHolistic.setOptions({ modelComplexity: 0 }); } catch (_) {}
+      if (window.SignDiag) SignDiag.event('vision', 'mp_lite_mode', { medianMs: Math.round(median) });
+      console.warn(`[Camera] Holistic median ${Math.round(median)}ms/frame — switched to the lite model for real-time tracking.`);
+    }
+  }
 
   // ── Rest-pose gate ─────────────────────────────────────────
   // Suppresses inference while every tracked hand is BOTH below shoulder level
@@ -4065,11 +4113,11 @@ button.is-busy{opacity:.6;cursor:progress}
       }
       if (!s2spHolistic) {
         s2spHolistic = new Holistic({
-          locateFile: file => `https://cdn.jsdelivr.net/npm/@mediapipe/holistic@0.5.1675471629/${file}`
+          locateFile: file => `/static/vendor/mediapipe/holistic/${file}`
         });
 
         s2spHolistic.setOptions({
-          modelComplexity: 1,
+          modelComplexity: _mpComplexity, // inherits the adaptive lite-mode choice
           selfieMode: false,  // must match training orientation — see the vision pipeline note
           smoothLandmarks: true,
           minDetectionConfidence: 0.5,
