@@ -88,6 +88,7 @@
 <script src="/static/js/socket.io.js"></script>
 <script src="/static/js/sign-diag.js"></script>
 <script src="/static/js/landmark-engine.js"></script>
+<script src="/static/js/meeting-live.js?v=1"></script>
 {% endblock %}
 
 
@@ -1487,6 +1488,7 @@ button.is-busy{opacity:.6;cursor:progress}
     streamSocket.on('sign_conf', (d) => {
       if (!d) return;
       if (window.SignDiag) SignDiag.event(d.module, 'sign_conf', d);
+      if (inMeeting && window.MeetLive && MeetLive.ready()) MeetLive.noteSignEvent('conf');
       const mod = d.module === 'speech' ? 's2sp' : 'hs';
       if (mod === 'hs' && (!cameraOn || !_hsHandsPresent)) return;
       if (mod === 's2sp' && (!s2spCameraOn || !_s2spHandsPresent)) return;
@@ -1500,6 +1502,7 @@ button.is-busy{opacity:.6;cursor:progress}
     streamSocket.on('sign_detected', (d) => {
       if (!d || !d.word) return;
       if (window.SignDiag) SignDiag.event(d.module, 'sign_detected', d);
+      if (inMeeting && window.MeetLive && MeetLive.ready()) MeetLive.noteSignEvent('detected');
       if (d.module === 'speech') {
         if (s2spCameraOn) {
           if (window._setDetectState) _setDetectState('locked', 'مؤكّد', 's2sp');
@@ -1623,16 +1626,28 @@ button.is-busy{opacity:.6;cursor:progress}
         // starves the compositor and makes BOTH feeds choppy. Throttle inference
         // hard while in a meeting so the video stays smooth.
         let _mLastFrameMs = 0;
-        const _MEET_FRAME_INTERVAL = 1000 / 10; // 10fps inference in-meeting
+        // ADAPTIVE duty cycle: on machines where the landmark model is slow
+        // (>100ms/frame, CPU WASM), a fixed 10fps means the synchronous
+        // send() occupies the main thread almost continuously — the local
+        // preview AND the outgoing WebRTC encode both starve, which is why
+        // the signer's video looked slow on their own screen and on every
+        // peer's. Track an EMA of send() cost and keep inference below
+        // ~40% main-thread duty so the video pipeline always has headroom.
+        let _mInterval = 100;      // start at 10fps
+        let _mEma = 0;
         const runFrame = async () => {
           if (!cameraOn || !inMeeting) return;
           const now = performance.now();
-          if (now - _mLastFrameMs >= _MEET_FRAME_INTERVAL &&
+          if (now - _mLastFrameMs >= _mInterval &&
               video.readyState >= 2 && holistic && !_holisticBusy) {
             _mLastFrameMs = now;
             _holisticBusy = true;
+            const _t0 = performance.now();
             try {
               await holistic.send({ image: video });
+              const _cost = performance.now() - _t0;
+              _mEma = _mEma ? (_mEma * 0.8 + _cost * 0.2) : _cost;
+              _mInterval = Math.min(700, Math.max(100, _mEma * 2.5));
             } catch (e) {
               console.error("[Camera] Holistic send frame error:", e);
               _holisticBusy = false;
@@ -2110,14 +2125,13 @@ button.is-busy{opacity:.6;cursor:progress}
     // In a meeting, the Signer buffers detected words and composes a sentence on
     // demand (Gemini) — we do NOT spam the recipient with raw gloss words.
     if (inMeeting && socket && isDeafHohUser) {
-      if (!Array.isArray(window.__meetGlossBuf)) window.__meetGlossBuf = [];
-      window.__meetGlossBuf.push(word);
-      renderMeetGloss();
+      if (window.MeetLive && MeetLive.ready()) MeetLive.onLocalSign(word);
     } else if (inMeeting && socket) {
       const roomId = currentMeetingRoom || document.getElementById('meeting-room-id').value.trim() || 'general';
       renderMeetingSentence(word, userRole, true);
       socket.emit('translate_sentence', {
         text: word, room: roomId, mode: 'sign_word', senderRole: userRole,
+        senderName: displayName,
       });
     }
   }
@@ -2273,16 +2287,8 @@ button.is-busy{opacity:.6;cursor:progress}
   }
 
   function renderMeetGloss() {
-    if (!Array.isArray(window.__meetGlossBuf)) window.__meetGlossBuf = [];
-    const buf = window.__meetGlossBuf;
-    renderGlossChips(
-      document.getElementById('meeting-gloss-preview'),
-      buf,
-      (i) => { buf.splice(i, 1); renderMeetGloss(); },
-      'لا توجد إشارات'
-    );
-    const cbtn = document.getElementById('meeting-compose-btn');
-    if (cbtn) cbtn.disabled = buf.length === 0;
+    // Wrapping chips + live "is signing" relay live in MeetLive.
+    if (window.MeetLive && MeetLive.ready()) MeetLive.renderLocalGloss();
   }
 
   function renderS2spGloss() {
@@ -2974,6 +2980,11 @@ button.is-busy{opacity:.6;cursor:progress}
       const corner = document.getElementById('meeting-avatar-corner');
       if (corner) corner.classList.remove('visible');
     }
+    // Overlay "connection interrupted" on this tile when its track mutes/ends
+    // or the pc drops to 'disconnected' — a dead peer no longer looks frozen.
+    if (window.MeetLive && MeetLive.ready()) {
+      MeetLive.watchTile(sid, video, (peers[sid] || {}).pc);
+    }
     updateParticipantsUI();
   }
 
@@ -3033,66 +3044,12 @@ button.is-busy{opacity:.6;cursor:progress}
     };
   }
 
+  // Captions, attribution, avatar queueing and speech-out all live in
+  // MeetLive (shared EN/AR — /static/js/meeting-live.js). This wrapper keeps
+  // the historical call sites working.
   function renderMeetingSentence(text, senderRole, localEcho = false) {
-    const sentence = document.getElementById('remote-sentence');
-    const payloadText = (text || '').trim();
-    if (!sentence || !payloadText) return;
-
-    sentence.textContent = payloadText;
-    sentence.style.color = '#111111';
-
-    const historyEl = document.getElementById('meeting-caption-history');
-    if (historyEl) {
-      const ph = historyEl.querySelector('.d-meet-remote-text');
-      if (ph && ph.style.color === 'var(--faint)') ph.remove();
-      const msg = document.createElement('div');
-      msg.className = 'd-meet-remote-text';
-      msg.style.cssText = 'font-size:13px;padding:4px 0;border-bottom:1px solid var(--border);display:flex;gap:6px;align-items:flex-start';
-      const time = new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});
-      const txtSpan = document.createElement('span');
-      txtSpan.style.flex = '1';
-      txtSpan.innerHTML = `<span style="color:var(--faint);font-size:10px;font-family:var(--font-mono)">${time}</span> <span class="d-hist-text"></span>`;
-      txtSpan.querySelector('.d-hist-text').textContent = payloadText || text;
-      msg.appendChild(txtSpan);
-      if (localEcho) {
-        const editBtn = document.createElement('button');
-        editBtn.textContent = '✎';
-        editBtn.className = 't-btn t-btn--ghost';
-        editBtn.style.cssText = 'padding:0 6px;font-size:11px';
-        editBtn.onclick = () => editMeetingHistory(msg);
-        msg.appendChild(editBtn);
-      }
-      historyEl.appendChild(msg);
-      historyEl.scrollTop = historyEl.scrollHeight;
-    }
-
-    const overlay = document.getElementById('meeting-subtitle-overlay');
-    if (overlay) {
-      overlay.textContent = payloadText;
-      overlay.style.color = '#ffffff';
-    }
-
-    if (localEcho) return;
-
-    const flags = getMeetingRoleFlags(senderRole);
-    if (isDeafHohUser && flags.isSpeaker) {
-      // The Deaf user should SEE THE SIGN, not read text. Promote the avatar
-      // corner above the peer video while it plays.
-      const corner = document.getElementById('meeting-avatar-corner');
-      const remoteVideo = document.getElementById('remote_video');
-      if (corner) {
-        corner.classList.add('visible');
-        corner.style.zIndex = '20';
-        if (remoteVideo) remoteVideo.style.opacity = '0.25';
-      }
-      playMeetingAvatarFromText(payloadText);
-    }
-
-    if (!isDeafHohUser && flags.isDeaf && meetingSpeechOutOn && 'speechSynthesis' in window) {
-      const utt = new SpeechSynthesisUtterance(payloadText);
-      utt.rate = 1.0;
-      utt.volume = 1.0;
-      window.speechSynthesis.speak(utt);
+    if (window.MeetLive && MeetLive.ready()) {
+      MeetLive.addCaption({ text, senderRole, localEcho: !!localEcho });
     }
   }
 
@@ -3118,6 +3075,7 @@ button.is-busy{opacity:.6;cursor:progress}
       renderMeetingSentence(sentence, userRole, true);
       socket.emit('translate_sentence', {
         text: sentence, room: roomId, mode: 'sign_sentence', senderRole: userRole,
+        senderName: displayName,
       });
       setStatus('تم إرسال الجملة', true);
     } catch (err) {
@@ -3284,23 +3242,9 @@ button.is-busy{opacity:.6;cursor:progress}
           speechBtn.textContent = meetingSpeechOutOn ? '🔊 Read captions' : '🔇 Captions only';
         }
 
-        const corner = document.getElementById('meeting-avatar-corner');
-        const canvas = document.getElementById('meeting-avatar-canvas');
-        const remoteVid = document.getElementById('remote_video');
-        const remoteHasVideo = remoteVid && remoteVid.style.display === 'block';
-        if (corner && canvas) {
-          // Show the speaker avatar only as a fallback when the peer is NOT
-          // sending a real camera stream — otherwise it covers their video.
-          if (remoteHasVideo) {
-            corner.classList.remove('visible');
-          } else {
-            corner.classList.add('visible');
-            const ctx = canvas.getContext('2d');
-            canvas.width = 440;
-            canvas.height = 320;
-            drawAuraAvatar(ctx, null, canvas.width, canvas.height);
-          }
-        }
+        // (the legacy avatar corner that used to be drawn over the LOCAL
+        // camera tile here is retired — MeetLive gives the avatar its own
+        // tile in the video grid, with a sentence queue.)
         const composeBar = document.getElementById('meeting-compose-bar');
         if (composeBar) composeBar.style.display = 'none';
       }
@@ -3330,61 +3274,16 @@ button.is-busy{opacity:.6;cursor:progress}
   }
 
   async function playMeetingAvatarFromText(text) {
-    if (!text || meetingAvatarPlaying) return;
-
-    const corner = document.getElementById('meeting-avatar-corner');
-    const canvas = document.getElementById('meeting-avatar-canvas');
-    if (!corner || !canvas) return;
-
-    const ctx = canvas.getContext('2d');
-    canvas.width = 440;
-    canvas.height = 320;
-
-    const words = text.split(/\s+/).filter(Boolean);
-    if (words.length === 0) return;
-
-    try {
-      meetingAvatarPlaying = true;
-      corner.classList.add('visible');
-      drawAuraAvatar(ctx, null, canvas.width, canvas.height);
-
-      const res = await authFetch('/api/signs_ar/batch', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ words }),
-      });
-      if (!res.ok) return;
-
-      const data = await res.json();
-      if (!data.found || data.found.length === 0) {
-        setStatus('لا يوجد مقطع إشارة لـ "' + text + '"', false);
-        return;
-      }
-
-      for (const item of data.found) {
-        const lms = item.landmarks || [];
-        const n = item.frame_count || lms.length;
-        for (let f = 0; f < n; f++) {
-          const flat = flattenLandmarkFrame(lms[f]);
-          drawAuraAvatar(ctx, flat, canvas.width, canvas.height);
-          await sleep(60);
-        }
-        await sleep(300);
-      }
-    } catch (_) {
-      // no-op
-    } finally {
-      meetingAvatarPlaying = false;
-      const _rv = document.getElementById('remote_video');
-      if (_rv) _rv.style.opacity = '1';
-    }
+    // The avatar now has its OWN tile in the video grid with a sentence
+    // queue (MeetLive) — the old corner overlay covered the local camera and
+    // silently DROPPED any sentence that arrived while one was playing.
+    if (window.MeetLive && MeetLive.ready()) MeetLive.enqueueAvatar(text);
   }
 
   function toggleMeetingSpeechOut() {
-    meetingSpeechOutOn = !meetingSpeechOutOn;
-    const btn = document.getElementById('meeting-speech-out-btn');
-    btn.classList.toggle('on', meetingSpeechOutOn);
-    btn.textContent = meetingSpeechOutOn ? '🔊 Read captions' : '🔇 Captions only';
+    // MeetLive speaks captions through playLocalTts (browser voice with the
+    // Gemini backend fallback), so Arabic is actually read aloud too.
+    if (window.MeetLive && MeetLive.ready()) meetingSpeechOutOn = MeetLive.toggleSpeechOut();
   }
 
   async function sendMeetingText() {
@@ -3403,6 +3302,7 @@ button.is-busy{opacity:.6;cursor:progress}
       room: currentMeetingRoom,
       mode: 'speaker_text',
       senderRole: userRole,
+      senderName: displayName,
     });
     renderMeetingSentence(text, userRole, true);
     setStatus('Message sent', true);
@@ -3677,6 +3577,7 @@ button.is-busy{opacity:.6;cursor:progress}
         });
         setStatus(`Meeting: ${roomId}`, true);
         setMeetingUiState(true);
+        if (window.MeetLive && MeetLive.ready()) MeetLive.onJoined();
       };
 
       if (socket && socket.connected && inMeeting && currentMeetingRoom && currentMeetingRoom !== roomId) {
@@ -3715,7 +3616,20 @@ button.is-busy{opacity:.6;cursor:progress}
 
         socket.on('remote_sentence', (data) => {
           const payload = typeof data === 'string' ? { text: data } : (data || {});
-          renderMeetingSentence(payload.text, payload.senderRole, false);
+          if (window.MeetLive && MeetLive.ready()) {
+            MeetLive.addCaption({
+              text: payload.text,
+              senderSid: payload.sender_sid,
+              senderName: payload.senderName,
+              senderRole: payload.senderRole,
+              localEcho: false,
+            });
+          }
+        });
+
+        // Live signing progress from the signer (before the sentence is composed)
+        socket.on('meeting_gloss', (data) => {
+          if (window.MeetLive && MeetLive.ready()) MeetLive.onRemoteGloss(data);
         });
 
         // ── Mesh signaling ──
@@ -3745,6 +3659,7 @@ button.is-busy{opacity:.6;cursor:progress}
           if (sid && peers[sid]) {
             peers[sid].name = data.name;
             peers[sid].role = data.role;
+            if (window.MeetLive && MeetLive.ready()) MeetLive.onPeerNamed(sid);
           }
           updateParticipantsUI();
           if (socket && socket.connected) {
@@ -3762,6 +3677,7 @@ button.is-busy{opacity:.6;cursor:progress}
           if (sid && peers[sid]) {
             peers[sid].name = data.name;
             peers[sid].role = data.role;
+            if (window.MeetLive && MeetLive.ready()) MeetLive.onPeerNamed(sid);
           }
           updateParticipantsUI();
         });
@@ -3769,6 +3685,7 @@ button.is-busy{opacity:.6;cursor:progress}
         socket.on('peer_left', (data) => {
           const sid = data && data.sid;
           if (sid) {
+            if (window.MeetLive && MeetLive.ready()) MeetLive.onPeerLeft(sid);
             removePeer(sid);
           } else {
             // Legacy no-sid → clear all peers.
@@ -3886,22 +3803,9 @@ button.is-busy{opacity:.6;cursor:progress}
   }
 
   function leaveMeeting() {
-    if (meetingMicRec) {
-      try { meetingMicRec.stop(); } catch (_) { }
-      meetingMicRec = null;
-    }
-    if (meetingMicMediaRec && meetingMicMediaRec.state !== 'inactive') {
-      try { meetingMicMediaRec.stop(); } catch (_) { }
-      meetingMicMediaRec = null;
-    }
-    meetingMicAudioChunks = [];
-    meetingMicOn = false;
-    const micBtn = document.getElementById('meeting-mic-btn');
-    if (micBtn) {
-      micBtn.textContent = '🔇 Mic Off';
-      micBtn.style.background = '';
-      micBtn.style.color = '';
-    }
+    // Mic, captions, gloss, avatar queue and toasts are MeetLive's — tear
+    // them down first so nothing keeps recording or playing after the call.
+    if (window.MeetLive && MeetLive.ready()) MeetLive.onLeave();
 
     // Close all mesh peer connections and clear the dynamic remote tiles.
     Object.keys(peers).forEach(removePeer);
@@ -3944,10 +3848,7 @@ button.is-busy{opacity:.6;cursor:progress}
     // Leave the input empty: writing 'general' back gets sanitized to
     // 'GENER' (A-Z, max 5) on the next join and lands in the wrong room.
     document.getElementById('meeting-room-id').value = '';
-    document.getElementById('remote-sentence').textContent = 'No messages yet.';
-    document.getElementById('remote-sentence').style.color = 'var(--gray-500)';
-    const _histEl = document.getElementById('meeting-caption-history');
-    if (_histEl) { _histEl.innerHTML = '<div class="d-meet-remote-text" style="color:var(--faint);font-size:12px">لا توجد رسائل بعد.</div>'; }
+    // (caption history is reset inside MeetLive.onLeave above)
     const _rvOff = document.getElementById('remote_video');
     if (_rvOff) _rvOff.style.opacity = '1';
     setMeetingUiState(false);
@@ -3962,95 +3863,32 @@ button.is-busy{opacity:.6;cursor:progress}
   }
 
   async function toggleMeetingMic() {
-    if (!socket || !inMeeting || !socket.connected) {
-      meetingMicOn = false;
-      setStatus('يجب الانضمام إلى الاجتماع أولاً', false);
-      renderMobileQuickActions();
-      return;
-    }
-
-    const btn = document.getElementById('meeting-mic-btn');
-
-    // Arabic push-to-talk via Gemini STT
-    if (meetingMicMediaRec && meetingMicMediaRec.state !== 'inactive') {
-      // Second press: stop and transcribe
-      meetingMicMediaRec.stop();
-      meetingMicOn = false;
-      btn.textContent = '🔇 ميك مغلق';
-      btn.style.background = 'rgba(255,255,255,0.1)';
-      btn.style.color = 'rgba(255,255,255,0.5)';
-      setStatus('جاري التحويل…', true);
-      renderMobileQuickActions();
-      return;
-    }
-
-    // First press: start recording
-    const mediaCheck = ensureMediaApi('Microphone');
-    if (!mediaCheck.ok) {
-      setStatus('الميكروفون غير متاح', false);
-      alert(mediaCheck.message);
-      renderMobileQuickActions();
-      return;
-    }
-
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      meetingMicAudioChunks = [];
-      meetingMicMediaRec = new MediaRecorder(stream);
-
-      meetingMicMediaRec.ondataavailable = (e) => {
-        if (e.data.size > 0) meetingMicAudioChunks.push(e.data);
-      };
-
-      meetingMicMediaRec.onstop = async () => {
-        stream.getTracks().forEach(t => t.stop());
-        if (meetingMicAudioChunks.length === 0) return;
-
-        const audioBlob = new Blob(meetingMicAudioChunks, { type: 'audio/webm' });
-        const formData = new FormData();
-        formData.append('file', audioBlob, 'meeting_speech.webm');
-        formData.append('language', 'arabic');
-
-        try {
-          const res = await authFetch('/api/stt', { method: 'POST', body: formData });
-          if (!res.ok) throw new Error('STT failed');
-          const sttData = await res.json();
-          const text = (sttData.text || '').trim();
-          if (text && socket && inMeeting) {
-            const roomId = currentMeetingRoom || document.getElementById('meeting-room-id').value.trim() || 'general';
-            renderMeetingSentence(text, userRole, true);
-            socket.emit('translate_sentence', {
-              text,
-              room: roomId,
-              mode: isSpeakerUser ? 'speaker_speech' : 'participant_speech',
-              senderRole: userRole,
-            });
-            setStatus('تم إرسال الرسالة', true);
-          } else {
-            setStatus('لم يتم اكتشاف كلام', false);
-          }
-        } catch (err) {
-          console.error('[Meeting STT Error]', err);
-          setStatus('خطأ في التحويل', false);
-        } finally {
-          meetingMicMediaRec = null;
-          meetingMicAudioChunks = [];
-          btn.textContent = '🔇 ميك مغلق';
-          btn.style.background = 'rgba(255,255,255,0.1)';
-          btn.style.color = 'rgba(255,255,255,0.5)';
-        }
-      };
-
-      meetingMicMediaRec.start();
-      meetingMicOn = true;
-      btn.textContent = '🔴 تسجيل… (اضغط للإيقاف)';
-      btn.style.background = 'rgba(220,50,50,0.25)';
-      btn.style.color = '#ff6b6b';
-      setStatus('جاري التسجيل…', true);
-    } catch (err) {
-      setStatus('تم رفض الإذن بالميكروفون', false);
-    }
+    // The meeting microphone lives in MeetLive now: device picker + live
+    // level meter and push-to-talk MediaRecorder -> /api/stt (Gemini, Arabic).
+    if (window.MeetLive && MeetLive.ready()) await MeetLive.toggleMic();
     renderMobileQuickActions();
+  }
+
+  // ── MeetLive: the shared live-meeting experience layer ──
+  if (window.MeetLive) {
+    MeetLive.init({
+      lang: 'ar',
+      getSocket: () => socket,
+      isInMeeting: () => inMeeting,
+      getRoom: () => currentMeetingRoom || 'general',
+      getRole: () => userRole,
+      isSigner: () => isDeafHohUser,
+      getDisplayName: () => displayName,
+      getPeers: () => peers,
+      authFetch: (u, o) => authFetch(u, o),
+      playTts: (t, l) => playLocalTts(t, l),
+      drawAvatar: (ctx, flat, w, h) => drawAuraAvatar(ctx, flat, w, h),
+      flattenFrame: (f) => flattenLandmarkFrame(f),
+      sentenceToGloss: (s, l) => sentenceToGlossWords(s, l),
+      signBatchUrl: '/api/signs_ar/batch',
+      getCamLangSelect: () => document.getElementById('cam-language-select'),
+      setStatus: (m, ok) => setStatus(m, ok),
+    });
   }
 
   initMeetingFromUrl();
