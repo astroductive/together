@@ -179,8 +179,13 @@
       '.dx-fab--wide{width:auto;padding:0 12px;font-size:13px;font-weight:600}',
       /* On phones the fixed bottom nav (~56-64px + safe area, z-index 60) covers
          anything parked at the very bottom edge — lift the cluster above it and
-         drop the keyboard-shortcuts FAB (no keyboard on touch). */
-      '@media(max-width:860px){.dx-cluster{inset-block-end:calc(76px + env(safe-area-inset-bottom,0px))}.dx-spm-chip{inset-block-end:calc(124px + env(safe-area-inset-bottom,0px))}.dx-fab--kbd{display:none}}',
+         drop the keyboard-shortcuts FAB (no keyboard on touch). Lay the cluster
+         out as a HORIZONTAL row there: a vertical column climbed ~220px up the
+         screen and sat on top of the transcription card's action buttons
+         (Compose/تكوين) on 844px-tall phones. The panels reserve matching
+         bottom padding (see the dashboards' mobile CSS) so nothing rests
+         underneath the row. */
+      '@media(max-width:860px){.dx-cluster{flex-direction:row;align-items:center;inset-block-end:calc(72px + env(safe-area-inset-bottom,0px))}.dx-fab{width:38px;height:38px}.dx-fab--wide{width:auto}.dx-spm-chip{inset-block-end:calc(118px + env(safe-area-inset-bottom,0px))}.dx-fab--kbd{display:none}}',
       /* generic modal / overlay */
       '.dx-overlay{position:fixed;inset:0;z-index:90;display:none;align-items:center;justify-content:center;background:var(--scrim,rgba(4,4,8,.65));padding:18px}',
       '.dx-overlay.dx-open{display:flex}',
