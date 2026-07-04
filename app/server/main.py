@@ -322,7 +322,16 @@ app.mount("/static", StaticFiles(directory=os.path.join(BASE_DIR, "static")), na
 templates = Jinja2Templates(directory=os.path.join(BASE_DIR, "templates"))
 
 # ── Socket.IO ─────────────────────────────────────────────────
-sio = socketio.AsyncServer(async_mode="asgi", cors_allowed_origins=_cors_origins)
+# ping_interval/ping_timeout tightened from the 25s/20s defaults: when a
+# meeting participant's tab dies without a clean leave_room, the others only
+# learn about it via the engine.io ping timeout — at the defaults that meant
+# up to ~45s of a frozen tile before 'peer_left' fired.
+sio = socketio.AsyncServer(
+    async_mode="asgi",
+    cors_allowed_origins=_cors_origins,
+    ping_interval=15,
+    ping_timeout=10,
+)
 socket_app = socketio.ASGIApp(sio, app)
 
 # ── Deferred model loading ────────────────────────────────────
@@ -1995,6 +2004,24 @@ async def translate_sentence(sid, data):
     payload = dict(data)
     payload["sender_sid"] = sid
     await sio.emit("remote_sentence", payload, room=room, skip_sid=sid)
+
+
+@sio.on("meeting_gloss")
+async def meeting_gloss(sid, data):
+    """Relay the signer's pending gloss words so other participants see live
+    signing progress ("✋ NAME is signing: …") before the sentence is composed.
+    Same room-membership gate + server-side sender stamp as captions."""
+    room = data.get("room", "general") if isinstance(data, dict) else "general"
+    if rooms.get(sid) != room:
+        return
+    payload = dict(data)
+    payload["sender_sid"] = sid
+    words = payload.get("words")
+    if not isinstance(words, list):
+        payload["words"] = []
+    else:
+        payload["words"] = [str(w)[:40] for w in words[:12]]
+    await sio.emit("meeting_gloss", payload, room=room, skip_sid=sid)
 
 
 # ═══════════════════════════════════════════════════════════════
