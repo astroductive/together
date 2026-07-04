@@ -59,6 +59,23 @@
     }
   }
 
+  function detectGlRenderer() {
+    // The UNMASKED renderer names the actual adapter (e.g. "ANGLE (NVIDIA,
+    // NVIDIA GeForce GTX 1050 Ti Direct3D11 ...)" vs "SwiftShader"). The
+    // string MediaPipe logs internally is the masked "WebKit WebGL", which
+    // cannot distinguish hardware from software rendering.
+    try {
+      var c = document.createElement('canvas');
+      var gl = c.getContext('webgl2') || c.getContext('webgl');
+      if (!gl) return 'none';
+      var ext = gl.getExtension('WEBGL_debug_renderer_info');
+      var r = ext ? gl.getParameter(ext.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER);
+      var lose = gl.getExtension('WEBGL_lose_context');
+      if (lose) lose.loseContext();
+      return String(r || 'unknown');
+    } catch (_) { return 'unknown'; }
+  }
+
   function shimImage(source) {
     // The legacy result exposed results.image.{width,height} (used for canvas
     // sizing). A raw <video> element's .width attribute is often 0 — report
@@ -154,8 +171,25 @@
     var complexity = typeof config.complexity === 'number' ? config.complexity : 1;
     var pref = pickPreference();
 
+    var renderer = window.__glRenderer;
+    if (!renderer) {
+      renderer = detectGlRenderer();
+      window.__glRenderer = renderer;
+      console.log('[LandmarkEngine] WebGL renderer:', renderer);
+    }
+    // Software rasterizers (SwiftShader/llvmpipe) make the "GPU" delegate
+    // slower than legacy WASM — skip the doomed 5s benchmark entirely and go
+    // straight to legacy. Fix on the user's side: enable hardware
+    // acceleration in the browser + update the GPU driver; a hardware
+    // renderer string here means the GPU backend will be used again.
+    var softwareGl = /swiftshader|software|llvmpipe|basic render/i.test(renderer);
+    if (softwareGl) {
+      console.warn('[LandmarkEngine] software WebGL detected (' + renderer + ') — using legacy WASM. ' +
+        'Enable hardware acceleration (chrome://settings/system) and update the GPU driver to unlock the GPU backend.');
+    }
+
     var impl = null;
-    if (pref !== 'legacy') {
+    if (pref !== 'legacy' && !softwareGl) {
       try {
         impl = await createTasksEngine(onResults);
         console.log('[LandmarkEngine] tasks-vision HolisticLandmarker active (GPU delegate)');

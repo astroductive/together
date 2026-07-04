@@ -149,6 +149,7 @@
       pctFace: pct(state.framesWithFace),
       payloadsSent: state.payloadsSent,
       landmarkEngine: window.__landmarkEngineBackend || 'unknown',
+      glRenderer: window.__glRenderer || 'unknown',
     };
   }
 
