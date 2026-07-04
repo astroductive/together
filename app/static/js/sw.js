@@ -11,7 +11,7 @@
  * detection is not possible — when offline the UI, camera and skeleton still
  * load, and detection degrades gracefully until the server is reachable again.
  */
-const CACHE = 'together-v1';
+const CACHE = 'together-v2'; // bump on strategy changes — activate() drops old caches
 
 const APP_SHELL = [
   '/static/css/main.css',
@@ -94,7 +94,27 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Same-origin static assets: cache-first, update in background.
+  // App code (JS/CSS): NETWORK-first with cache fallback. These change on
+  // every deploy and are small; serving them cache-first meant users ran the
+  // PREVIOUS deploy's code until a couple of reloads later (measurements and
+  // bug reports were chasing stale JavaScript). Offline still works via the
+  // cached copy.
+  if (url.origin === self.location.origin &&
+      (url.pathname.startsWith('/static/js/') || url.pathname.startsWith('/static/css/'))) {
+    event.respondWith(
+      caches.open(CACHE).then((cache) =>
+        fetch(req).then((res) => {
+          if (res && res.status === 200) cache.put(req, res.clone()).catch(() => {});
+          return res;
+        }).catch(() => cache.match(req))
+      )
+    );
+    return;
+  }
+
+  // Everything else under /static/ (fonts, images, the 70MB of vendored
+  // MediaPipe WASM/models — versioned by path, effectively immutable):
+  // cache-first, refreshed in the background.
   if (url.origin === self.location.origin && url.pathname.startsWith('/static/')) {
     event.respondWith(
       caches.open(CACHE).then((cache) =>
