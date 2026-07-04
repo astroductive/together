@@ -410,6 +410,13 @@ a.t-user:hover{border-color:var(--accent);background:var(--accent-soft)}
 .d-compose-badge::before{content:"";width:7px;height:7px;border-radius:50%;background:currentColor;
   animation:dComposePulse 1s ease-in-out infinite}
 .d-compose-badge[hidden]{display:none}
+/* Pending gloss words render as tappable chips — one tap removes a
+   mis-detected word before the sentence is composed. */
+.d-gloss-chip{display:inline-flex;align-items:center;gap:6px;margin:2px 3px;padding:4px 9px 4px 11px;
+  border-radius:var(--radius-full);background:var(--accent-soft);color:var(--accent);
+  border:1px solid transparent;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit;line-height:1.3}
+.d-gloss-chip:hover,.d-gloss-chip:focus-visible{border-color:var(--danger);color:var(--danger);background:rgba(220,70,70,.10)}
+.d-gloss-chip .x{font-size:12px;opacity:.75;font-weight:800}
 @keyframes dComposePulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.3;transform:scale(.55)}}
 button.is-busy{opacity:.6;cursor:progress}
 button.t-nav-item[aria-label="Sign out"]{border:1px solid transparent}
@@ -1016,7 +1023,14 @@ button.t-nav-item[aria-label="Sign out"]:hover svg{color:var(--danger,#ef4444)}
     console.error(errorMsg, event.reason);
     showDebugError(errorMsg + (event.reason && event.reason.stack ? '\n' + event.reason.stack : ''));
   };
+  // The red banner is a DEVELOPMENT aid: enable with ?debug=1 or
+  // localStorage debugBanner=1. Errors still go to the console for everyone —
+  // end users were seeing a full-width red banner for ANY runtime error,
+  // including ones thrown by browser extensions and third-party CDN scripts.
+  const _debugBannerOn = /[?&]debug=1\b/.test(location.search) ||
+    (function () { try { return localStorage.getItem('debugBanner') === '1'; } catch (_) { return false; } })();
   function showDebugError(msg) {
+    if (!_debugBannerOn) return;
     let errorBanner = document.getElementById('debug-error-banner');
     if (!errorBanner) {
       errorBanner = document.createElement('div');
@@ -2046,6 +2060,52 @@ button.t-nav-item[aria-label="Sign out"]:hover svg{color:var(--danger,#ef4444)}
   // wait for 30 frames of context before inference
   // rolling window of landmark frames
 
+
+  // ── Rest-pose gate ─────────────────────────────────────────
+  // Suppresses inference while every tracked hand is BOTH below shoulder level
+  // and nearly motionless for ~1s. Resting hands stay tracked by MediaPipe and
+  // the model confidently misreads the idle posture — verified live: a hand
+  // resting near the bottom of frame produced sustained false detections at
+  // 0.74–0.87 confidence. Stillness is measured on the wrist; the gate fails
+  // OPEN whenever pose/shoulders are missing so it can never block real
+  // signing. Thresholds derived from the captured live session (resting wrist
+  // moved <0.01/frame; signing moves far more).
+  function makeRestGate() {
+    const BELOW_MARGIN = 0.03;   // wrist must sit this far below the shoulder line
+    const STILL_EPS = 0.012;     // max mean per-frame wrist movement (normalized)
+    const STILL_FRAMES = 14;     // ~1s at typical 12–18fps
+    let prev = null, still = 0, resting = false;
+    return {
+      update(results) {
+        const pose = results.poseLandmarks;
+        const lh = results.leftHandLandmarks, rh = results.rightHandLandmarks;
+        if (!pose || !pose[11] || !pose[12] || (!lh && !rh)) {
+          prev = null; still = 0; resting = false; return false;
+        }
+        const shoulderY = Math.max(pose[11].y, pose[12].y);
+        let below = true, motion = 0, n = 0;
+        const cur = {};
+        [['l', lh], ['r', rh]].forEach(([k, hand]) => {
+          if (!hand || !hand[0]) return;
+          const w = hand[0];   // wrist landmark
+          cur[k] = { x: w.x, y: w.y };
+          if (w.y < shoulderY + BELOW_MARGIN) below = false;  // hand up in signing space
+          if (prev && prev[k]) { motion += Math.abs(w.x - prev[k].x) + Math.abs(w.y - prev[k].y); n++; }
+        });
+        prev = cur;
+        if (below && n > 0 && (motion / n) < STILL_EPS) still++;
+        else still = 0;
+        resting = still >= STILL_FRAMES;
+        return resting;
+      },
+      reset() { prev = null; still = 0; resting = false; },
+      get resting() { return resting; },
+    };
+  }
+  const _visionRestGate = makeRestGate();
+  const _s2spRestGate = makeRestGate();
+  let _hsNoHandsFrames = 0, _s2spNoHandsFrames = 0;
+
   function onHolisticResults(results) {
     _holisticBusy = false; // WASM has finished — safe to send the next frame
     if (window.SignDiag) SignDiag.frame(results);
@@ -2066,22 +2126,19 @@ button.t-nav-item[aria-label="Sign out"]:hover svg{color:var(--danger,#ef4444)}
     const handsPresent = !!(rawLh || rawRh);
     _hsHandsPresent = handsPresent;
 
-    if (rawLh) { _lhLmSmooth = _emaLandmarks(_lhLmSmooth, rawLh); _lhLastSeen = _lhLmSmooth; }
-    if (rawRh) { _rhLmSmooth = _emaLandmarks(_rhLmSmooth, rawRh); _rhLastSeen = _rhLmSmooth; }
-
-    let lhDraw, rhDraw;
-    if (handsPresent) {
-      _lmGrace = LM_GRACE_FRAMES;
-      lhDraw = _lhLmSmooth;
-      rhDraw = _rhLmSmooth;
-    } else if (_lmGrace > 0) {
-      _lmGrace--;
-      lhDraw = _lhLastSeen;
-      rhDraw = _rhLastSeen;
-    } else {
-      _lhLmSmooth = null; _rhLmSmooth = null;
-      lhDraw = null; rhDraw = null;
-    }
+    // PER-HAND grace: each hand clears independently a few frames after ITS
+    // tracking drops. The old shared grace only cleared when BOTH hands were
+    // gone, so a lowered hand stayed frozen on the canvas as a ghost for as
+    // long as the other hand was up. (Display only — the model payload uses
+    // the raw per-frame results, never these smoothed copies.)
+    if (rawLh) { _lhLmSmooth = _emaLandmarks(_lhLmSmooth, rawLh); _lhGrace = LM_GRACE_FRAMES; }
+    else if (_lhGrace > 0) { _lhGrace--; }
+    else { _lhLmSmooth = null; }
+    if (rawRh) { _rhLmSmooth = _emaLandmarks(_rhLmSmooth, rawRh); _rhGrace = LM_GRACE_FRAMES; }
+    else if (_rhGrace > 0) { _rhGrace--; }
+    else { _rhLmSmooth = null; }
+    const lhDraw = _lhLmSmooth;
+    const rhDraw = _rhLmSmooth;
 
     // Draw skeleton overlay
     if (window.drawConnectors && window.HAND_CONNECTIONS) {
@@ -2116,14 +2173,33 @@ button.t-nav-item[aria-label="Sign out"]:hover svg{color:var(--danger,#ef4444)}
     // This stops "Detecting" from persisting when hands have left the frame.
     if (window._setDetectState) {
       if (handsPresent && streaming('vision')) {
+        _hsNoHandsFrames = 0;
         _setDetectState('detecting', 'Detecting', 'hs');
       } else if (!handsPresent) {
-        _setDetectState('idle', 'Idle', 'hs');
+        // After ~2s without hands, tell the user WHY nothing is happening.
+        _hsNoHandsFrames++;
+        _setDetectState('idle', _hsNoHandsFrames > 30 ? 'No hands detected' : 'Idle', 'hs');
       }
     }
 
     // Skip inference during cooldown or before enough hand frames
     if (globalCooldown > 0 || consecutiveHand < MIN_HAND_FRAMES) return;
+
+    // Rest-pose gate: resting hands are not signing — pause streaming so the
+    // idle posture cannot vote phantom words in. Entering rest also flushes
+    // the buffers, exactly like a true hand gap.
+    const _wasRestingV = _visionRestGate.resting;
+    if (_visionRestGate.update(results)) {
+      if (!_wasRestingV) {
+        frameBuffer = []; voteBuffer = [];
+        streamReset('vision');
+        if (window.SignDiag) SignDiag.event('vision', 'rest_gate_on', {});
+      }
+      if (window._setDetectState) _setDetectState('idle', 'Hands resting — paused', 'hs');
+      return;
+    } else if (_wasRestingV) {
+      if (window.SignDiag) SignDiag.event('vision', 'rest_gate_off', {});
+    }
 
     const frame = buildLandmarkFrame(results);
 
@@ -2277,38 +2353,20 @@ button.t-nav-item[aria-label="Sign out"]:hover svg{color:var(--danger,#ef4444)}
       lastAccepted = word;
     }
 
-    if (forcedLang === 'ar') {
-      // Clear buffer so we don't accumulate multiple words
-      glossBuffer = [];
-      lastSignTime = Date.now();
-
-      if (window.arClearTimeout) {
-        clearTimeout(window.arClearTimeout);
-      }
-
-      // Show the current detected word immediately (but never clobber an
-      // in-progress composition — the word is still logged below).
-      if (!composing) updateTranscription(word, true);
-      // playLocalTts(word, 'arabic'); // Disabled TTS in Sign-to-Text feature
-
-      // Add to session log
-      signs.push({ text: word, time: new Date().toLocaleTimeString() });
-      updateLog();
-
-      // Clear the transcription output box after 2 seconds
-      window.arClearTimeout = setTimeout(() => {
-        updateTranscription('');
-      }, 2000);
-    } else {
-      // Accumulate for sentence
-      glossBuffer.push(word);
-      lastSignTime = Date.now();
-      // Update live transcription box with ALL accumulated words — but while a
-      // sentence is being composed, keep buffering silently so the new sign
-      // doesn't overwrite the "Composing…" / freshly composed sentence. The
-      // buffered words simply become the start of the next sentence.
-      if (!composing) updateTranscription(glossBuffer.join(' '));
-    }
+    // BOTH languages accumulate now. Arabic used to clear the buffer on every
+    // detection, so triggerSentenceTranslation always saw an empty buffer and
+    // sentence composition was structurally impossible in Arabic — while
+    // gloss.py and /api/translate/sentence are fully Arabic-aware.
+    if (window.arClearTimeout) { clearTimeout(window.arClearTimeout); window.arClearTimeout = null; }
+    glossBuffer.push(word);
+    lastSignTime = Date.now();
+    // Log the individual word (the old flow logged the whole accumulating
+    // string on every detection — one entry per sign reads better).
+    signs.push({ text: word, time: new Date().toLocaleTimeString() });
+    updateLog();
+    // While a sentence is being composed, keep buffering silently so the new
+    // sign doesn't overwrite the "Composing…" / freshly composed sentence.
+    if (!composing) renderGlossBuffer();
 
     // Count every accepted sign toward the cross-dashboard topbar counter
     _uniqueSigns.add((word || '').toLowerCase());
@@ -2320,10 +2378,7 @@ button.t-nav-item[aria-label="Sign out"]:hover svg{color:var(--danger,#ef4444)}
     if (inMeeting && socket && isDeafHohUser) {
       if (!Array.isArray(window.__meetGlossBuf)) window.__meetGlossBuf = [];
       window.__meetGlossBuf.push(word);
-      const preview = document.getElementById('meeting-gloss-preview');
-      if (preview) preview.textContent = window.__meetGlossBuf.join(' ') || 'No signs buffered';
-      const cbtn = document.getElementById('meeting-compose-btn');
-      if (cbtn) cbtn.disabled = window.__meetGlossBuf.length === 0;
+      renderMeetGloss();
     } else if (inMeeting && socket) {
       const roomId = currentMeetingRoom || document.getElementById('meeting-room-id').value.trim() || 'general';
       renderMeetingSentence(word, userRole, true);
@@ -2453,6 +2508,59 @@ button.t-nav-item[aria-label="Sign out"]:hover svg{color:var(--danger,#ef4444)}
     }
   }
 
+  // ── Gloss chips: pending words are tappable — one tap removes a
+  // mis-detected word from the buffer before the sentence is composed. ──
+  function renderGlossChips(el, buf, onRemove, placeholderHtml) {
+    if (!el) return;
+    if (!buf.length) { el.innerHTML = placeholderHtml; return; }
+    el.textContent = '';
+    buf.forEach((w, i) => {
+      const chip = document.createElement('button');
+      chip.type = 'button';
+      chip.className = 'd-gloss-chip';
+      chip.title = 'Tap to remove';
+      const t = document.createElement('span');
+      t.textContent = w;
+      const x = document.createElement('span');
+      x.className = 'x';
+      x.textContent = '\u00d7';
+      chip.append(t, x);
+      chip.addEventListener('click', () => onRemove(i));
+      el.appendChild(chip);
+    });
+  }
+
+  function renderGlossBuffer() {
+    renderGlossChips(
+      document.getElementById('transcription-output'),
+      glossBuffer,
+      (i) => { glossBuffer.splice(i, 1); renderGlossBuffer(); },
+      '<span class="d-box-ph">Waiting for input…</span>'
+    );
+  }
+
+  function renderMeetGloss() {
+    if (!Array.isArray(window.__meetGlossBuf)) window.__meetGlossBuf = [];
+    const buf = window.__meetGlossBuf;
+    renderGlossChips(
+      document.getElementById('meeting-gloss-preview'),
+      buf,
+      (i) => { buf.splice(i, 1); renderMeetGloss(); },
+      'No signs buffered'
+    );
+    const cbtn = document.getElementById('meeting-compose-btn');
+    if (cbtn) cbtn.disabled = buf.length === 0;
+  }
+
+  function renderS2spGloss() {
+    renderGlossChips(
+      document.getElementById('s2sp-gloss-output'),
+      s2spGlossBuf,
+      (i) => { s2spGlossBuf.splice(i, 1); renderS2spGloss(); },
+      '<span class="transcription-placeholder">Signs appear here…</span>'
+    );
+  }
+
   function updateTranscription(text, isSentence = false) {
     const el = document.getElementById('transcription-output');
     // Theme-aware: full sentences use the primary text color, partial gloss uses muted.
@@ -2461,10 +2569,9 @@ button.t-nav-item[aria-label="Sign out"]:hover svg{color:var(--danger,#ef4444)}
       ? `<span style="color:${color}">${text}</span>`
       : '<span class="d-box-ph">Waiting for input…</span>';
 
-    if (text && !isSentence) {
-      signs.push({ text, time: new Date().toLocaleTimeString() });
-      updateLog();
-    }
+    // NOTE: no auto-logging here. Detected words and composed sentences are
+    // logged explicitly at their sources; this also keeps transient status
+    // text ('Forming sentence: …') out of the session log.
   }
 
   function updateLog() {
@@ -3292,20 +3399,14 @@ button.t-nav-item[aria-label="Sign out"]:hover svg{color:var(--danger,#ef4444)}
       window.__meetGlossBuf = gloss;
     } finally {
       if (badge) badge.hidden = true;
-      const preview = document.getElementById('meeting-gloss-preview');
-      const remain = Array.isArray(window.__meetGlossBuf) ? window.__meetGlossBuf : [];
-      if (preview) preview.textContent = remain.join(' ') || 'No signs buffered';
-      if (btn) btn.disabled = remain.length === 0;
+      renderMeetGloss();
     }
   }
   window.composeMeetingSentence = composeMeetingSentence;
 
   function clearMeetingGloss() {
     window.__meetGlossBuf = [];
-    const preview = document.getElementById('meeting-gloss-preview');
-    if (preview) preview.textContent = 'No signs buffered';
-    const btn = document.getElementById('meeting-compose-btn');
-    if (btn) btn.disabled = true;
+    renderMeetGloss();
   }
   window.clearMeetingGloss = clearMeetingGloss;
 
@@ -4529,13 +4630,29 @@ button.t-nav-item[aria-label="Sign out"]:hover svg{color:var(--danger,#ef4444)}
     // Immediately reflect hand presence in the detect pill
     if (window._setDetectState) {
       if (handsPresent && streaming('speech')) {
+        _s2spNoHandsFrames = 0;
         _setDetectState('detecting', 'Detecting', 's2sp');
       } else if (!handsPresent) {
-        _setDetectState('idle', 'Idle', 's2sp');
+        _s2spNoHandsFrames++;
+        _setDetectState('idle', _s2spNoHandsFrames > 30 ? 'No hands detected' : 'Idle', 's2sp');
       }
     }
 
     if (s2spGlobalCooldown > 0 || s2spConsecHand < MIN_HAND_FRAMES) return;
+
+    // Rest-pose gate (see the Sign-to-Text pipeline for rationale).
+    const _wasRestingS = _s2spRestGate.resting;
+    if (_s2spRestGate.update(results)) {
+      if (!_wasRestingS) {
+        s2spFrameBuffer = []; s2spVoteBuffer = [];
+        streamReset('speech');
+        if (window.SignDiag) SignDiag.event('speech', 'rest_gate_on', {});
+      }
+      if (window._setDetectState) _setDetectState('idle', 'Hands resting — paused', 's2sp');
+      return;
+    } else if (_wasRestingS) {
+      if (window.SignDiag) SignDiag.event('speech', 'rest_gate_off', {});
+    }
 
     const frame = buildLandmarkFrame(results);
 
@@ -4619,39 +4736,14 @@ button.t-nav-item[aria-label="Sign out"]:hover svg{color:var(--danger,#ef4444)}
 
 
   function s2spHandleSign(word) {
-    if (forcedLang === 'ar') {
-      s2spGlossBuf = [];
-      const el = document.getElementById('s2sp-gloss-output');
-      el.innerHTML = `<span style="color:var(--text);">${word}</span>`;
-
-      if (window.s2spArClearTimeout) {
-        clearTimeout(window.s2spArClearTimeout);
-      }
-
-      // Show immediately and read aloud
-      document.getElementById('s2sp-sentence-output').innerHTML = `<span>${word}</span>`;
-      playLocalTts(word, 'arabic');
-
-      // Log it
-      s2spSentences.unshift({ text: word, time: new Date().toLocaleTimeString() });
-      renderS2spLog();
-      if (typeof bumpSignCount === 'function') bumpSignCount(1);
-
-      // Clear the display outputs after 2 seconds
-      window.s2spArClearTimeout = setTimeout(() => {
-        document.getElementById('s2sp-sentence-output').innerHTML = '<span class="d-box-ph">Waiting for signs…</span>';
-        document.getElementById('s2sp-gloss-output').innerHTML = '<span class="transcription-placeholder">Signs appear here…</span>';
-      }, 2000);
-    } else {
-      // Voting already ensured uniqueness — just push the word
-      s2spGlossBuf.push(word);
-      // Don't overwrite the gloss box while a sentence is being composed.
-      if (!s2spComposing) {
-        const el = document.getElementById('s2sp-gloss-output');
-        el.innerHTML = `<span style="color:var(--text);">${s2spGlossBuf.join(' ')}</span>`;
-      }
-      if (typeof bumpSignCount === 'function') bumpSignCount(1);
-    }
+    // BOTH languages accumulate + compose now: Arabic used to clear the
+    // buffer and speak every raw word; instead the composed sentence is
+    // spoken on Compose — same flow as English (the endpoint is Arabic-aware).
+    if (window.s2spArClearTimeout) { clearTimeout(window.s2spArClearTimeout); window.s2spArClearTimeout = null; }
+    s2spGlossBuf.push(word);
+    // Don't overwrite the gloss box while a sentence is being composed.
+    if (!s2spComposing) renderS2spGloss();
+    if (typeof bumpSignCount === 'function') bumpSignCount(1);
   }
 
   // Toggle the S2SP "Composing…" indicator + disable its Compose button.
@@ -4738,10 +4830,16 @@ button.t-nav-item[aria-label="Sign out"]:hover svg{color:var(--danger,#ef4444)}
   // ── STARTUP: Check engine health ───────────────────────────
   // ═══════════════════════════════════════════════════════════
   (async function checkHealth() {
+    // Hoisted: the warm-up block below also reads it. The old block-scoped
+    // `const signs` shadowed the OUTER session-log array only inside the
+    // first try, so `warmedData.signs_loaded || signs` down there fell back
+    // to the ARRAY and printed it into the status line.
+    let signsLoaded = 0;
     try {
       const res = await authFetch('/api/health');
       const data = await res.json();
-      const signs = data.signs_loaded || 0;
+      signsLoaded = data.signs_loaded || 0;
+      const signs = signsLoaded;
       if (data.status === 'ok' && data.models_ready) {
         setStatus(`AI Ready · ${signs} signs`, false);
       } else if (data.status === 'ok' && !data.models_ready) {
@@ -4771,7 +4869,7 @@ button.t-nav-item[aria-label="Sign out"]:hover svg{color:var(--danger,#ef4444)}
       const warmed = await authFetch('/api/health');
       const warmedData = await warmed.json();
       if (warmedData.status === 'ok' && warmedData.models_ready) {
-        setStatus(`AI Ready · ${warmedData.signs_loaded || signs} signs`, false);
+        setStatus(`AI Ready · ${warmedData.signs_loaded || signsLoaded} signs`, false);
       }
       console.log('[Warmup] Health warm-up completed.');
     } catch (_) { } finally {
@@ -4874,8 +4972,7 @@ const _signsSparkPts = []; // running count per 5-sign bucket for sparkline
 let _signsSparkBucket = 0;
 // MediaPipe landmark smoothing — grace frames + EMA
 let _lhLmSmooth = null, _rhLmSmooth = null;
-let _lhLastSeen = null, _rhLastSeen = null;
-let _lmGrace = 0;
+let _lhGrace = 0, _rhGrace = 0;
 const LM_GRACE_FRAMES = 3;
 const LM_ALPHA = 0.65; // EMA weight for previous frame
 

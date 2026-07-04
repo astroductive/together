@@ -432,7 +432,7 @@
   const MAX_HAND_GAP_FRAMES = 3;
 
   // Landmark smoothing (EMA + grace), copied from the dashboard.
-  let _lhSmooth = null, _rhSmooth = null, _lhSeen = null, _rhSeen = null, _grace = 0;
+  let _lhSmooth = null, _rhSmooth = null, _lhGrace = 0, _rhGrace = 0;
   const GRACE_FRAMES = 3, ALPHA = 0.65;
   function emaLandmarks(prev, curr) {
     if (!prev || prev.length !== curr.length) return curr;
@@ -553,6 +553,44 @@
   }
 
   // ── MediaPipe results callback ───────────────────────────────────────
+
+  // ── Rest-pose gate ─────────────────────────────────────────
+  // Suppresses inference while every tracked hand is BOTH below shoulder level
+  // and nearly motionless for ~1s — resting hands stay tracked and the model
+  // confidently misreads the idle posture (verified live). Fails OPEN when
+  // pose/shoulders are missing. See the dashboards for the same gate.
+  function makeRestGate() {
+    const BELOW_MARGIN = 0.03, STILL_EPS = 0.012, STILL_FRAMES = 14;
+    let prev = null, still = 0, resting = false;
+    return {
+      update(results) {
+        const pose = results.poseLandmarks;
+        const lh = results.leftHandLandmarks, rh = results.rightHandLandmarks;
+        if (!pose || !pose[11] || !pose[12] || (!lh && !rh)) {
+          prev = null; still = 0; resting = false; return false;
+        }
+        const shoulderY = Math.max(pose[11].y, pose[12].y);
+        let below = true, motion = 0, n = 0;
+        const cur = {};
+        [['l', lh], ['r', rh]].forEach(([k, hand]) => {
+          if (!hand || !hand[0]) return;
+          const w = hand[0];
+          cur[k] = { x: w.x, y: w.y };
+          if (w.y < shoulderY + BELOW_MARGIN) below = false;
+          if (prev && prev[k]) { motion += Math.abs(w.x - prev[k].x) + Math.abs(w.y - prev[k].y); n++; }
+        });
+        prev = cur;
+        if (below && n > 0 && (motion / n) < STILL_EPS) still++;
+        else still = 0;
+        resting = still >= STILL_FRAMES;
+        return resting;
+      },
+      reset() { prev = null; still = 0; resting = false; },
+      get resting() { return resting; },
+    };
+  }
+  const _restGate = makeRestGate();
+
   function onHolisticResults(results) {
     _holisticBusy = false;
     if (window.SignDiag) SignDiag.frame(results);
@@ -568,13 +606,16 @@
     const handsPresent = !!(rawLh || rawRh);
     _handsPresent = handsPresent;
 
-    if (rawLh) { _lhSmooth = emaLandmarks(_lhSmooth, rawLh); _lhSeen = _lhSmooth; }
-    if (rawRh) { _rhSmooth = emaLandmarks(_rhSmooth, rawRh); _rhSeen = _rhSmooth; }
-
-    let lhDraw, rhDraw;
-    if (handsPresent) { _grace = GRACE_FRAMES; lhDraw = _lhSmooth; rhDraw = _rhSmooth; }
-    else if (_grace > 0) { _grace--; lhDraw = _lhSeen; rhDraw = _rhSeen; }
-    else { _lhSmooth = null; _rhSmooth = null; lhDraw = null; rhDraw = null; }
+    // Per-hand grace: a lowered hand clears after ITS OWN grace window —
+    // the shared grace only cleared when both hands were gone, leaving a
+    // frozen ghost of the lowered hand while the other was up. Display only.
+    if (rawLh) { _lhSmooth = emaLandmarks(_lhSmooth, rawLh); _lhGrace = GRACE_FRAMES; }
+    else if (_lhGrace > 0) { _lhGrace--; }
+    else { _lhSmooth = null; }
+    if (rawRh) { _rhSmooth = emaLandmarks(_rhSmooth, rawRh); _rhGrace = GRACE_FRAMES; }
+    else if (_rhGrace > 0) { _rhGrace--; }
+    else { _rhSmooth = null; }
+    const lhDraw = _lhSmooth, rhDraw = _rhSmooth;
 
     if (window.drawConnectors && window.HAND_CONNECTIONS) {
       if (lhDraw) drawConnectors(ctx, lhDraw, HAND_CONNECTIONS, { color: '#00ffff', lineWidth: 2 });
@@ -599,6 +640,20 @@
     }
 
     if (consecutiveHand < MIN_HAND_FRAMES) return;
+
+    // Rest-pose gate: resting hands must not vote phantom words into grading.
+    const _wasResting = _restGate.resting;
+    if (_restGate.update(results)) {
+      if (!_wasResting) {
+        frameBuffer = [];
+        streamReset();
+        if (window.SignDiag) SignDiag.event('vision', 'rest_gate_on', {});
+      }
+      if (!graded) setPill('idle', 'استراحة — التعرف متوقف', '');
+      return;
+    } else if (_wasResting) {
+      if (window.SignDiag) SignDiag.event('vision', 'rest_gate_off', {});
+    }
 
     const frame = buildLandmarkFrame(results);
     const language = lang();
