@@ -163,7 +163,10 @@
   // legacy WASM path. The facade times real video frames and hot-swaps to
   // legacy once the verdict is in; on healthy GPUs (5-40ms/frame) it never
   // triggers. Explicit ?engine=/localStorage choices bypass all of this.
-  var SWAP_AFTER_SAMPLES = 30;    // ~4-6s of live video
+  var WARMUP_FRAMES = 12;         // GPU delegates JIT-compile shaders on the first
+                                  // real frames (100-500ms each even on strong GPUs) —
+                                  // sampling those would condemn a healthy GPU.
+  var SWAP_AFTER_SAMPLES = 30;    // ~4-6s of live video after warmup
   var SWAP_THRESHOLD_MS = 150;    // legacy CPU measured 120-140ms on the slowest machine so far
 
   async function create(config) {
@@ -204,15 +207,19 @@
     announce(impl.backend);
 
     var samples = [];
+    var warmupLeft = WARMUP_FRAMES;
     var swapping = false;
+    var verdictLogged = false;
 
     var facade = {
       get backend() { return impl.backend; },
       send: function (frame) {
         // Benchmark only the tasks backend, only on real video frames (the
-        // blank pre-warm canvas takes a cheap no-person path).
-        if (impl.backend === 'tasks-gpu' && !swapping &&
+        // blank pre-warm canvas takes a cheap no-person path), and only
+        // AFTER the shader-JIT warmup frames.
+        if (impl.backend === 'tasks-gpu' && !swapping && !verdictLogged &&
             frame && frame.image && frame.image.videoWidth) {
+          if (warmupLeft > 0) { warmupLeft--; return impl.send(frame); }
           var t0 = performance.now();
           var p = impl.send(frame);
           return p.then(function (r) {
@@ -221,6 +228,13 @@
               var sorted = samples.slice().sort(function (a, b) { return a - b; });
               var median = sorted[Math.floor(sorted.length / 2)];
               samples.length = 0;
+              verdictLogged = true;
+              console.log('[LandmarkEngine] tasks-vision steady-state median: ' +
+                Math.round(median) + 'ms/frame (post-warmup)');
+              if (window.SignDiag && window.SignDiag.enabled) {
+                window.SignDiag.event('engine', 'landmark_engine_benchmark',
+                  { backend: 'tasks-gpu', medianMs: Math.round(median) });
+              }
               if (median > SWAP_THRESHOLD_MS) swapToLegacy(median);
             }
             return r;
