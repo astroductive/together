@@ -69,12 +69,6 @@ def section_header(y, kicker, title):
     return y + 178
 
 
-def caption(box_bottom_center, text):
-    cx, y = box_bottom_center
-    f = F(SANS_R, 27)
-    d.text((cx - text_w(f, text) / 2, y), text, font=f, fill=FAINT)
-
-
 def arrow(x0, x1, cy, color=FAINT):
     d.line([(x0, cy), (x1 - 16, cy)], fill=color, width=5)
     d.polygon([(x1, cy), (x1 - 26, cy - 13), (x1 - 26, cy + 13)], fill=color)
@@ -246,10 +240,7 @@ y += 224 + 44
 half = (BW - 2 * M - 60) // 2
 r1 = paste_fit(img, A("fig5_1_recognition_accuracy"), (M, y, M + half, y + 545))
 r2 = paste_fit(img, A("fig5_4_chrf"), (M + half + 60, y, BW - M, y + 545))
-caption((M + half // 2, max(r1[3], r2[3]) + 14), "Recognition: in-distribution vs. generalization")
-caption((M + half + 60 + half // 2, max(r1[3], r2[3]) + 14),
-        "Translation quality (chrF): the LLM lifts 0.54 → 0.91 (EN), 0.34 → 0.59 (AR)")
-y = max(r1[3], r2[3]) + 14 + 40 + 56
+y = max(r1[3], r2[3]) + 64
 
 # ═════════════════════ 8. the platform ════════════════════════════════════
 y = section_header(y, "The platform", "Eight modules, two languages, one web app")
@@ -271,9 +262,7 @@ for s in ["HandScript · VoiceBridge · SignType",
         lf = F(SANS_R, 29)
         d.text((bx + 36, yy + j * 40), ln, font=lf, fill=BODY)
     yy += 46 + 40 * (s.count("\n"))
-caption((M + dash_w // 2, y + row_h + 14), "The shared real-time translation dashboard (sign → text, live)")
-caption(((rx + rm[2]) // 2, y + row_h + 14), "Mobile PWA — Arabic RTL")
-y = y + row_h + 14 + 40
+y = y + row_h + 24
 
 # ═════════════════════ 9. conclusion strip + footer ═══════════════════════
 strip_t = BH - 460
