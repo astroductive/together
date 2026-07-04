@@ -40,6 +40,14 @@
       if (q === 'legacy' || q === 'tasks') return q;
       var ls = localStorage.getItem('landmark-engine');
       if (ls === 'legacy' || ls === 'tasks') return ls;
+      // Auto-benchmark verdict from THIS browser session (see the facade
+      // below): on machines where the "GPU" delegate lands on software WebGL,
+      // tasks measured SLOWER than legacy WASM (195ms vs 137ms per frame on
+      // the owner's machine) — once measured, later engine creations in the
+      // same session skip the slow path. Session-scoped on purpose: drivers,
+      // browsers and machines change, so every new session re-probes.
+      var auto = sessionStorage.getItem('landmark-engine-auto');
+      if (auto === 'legacy') return 'legacy';
     } catch (_) { /* storage blocked */ }
     return 'tasks';
   }
@@ -133,24 +141,86 @@
     };
   }
 
+  // Measure, don't assume: "GPU delegate" can land on SOFTWARE WebGL
+  // (blocklisted/weak GPUs, VMs), where tasks-vision is SLOWER than the
+  // legacy WASM path. The facade times real video frames and hot-swaps to
+  // legacy once the verdict is in; on healthy GPUs (5-40ms/frame) it never
+  // triggers. Explicit ?engine=/localStorage choices bypass all of this.
+  var SWAP_AFTER_SAMPLES = 30;    // ~4-6s of live video
+  var SWAP_THRESHOLD_MS = 150;    // legacy CPU measured 120-140ms on the slowest machine so far
+
   async function create(config) {
     var onResults = config.onResults;
     var complexity = typeof config.complexity === 'number' ? config.complexity : 1;
     var pref = pickPreference();
+
+    var impl = null;
     if (pref !== 'legacy') {
       try {
-        var eng = await createTasksEngine(onResults);
+        impl = await createTasksEngine(onResults);
         console.log('[LandmarkEngine] tasks-vision HolisticLandmarker active (GPU delegate)');
-        announce(eng.backend);
-        return eng;
       } catch (e) {
         console.warn('[LandmarkEngine] tasks-vision unavailable — falling back to legacy WASM:', e);
       }
     }
-    var legacy = createLegacyEngine(onResults, complexity);
-    console.log('[LandmarkEngine] legacy Holistic active (CPU WASM, complexity ' + complexity + ')');
-    announce(legacy.backend);
-    return legacy;
+    if (!impl) {
+      impl = createLegacyEngine(onResults, complexity);
+      console.log('[LandmarkEngine] legacy Holistic active (CPU WASM, complexity ' + complexity + ')');
+    }
+    announce(impl.backend);
+
+    var samples = [];
+    var swapping = false;
+
+    var facade = {
+      get backend() { return impl.backend; },
+      send: function (frame) {
+        // Benchmark only the tasks backend, only on real video frames (the
+        // blank pre-warm canvas takes a cheap no-person path).
+        if (impl.backend === 'tasks-gpu' && !swapping &&
+            frame && frame.image && frame.image.videoWidth) {
+          var t0 = performance.now();
+          var p = impl.send(frame);
+          return p.then(function (r) {
+            samples.push(performance.now() - t0);
+            if (samples.length >= SWAP_AFTER_SAMPLES) {
+              var sorted = samples.slice().sort(function (a, b) { return a - b; });
+              var median = sorted[Math.floor(sorted.length / 2)];
+              samples.length = 0;
+              if (median > SWAP_THRESHOLD_MS) swapToLegacy(median);
+            }
+            return r;
+          });
+        }
+        return impl.send(frame);
+      },
+      setOptions: function (opts) { impl.setOptions(opts); },
+      close: function () { impl.close(); },
+    };
+
+    async function swapToLegacy(medianMs) {
+      swapping = true;
+      try {
+        var legacy = createLegacyEngine(onResults, complexity);
+        var old = impl;
+        impl = legacy;
+        try { old.close(); } catch (_) {}
+        try { sessionStorage.setItem('landmark-engine-auto', 'legacy'); } catch (_) {}
+        announce(impl.backend);
+        if (window.SignDiag && window.SignDiag.enabled) {
+          window.SignDiag.event('engine', 'landmark_engine_swap',
+            { to: 'legacy-wasm', tasksMedianMs: Math.round(medianMs) });
+        }
+        console.warn('[LandmarkEngine] tasks-vision measured ' + Math.round(medianMs) +
+          'ms/frame on this machine (software GL?) — swapped to legacy WASM, which benchmarked faster here.');
+      } catch (e) {
+        console.error('[LandmarkEngine] backend swap failed; staying on tasks:', e);
+        swapping = false; // allow a later retry
+        return;
+      }
+    }
+
+    return facade;
   }
 
   window.LandmarkEngine = { create: create };
