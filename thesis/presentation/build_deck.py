@@ -44,7 +44,7 @@ add({"type": "cards", "kicker": "Agenda", "title": "Four speakers, one system",
         ("Speaker 1 — The problem & the field",
          "Why sign-language translation matters, what exists today, and the gap Together fills."),
         ("Speaker 2 — Architecture & the ASL model",
-         "System design, the browser-to-server pipeline, and the 250-class Squeezeformer-style recognizer."),
+         "System design, the browser-to-server pipeline, and the custom 250-class Conv-Transformer recognizer."),
         ("Speaker 3 — ArSL, language & the platform",
          "The Egyptian ArSL recognizer, the LLM translation layer, sign synthesis, and the eight app modules."),
         ("Speaker 4 — Evaluation & live demo",
@@ -265,20 +265,20 @@ add({"type": "content", "kicker": "Architecture", "title": "Streaming recognitio
     "signs. This is what makes the demo feel stable rather than jittery.")
 
 add({"type": "divider", "num": "03", "title": "The ASL Recognizer",
-     "sub": "250 signs · Squeezeformer-style Conv1D + Transformer · trained on Google ISLR · exported to TFLite."},
+     "sub": "250 signs · custom Conv1D + Transformer hybrid · trained on Google ISLR · exported to TFLite."},
     "[Speaker 2 — 10s] Now the first of our two models — the large one.")
 
 add({"type": "content", "kicker": "ASL model", "title": "Google ISLR: the training corpus",
      "section": "ASL model", "layout": "right", "split": 0.52, "images": [A("Figure4_1")],
      "bullets": [
         ("Scale.", "≈100,000 landmark sequences · 250 signs · 21 Deaf signers [23]."),
-        ("Our subset.", "4,078 sequences, split 70 / 15 / 15 for train, validation, test."),
+        ("Our split.", "The full corpus, split 70 / 15 / 15 for train, validation, test."),
         ("Landmark-native.", "The dataset ships MediaPipe landmarks — no video processing."),
         ("~Deployed shape.", "TFLite accepts raw (60, 543, 3) and preprocesses inside the graph."),
      ]},
     "[Speaker 2 — 40s] The ASL model trains on Google's Isolated Sign Language Recognition "
-    "corpus — about a hundred thousand sequences signed by twenty-one Deaf adults. We worked "
-    "with a 4,078-sequence subset under a seventy-fifteen-fifteen split. Note the deployment "
+    "corpus — about a hundred thousand sequences signed by twenty-one Deaf adults. We train "
+    "on the full corpus under a seventy-fifteen-fifteen split. Note the deployment "
     "detail on the right: the exported TFLite graph takes raw landmarks and performs all "
     "preprocessing internally, so the browser sends coordinates and nothing else.")
 
@@ -300,10 +300,10 @@ add({"type": "content", "kicker": "ASL model", "title": "Macro architecture: Con
         ("Stem.", "Linear projection of 708 features to a 192-d representation."),
         ("Body.", "Two repetitions of three Conv1D blocks followed by a Transformer block."),
         ("Head.", "Global average pooling → 250-way softmax."),
-        ("~Lineage.", "Adapts the Squeezeformer design of the top Google-ISLR solution [23]."),
+        ("~Design.", "A custom hybrid built for this task: convolution for local shape, attention for long range."),
      ]},
-    "[Speaker 2 — 40s] The architecture adapts the Squeezeformer family that dominates this "
-    "benchmark: convolutions capture local hand-shape transitions, attention captures the "
+    "[Speaker 2 — 40s] The architecture is our own convolution-plus-transformer hybrid: "
+    "convolutions capture local hand-shape transitions, attention captures the "
     "long-range structure of a sign, and we alternate them — three convolution blocks then a "
     "transformer block, repeated twice — before pooling into a 250-way classifier.")
 
@@ -467,7 +467,7 @@ add({"type": "cards", "kicker": "Language layer", "title": "The grammar gap",
 
 add({"type": "cards", "kicker": "Language layer", "title": "An LLM supplies the grammar — with a safety net",
      "section": "Language", "cols": 3, "cards": [
-        ("1", "Gemini 2.5 Flash", "Few-shot prompts enforce Topic–Comment ↔ SVO conversion in both languages [27]."),
+        ("1", "Gemini 3.5 Flash", "Few-shot prompts enforce Topic–Comment ↔ SVO conversion in both languages [27]."),
         ("2", "Bounded cache", "256 recent gloss→sentence results — repeated phrases cost ~0 ms."),
         ("3", "Offline fallback", "No cloud? Ollama serves a local LLaMA [28]; worst case, raw gloss is shown."),
      ]},
@@ -783,7 +783,7 @@ add({"type": "closing", "title": "Thank you.",
 
 add({"type": "table", "kicker": "Backup — for Q&A", "title": "Full training configurations",
      "section": "Backup", "fsize": 24,
-     "headers": ["Hyperparameter", "ASL (Squeezeformer-style)", "ArSL (CNN-BiGRU)"],
+     "headers": ["Hyperparameter", "ASL (Conv1D + Transformer)", "ArSL (CNN-BiGRU)"],
      "widths": [0.3, 0.37, 0.33],
      "rows": [
         ["Dataset / classes", "Google ISLR — 250 signs [23]", "Balaha ArSL-20 — 20 signs [24]"],

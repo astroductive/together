@@ -206,7 +206,7 @@ y = section_header(y, "Recognition", "Two models, sized to their data")
 col_w = (BW - 2 * M - 60) // 2
 for i, (title, fig, specs) in enumerate([
     ("ASL — 250 signs", "Figure4_3",
-     ["Squeezeformer-style: Conv1D blocks + Transformer",
+     ["Custom hybrid: Conv1D blocks + Transformer",
       "Input (60, 543, 3) MediaPipe landmarks → 708 features",
       "3-tower ensemble, exported to TFLite (CPU, XNNPACK)",
       "RAdam + Lookahead · cosine LR · 400 epochs · AWP"]),

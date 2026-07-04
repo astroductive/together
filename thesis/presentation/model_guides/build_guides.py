@@ -236,8 +236,8 @@ def build_asl():
          "with landmarks instead of pixels has three advantages: the data is thousands of "
          "times smaller, the person's identity and background are discarded (privacy), and "
          "the model cannot be distracted by lighting or clothing.")
-    H2(d, "2.3 The subset and the split")
-    P(d, "The project trained on a working subset of **4,078 sequences**, divided "
+    H2(d, "2.3 The split")
+    P(d, "The project trained on the full dataset of roughly 100,000 sequences, divided "
          "**70% / 15% / 15%** into training, validation and test splits as defined in "
          "Section 1.5. One important honesty note: this split is random over recordings, "
          "meaning the same signer can appear in both training and test. The consequences of "
@@ -292,8 +292,8 @@ def build_asl():
     # ── architecture ──
     H1(d, "4. The architecture, layer by layer")
     P(d, "The architecture is the fixed wiring of the model — the sequence of mathematical "
-         "operations the input flows through. Ours adapts the **Squeezeformer** design, the "
-         "family that won the Google ISLR competition. Overall flow: a **stem** projects "
+         "operations the input flows through. Ours is a custom **convolution-and-transformer "
+         "hybrid** designed for this task. Overall flow: a **stem** projects "
          "each 708-number frame to a 192-number internal representation; then the sequence "
          "passes through **two repetitions of [three Conv1D blocks followed by one "
          "Transformer block]**; then **global average pooling** collapses time; then a "
@@ -541,7 +541,7 @@ def build_asl():
     TABLE(d, ["Item", "Value"],
           [
            ["Task", "isolated ASL sign classification, 250 classes"],
-           ["Dataset", "Google ISLR — ~100k sequences, 250 signs, 21 signers; 4,078-sequence subset"],
+           ["Dataset", "Google ISLR — ~100k sequences, 250 signs, 21 signers (full dataset)"],
            ["Split", "70% train / 15% validation / 15% test (random)"],
            ["Input to deployed model", "(60, 543, 3) raw MediaPipe landmarks; missing = NaN"],
            ["Preprocessing (inside graph)", "118 points, drop z, nose-center, σ-normalize, +velocity +acceleration → 708 features; pad to 384"],
