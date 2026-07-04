@@ -75,8 +75,11 @@
   }
   @media (max-width:420px){
     .lp-btn-demo{display:none}
+    .lp-nav-end>a[lang="ar"]{display:none} /* the mobile menu keeps an العربية entry */
+    .lp-btn-login{padding:8px 12px;font-size:12.5px}
     .lp-nav-brand-name{height:18px}
   }
+  .lp-btn-en,.lp-btn-login,.lp-btn-demo{white-space:nowrap} /* "Sign In" wrapped into a circle at 360px */
 
   /* ── Inner page layout ── */
   .pg-hero{padding:80px 24px 60px;max-width:900px;margin-inline:auto}
