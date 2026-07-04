@@ -65,6 +65,9 @@
     signLangLabel: 'لغة الإشارة',
     corrected: 'تم التصحيح',
     edit: 'تعديل',
+    composing: 'يقوم بتكوين الجملة…',
+    avatarLoading: 'جارٍ تحميل الإشارات…',
+    peerDead: 'انقطع اتصال المشارك',
   };
   var STRINGS_EN = {
     you: 'You',
@@ -95,8 +98,16 @@
     signLangLabel: 'Sign language',
     corrected: 'corrected',
     edit: 'Edit',
+    composing: 'is composing a sentence…',
+    avatarLoading: 'Loading signs…',
+    peerDead: 'Participant connection lost',
   };
   var S = AR ? STRINGS_AR : STRINGS_EN;
+
+  // Text→sign and TTS pick their language from the TEXT itself, not the page:
+  // a speaker on the English dashboard can type Arabic (and vice versa).
+  function textIsArabic(text) { return /[؀-ۿ]/.test(String(text || '')); }
+  var BATCH_URLS = { en: '/api/signs/batch', ar: '/api/signs_ar/batch' };
 
   var opts = null;              // page context, set by init()
   var peerNames = {};           // sid -> {name, role} survives peer removal (for "X left")
@@ -164,6 +175,10 @@
       '.ml-cap-row.mine .ml-cap-text{color:var(--muted)}',
       '.ml-cap-edit{flex:none;border:none;background:transparent;color:var(--faint);cursor:pointer;font-size:12px;padding:2px 4px;border-radius:6px}',
       '.ml-cap-edit:hover{color:var(--text);background:var(--surface-2)}',
+      '.ml-cap-sys{font-size:11.5px;color:var(--faint);font-style:italic;text-align:center;padding:5px 2px;border-bottom:1px dashed var(--border)}',
+      '.ml-remote-gloss.composing .ml-rg-word{opacity:.55}',
+      '.ml-rg-spin{width:12px;height:12px;border:2px solid var(--border);border-top-color:var(--accent,#1f8a82);border-radius:50%;animation:mlspin .9s linear infinite;flex:none}',
+      'body.ml-in-meeting .d-aurora-bg{display:none !important}',
       '.ml-remote-gloss{display:none;align-items:center;gap:6px;flex-wrap:wrap;background:var(--surface-2);border:1px dashed var(--border);border-radius:10px;padding:7px 10px;margin-bottom:8px;font-size:12.5px;color:var(--muted)}',
       '.ml-remote-gloss.on{display:flex}',
       '.ml-remote-gloss b{color:var(--text);font-size:12px}',
@@ -228,6 +243,11 @@
       return;
     }
     captions.forEach(function (c) {
+      if (c.system) {
+        var sysRow = el('div', 'ml-cap-sys', c.text);
+        host.appendChild(sysRow);
+        return;
+      }
       var row = el('div', 'ml-cap-row' + (c.mine ? ' mine' : ''));
       var meta = el('div', 'ml-cap-meta');
       meta.appendChild(el('div', 'ml-cap-name', c.mine ? S.you : c.name));
@@ -307,9 +327,16 @@
       var senderIsSpeaker = String(role || '').toLowerCase().indexOf('speak') >= 0;
       if (opts.isSigner() && senderIsSpeaker) enqueueAvatar(text);
       if (speechOut) {
-        try { opts.playTts(text, AR ? 'arabic' : 'english'); } catch (_) {}
+        try { opts.playTts(text, textIsArabic(text) ? 'arabic' : 'english'); } catch (_) {}
       }
     }
+  }
+
+  // Faint centered system rows in the caption feed ("word X not in dataset" etc.)
+  function addSystemNote(text) {
+    captions.push({ time: fmtTime(), system: true, text: text });
+    if (captions.length > CAPTION_MAX) captions.shift();
+    renderCaptions();
   }
 
   // ── local gloss (signer's pending words) ──────────────────────
@@ -394,21 +421,42 @@
   function onRemoteGloss(data) {
     var sid = data && data.sender_sid;
     var words = (data && Array.isArray(data.words)) ? data.words : [];
+    var composing = !!(data && data.composing);
     var host = remoteGlossHost();
     if (!host) return;
-    if (!words.length) { hideRemoteGloss(sid); return; }
+    if (!words.length && !composing) { hideRemoteGloss(sid); return; }
     host.classList.add('on');
+    host.classList.toggle('composing', composing);
     host.textContent = '';
     host.appendChild(el('span', null, '✋'));
-    var who = el('b', null, nameFor(sid, data && data.name) + ' ' + S.isSigning);
+    var who = el('b', null, nameFor(sid, data && data.name) + ' ' +
+      (composing ? S.composing : S.isSigning));
     host.appendChild(who);
     words.slice(-8).forEach(function (w) { host.appendChild(el('span', 'ml-rg-word', w)); });
+    if (composing) host.appendChild(el('span', 'ml-rg-spin'));
     if (rgTimers[sid]) clearTimeout(rgTimers[sid]);
-    rgTimers[sid] = setTimeout(function () { hideRemoteGloss(sid); }, 8000);
+    // While composing, hold the line until the sentence caption arrives (or a
+    // generous timeout — the LLM can take several seconds).
+    rgTimers[sid] = setTimeout(function () { hideRemoteGloss(sid); }, composing ? 25000 : 8000);
+  }
+
+  // The signer pressed Compose: tell the room the words are being turned
+  // into a sentence — previously they just VANISHED from the other side's
+  // panel until the sentence arrived.
+  function notifyComposing(words) {
+    var sock = opts.getSocket();
+    if (!sock || !sock.connected || !opts.isInMeeting()) return;
+    sock.emit('meeting_gloss', {
+      room: opts.getRoom(),
+      words: (words || []).slice(-12),
+      composing: true,
+      name: opts.getDisplayName(),
+      role: opts.getRole(),
+    });
   }
   function hideRemoteGloss(sid) {
     var host = $('ml-remote-gloss');
-    if (host) { host.classList.remove('on'); host.textContent = ''; }
+    if (host) { host.classList.remove('on', 'composing'); host.textContent = ''; }
     if (sid && rgTimers[sid]) { clearTimeout(rgTimers[sid]); delete rgTimers[sid]; }
   }
 
@@ -438,6 +486,7 @@
     }, 50);
   }
 
+  var deadTimers = {};
   function tileNote(sid, show, msg) {
     var tile = document.getElementById('remote-tile-' + String(sid || '').replace(/[^A-Za-z0-9_-]/g, '_'));
     if (!tile) return;
@@ -452,8 +501,22 @@
         var m = note.querySelector('.ml-tile-note-msg');
         if (m) m.textContent = msg || S.interrupted;
       }
-    } else if (note) {
-      note.remove();
+      // WATCHDOG: if the interruption never recovers AND no peer_left ever
+      // arrives (flaky signaling), stop showing a frozen ghost — after 12s
+      // treat the peer as gone and let the page tear the tile down.
+      if (!deadTimers[sid]) {
+        deadTimers[sid] = setTimeout(function () {
+          delete deadTimers[sid];
+          var t2 = document.getElementById('remote-tile-' + String(sid || '').replace(/[^A-Za-z0-9_-]/g, '_'));
+          if (t2 && t2.querySelector('.ml-tile-note')) {
+            toast(S.peerDead);
+            if (opts.removePeer) { try { opts.removePeer(sid); } catch (_) {} }
+          }
+        }, 12000);
+      }
+    } else {
+      if (note) note.remove();
+      if (deadTimers[sid]) { clearTimeout(deadTimers[sid]); delete deadTimers[sid]; }
     }
   }
 
@@ -502,30 +565,13 @@
       chipEl.title = (window.__landmarkEngineBackend || '');
       stageLabel.parentElement.insertBefore(chipEl, stageLabel);
     }
-    // signer-only: a sign-language picker that mirrors the dashboard's picker
+    // The model is chosen ONCE in the create/join dialog and stays fixed for
+    // the whole meeting (a mid-meeting picker invited exactly the "unusual
+    // bugs" the owner asked to prevent) — the chip only REPORTS it.
     var camSel = opts.getCamLangSelect();
-    if (camSel && opts.isSigner() && !$('ml-sign-lang')) {
-      var sel = document.createElement('select');
-      sel.id = 'ml-sign-lang';
-      sel.className = 'd-lang-sel';
-      sel.style.cssText = 'padding:4px 8px;font-size:12px;max-width:150px;margin-inline-end:8px';
-      sel.setAttribute('aria-label', S.signLangLabel);
-      Array.prototype.forEach.call(camSel.options, function (o) {
-        var c = document.createElement('option');
-        c.value = o.value; c.textContent = o.textContent;
-        sel.appendChild(c);
-      });
-      sel.value = camSel.value;
-      sel.addEventListener('change', function () {
-        camSel.value = sel.value;
-        camSel.dispatchEvent(new Event('change'));
-        updateChip();
-      });
-      camSel.addEventListener('change', function () {
-        sel.value = camSel.value;
-        updateChip();
-      });
-      chipEl.parentElement.insertBefore(sel, chipEl);
+    if (camSel && !camSel.__mlChipBound) {
+      camSel.__mlChipBound = true;
+      camSel.addEventListener('change', updateChip);
     }
     updateChip();
   }
@@ -597,7 +643,12 @@
   }
 
   function startMeter(stream) {
+    // NOTE: stopMeter() stops meterStream — assign the NEW stream only after
+    // the old one is torn down. Assigning it before this call made stopMeter
+    // kill the stream we were about to record from, and MediaRecorder.start()
+    // then threw NotSupportedError on the dead stream.
     stopMeter(false);
+    meterStream = stream;
     try {
       meterCtx = new (window.AudioContext || window.webkitAudioContext)();
       var src = meterCtx.createMediaStreamSource(stream);
@@ -663,27 +714,40 @@
   // Push-to-talk MediaRecorder → /api/stt. Used for Arabic always, and for
   // English when a specific (non-default) input device is selected —
   // SpeechRecognition can only listen on the OS default device.
+  function pickAudioMime() {
+    if (!window.MediaRecorder || !MediaRecorder.isTypeSupported) return '';
+    var candidates = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4', 'audio/ogg;codecs=opus'];
+    for (var i = 0; i < candidates.length; i++) {
+      try { if (MediaRecorder.isTypeSupported(candidates[i])) return candidates[i]; } catch (_) {}
+    }
+    return '';
+  }
+
   async function startRecorder(language) {
     var stream;
     try { stream = await navigator.mediaDevices.getUserMedia(micConstraints()); }
     catch (e) { opts.setStatus(S.micDenied, false); return false; }
-    meterStream = stream;
-    startMeter(stream);
+    startMeter(stream); // takes ownership of the stream (meterStream)
     micChunks = [];
-    micMediaRec = new MediaRecorder(stream);
+    var mime = pickAudioMime();
+    try {
+      micMediaRec = mime ? new MediaRecorder(stream, { mimeType: mime }) : new MediaRecorder(stream);
+    } catch (e) {
+      micMediaRec = new MediaRecorder(stream);
+    }
+    var recMime = (micMediaRec.mimeType || mime || 'audio/webm').split(';')[0];
     micMediaRec.ondataavailable = function (e) { if (e.data.size > 0) micChunks.push(e.data); };
     micMediaRec.onstop = async function () {
-      stopMeter();
-      stream.getTracks().forEach(function (t) { t.stop(); });
-      if (meterStream === stream) meterStream = null;
-      var blob = new Blob(micChunks, { type: 'audio/webm' });
+      stopMeter(); // stops + releases the stream (it owns meterStream)
+      var blob = new Blob(micChunks, { type: recMime });
       micChunks = [];
       micMediaRec = null;
       if (!blob.size) { setMicButton('off'); return; }
       opts.setStatus(S.micTranscribing, true);
       try {
         var fd = new FormData();
-        fd.append('file', blob, 'meeting_speech.webm');
+        var ext = recMime.indexOf('mp4') >= 0 ? 'mp4' : (recMime.indexOf('ogg') >= 0 ? 'ogg' : 'webm');
+        fd.append('file', blob, 'meeting_speech.' + ext);
         fd.append('language', language);
         var res = await opts.authFetch('/api/stt', { method: 'POST', body: fd });
         if (!res.ok) throw new Error('stt ' + res.status);
@@ -720,8 +784,8 @@
     }
     // a parallel monitor stream feeds the level meter (SR exposes no audio)
     try {
-      meterStream = await navigator.mediaDevices.getUserMedia(micConstraints());
-      startMeter(meterStream);
+      var monitor = await navigator.mediaDevices.getUserMedia(micConstraints());
+      startMeter(monitor); // takes ownership
     } catch (_) { /* SR may still work */ }
 
     micRec = new SR();
@@ -807,8 +871,8 @@
     return tile;
   }
 
-  function normalizeWords(text) {
-    if (AR) {
+  function normalizeWords(text, isAr) {
+    if (isAr) {
       return String(text || '').replace(/[^؀-ۿ0-9\s]/g, ' ').split(/\s+/).filter(Boolean);
     }
     var out = [];
@@ -818,6 +882,30 @@
         if (c === 'im') { out.push('i', 'am'); } else if (c) out.push(c);
       });
     return out;
+  }
+
+  // Per-word landmark cache — repeated words play instantly instead of
+  // re-downloading their landmark clips on every sentence.
+  var signCache = {};
+  var signCacheKeys = [];
+  var SIGN_CACHE_MAX = 80;
+  function cachePut(lang, word, item) {
+    var k = lang + '|' + String(word || '').toLowerCase();
+    if (!(k in signCache)) {
+      signCacheKeys.push(k);
+      if (signCacheKeys.length > SIGN_CACHE_MAX) delete signCache[signCacheKeys.shift()];
+    }
+    signCache[k] = item;
+  }
+  function cacheGet(lang, word) {
+    return signCache[lang + '|' + String(word || '').toLowerCase()] || null;
+  }
+
+  function withTimeout(promise, ms) {
+    return Promise.race([
+      promise,
+      new Promise(function (resolve) { setTimeout(function () { resolve(null); }, ms); }),
+    ]);
   }
 
   function enqueueAvatar(text) {
@@ -847,33 +935,64 @@
     while (avatarQueue.length) {
       var sentence = avatarQueue.shift();
       if (qEl) qEl.textContent = avatarQueue.length ? ('+' + avatarQueue.length) : '';
+      // Immediate feedback — the old flow showed a frozen idle avatar for as
+      // long as gloss LLM + landmark download took (reported ~10s).
+      if (wordEl) wordEl.textContent = '⏳ ' + S.avatarLoading;
+
+      // Pick the sign language from the TEXT (Arabic letters → ArSL), so a
+      // speaker typing Arabic on the English dashboard still signs correctly.
+      var isArText = textIsArabic(sentence);
+      var langKey = isArText ? 'ar' : 'en';
+
       var words = null;
       if (opts.sentenceToGloss) {
-        try { words = await opts.sentenceToGloss(sentence, AR ? 'arabic' : 'english'); } catch (_) {}
+        // The LLM gloss is a nice-to-have; never let it hold the avatar
+        // hostage — 1.2s budget, then fall back to plain word order.
+        try { words = await withTimeout(opts.sentenceToGloss(sentence, isArText ? 'arabic' : 'english'), 1200); } catch (_) {}
       }
-      if (!words || !words.length) words = normalizeWords(sentence);
+      if (!words || !words.length) words = normalizeWords(sentence, isArText);
       if (!words.length) continue;
+
+      // Serve every word we can from the cache; fetch only the misses.
+      var playlist = [];
+      var misses = [];
+      words.forEach(function (w) {
+        if (!cacheGet(langKey, w)) misses.push(w);
+      });
       var data = null;
-      try {
-        var res = await opts.authFetch(opts.signBatchUrl, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ words: words }),
-        });
-        if (res.ok) data = await res.json();
-      } catch (_) {}
-      if (!data || !data.found || !data.found.length) {
-        opts.setStatus(S.avatarMissing + ' "' + sentence + '"', false);
-        continue;
+      if (misses.length) {
+        try {
+          var res = await opts.authFetch(BATCH_URLS[langKey], {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ words: misses }),
+          });
+          if (res.ok) data = await res.json();
+        } catch (_) {}
+        if (data && Array.isArray(data.found)) {
+          data.found.forEach(function (item) {
+            if (item && item.word) cachePut(langKey, item.word, item);
+          });
+        }
       }
-      if (data.missing && data.missing.length) {
-        opts.setStatus(S.avatarMissing + ' ' + data.missing.join(', '), false);
+      var notFound = [];
+      words.forEach(function (w) {
+        var item = cacheGet(langKey, w);
+        if (item) playlist.push(item);
+        else notFound.push(w);
+      });
+      if (notFound.length) {
+        // Surface it where the user is looking instead of failing silently.
+        addSystemNote('⚠ ' + S.avatarMissing + ' ' + notFound.join('، '));
+        toast(S.avatarMissing + ' ' + notFound.slice(0, 3).join('، '));
       }
-      for (var wi = 0; wi < data.found.length; wi++) {
-        var item = data.found[wi];
-        var lms = item.landmarks || [];
-        var n = item.frame_count || lms.length;
-        if (wordEl) wordEl.textContent = item.word_ar || item.word || '';
+      if (!playlist.length) continue;
+
+      for (var wi = 0; wi < playlist.length; wi++) {
+        var item2 = playlist[wi];
+        var lms = item2.landmarks || [];
+        var n = item2.frame_count || lms.length;
+        if (wordEl) wordEl.textContent = item2.word_ar || item2.word || '';
         for (var f = 0; f < n; f++) {
           if (!avatarBusy) return; // torn down mid-play (leave)
           var flat = opts.flattenFrame(lms[f]);
@@ -903,6 +1022,9 @@
 
   // ── lifecycle ─────────────────────────────────────────────────
   function onJoined() {
+    // The animated aurora background (three blur(100px) blobs) competes with
+    // camera capture + WebRTC encode for the GPU — pause it during calls.
+    document.body.classList.add('ml-in-meeting');
     ensureIndicators();
     ensureMicUi();
     // The signer's role UI hides the mic button — hide its companions too.
@@ -914,6 +1036,7 @@
   }
 
   function onLeave() {
+    document.body.classList.remove('ml-in-meeting');
     stopMic();
     resetAvatar();
     hideRemoteGloss();
@@ -940,6 +1063,8 @@
     },
     ready: function () { return !!opts; },
     addCaption: addCaption,
+    addSystemNote: addSystemNote,
+    notifyComposing: notifyComposing,
     onLocalSign: onLocalSign,
     clearLocalGloss: clearLocalGloss,
     renderLocalGloss: renderLocalGloss,

@@ -918,6 +918,23 @@ button.is-busy{opacity:.6;cursor:progress}
             <div class="d-modal-title">انضمام للاجتماع</div>
             <input id="modal-meeting-code" class="t-input" placeholder="أدخل رمزاً من 5 أحرف" maxlength="5"
               style="text-transform:uppercase;text-align:center;font-size:18px;letter-spacing:4px;font-weight:700;margin-bottom:16px">
+            <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:16px;text-align:start">
+              <label style="display:flex;flex-direction:column;gap:4px;font-size:12px;font-weight:700;color:var(--muted)">دورك في الاجتماع
+                <select id="modal-join-role" class="d-lang-sel">
+                  <option value="signer">مُشير (أصم/ضعيف سمع)</option>
+                  <option value="speaker">متحدث</option>
+                </select>
+              </label>
+              <label style="display:flex;flex-direction:column;gap:4px;font-size:12px;font-weight:700;color:var(--muted)">نموذج لغة الإشارة (ثابت طوال الاجتماع)
+                <select id="modal-join-model" class="d-lang-sel">
+                  <option value="arabic">العربية (ArSL)</option>
+                  <option value="english">English (ASL)</option>
+                </select>
+              </label>
+              <label style="display:flex;gap:8px;align-items:center;font-size:13px;color:var(--text);cursor:pointer">
+                <input type="checkbox" id="modal-join-cam" checked style="width:16px;height:16px;accent-color:var(--accent)"> الانضمام والكاميرا تعمل
+              </label>
+            </div>
             <div style="display:flex;gap:10px;justify-content:center">
               <button class="t-btn t-btn--ghost" onclick="closeJoinModal()">إلغاء</button>
               <button class="t-btn t-btn--accent" onclick="submitJoinModal()">انضمام</button>
@@ -928,6 +945,23 @@ button.is-busy{opacity:.6;cursor:progress}
           <div class="d-modal-box">
             <div class="d-modal-title">تم إنشاء الاجتماع</div>
             <div class="d-modal-code" id="modal-created-code">ABCDE</div>
+            <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:16px;text-align:start">
+              <label style="display:flex;flex-direction:column;gap:4px;font-size:12px;font-weight:700;color:var(--muted)">دورك في الاجتماع
+                <select id="modal-create-role" class="d-lang-sel">
+                  <option value="signer">مُشير (أصم/ضعيف سمع)</option>
+                  <option value="speaker">متحدث</option>
+                </select>
+              </label>
+              <label style="display:flex;flex-direction:column;gap:4px;font-size:12px;font-weight:700;color:var(--muted)">نموذج لغة الإشارة (ثابت طوال الاجتماع)
+                <select id="modal-create-model" class="d-lang-sel">
+                  <option value="arabic">العربية (ArSL)</option>
+                  <option value="english">English (ASL)</option>
+                </select>
+              </label>
+              <label style="display:flex;gap:8px;align-items:center;font-size:13px;color:var(--text);cursor:pointer">
+                <input type="checkbox" id="modal-create-cam" checked style="width:16px;height:16px;accent-color:var(--accent)"> الانضمام والكاميرا تعمل
+              </label>
+            </div>
             <div style="display:flex;flex-direction:column;gap:10px">
               <button class="t-btn t-btn--accent" id="modal-copy-btn" onclick="copyCreatedCode()">نسخ الرمز والرابط</button>
               <button class="t-btn t-btn--ghost" onclick="closeCreateModal()">بدء الاجتماع</button>
@@ -1647,7 +1681,7 @@ button.is-busy{opacity:.6;cursor:progress}
               await holistic.send({ image: video });
               const _cost = performance.now() - _t0;
               _mEma = _mEma ? (_mEma * 0.8 + _cost * 0.2) : _cost;
-              _mInterval = Math.min(700, Math.max(100, _mEma * 2.5));
+              _mInterval = Math.min(1400, Math.max(120, _mEma * 3.5)); // <30% main-thread duty
             } catch (e) {
               console.error("[Camera] Holistic send frame error:", e);
               _holisticBusy = false;
@@ -2436,14 +2470,20 @@ button.is-busy{opacity:.6;cursor:progress}
       const data = await res.json();
 
       if (data.found.length === 0) {
-        setStatus(`No signs found for: "${text}"`, false);
+        setStatus(`لا توجد إشارات لـ: "${text}"`, false);
+        t2sHistory.unshift({ text: `⚠️ غير موجودة في قاموس الإشارات: ${data.missing && data.missing.length ? data.missing.join('، ') : text}`, time: new Date().toLocaleTimeString() });
+        renderT2SHistory();
         document.getElementById('avatar-placeholder').style.display = 'flex';
         return;
       }
 
       document.getElementById('avatar-placeholder').style.display = 'none';
-      const missing = data.missing.length > 0 ? ` (skipped: ${data.missing.join(', ')})` : '';
-      setStatus(`Signing: ${text}${missing}`, true);
+      const missing = data.missing.length > 0 ? ` (تخطّي: ${data.missing.join('، ')})` : '';
+      if (data.missing.length > 0) {
+        t2sHistory.unshift({ text: `⚠️ غير موجودة في قاموس الإشارات: ${data.missing.join('، ')}`, time: new Date().toLocaleTimeString() });
+        renderT2SHistory();
+      }
+      setStatus(`جارٍ الإشارة: ${text}${missing}`, true);
       await playLandmarkSequence(data.found, avatarCanvas, avatarCtx);
       setStatus('Done', false);
 
@@ -2752,8 +2792,14 @@ button.is-busy{opacity:.6;cursor:progress}
       }
       const data = await res.json();
 
+      const s2sStatusEl = document.getElementById('mic-status');
+      if (data.missing && data.missing.length && s2sStatusEl) {
+        s2sStatusEl.textContent = `⚠️ غير موجودة في قاموس الإشارات: ${data.missing.join('، ')}`;
+      }
       if (data.found.length > 0) {
         await playLandmarkSequence(data.found, s2sCanvas, s2sCtx);
+      } else if (s2sStatusEl) {
+        s2sStatusEl.textContent = `⚠️ لا توجد إشارات لـ: "${text}"`;
       }
     } catch (_) { }
     s2sPlaying = false;
@@ -2801,6 +2847,24 @@ button.is-busy{opacity:.6;cursor:progress}
     } catch (e) { console.warn('[WebRTC] ICE config fetch failed; using STUN only', e); }
   }
 
+  // Prefer FRAMERATE over resolution when the encoder is starved (weak
+  // machines): without this Chrome's default 'balanced' mode lets the sent
+  // stream drop to a slideshow while holding 480p.
+  function tuneVideoSenders(pc) {
+    try {
+      pc.getSenders().forEach(sn => {
+        if (sn.track && sn.track.kind === 'video') {
+          try { sn.track.contentHint = 'motion'; } catch (_) {}
+          try {
+            const p = sn.getParameters();
+            p.degradationPreference = 'maintain-framerate';
+            sn.setParameters(p).catch(() => {});
+          } catch (_) {}
+        }
+      });
+    } catch (_) {}
+  }
+
   function createPeer(remoteSid, isOfferer) {
     if (!remoteSid || remoteSid === (socket && socket.id)) return null;
     let entry = peers[remoteSid];
@@ -2837,6 +2901,7 @@ button.is-busy{opacity:.6;cursor:progress}
       meetingCamStream.getTracks().forEach(t => {
         try { pc.addTrack(t, meetingCamStream); } catch (_) {}
       });
+      tuneVideoSenders(pc);
     }
 
     let offerCreated = false;
@@ -3059,6 +3124,7 @@ button.is-busy{opacity:.6;cursor:progress}
     if (buf.length === 0) return;
     const gloss = [...buf];
     window.__meetGlossBuf = [];
+    if (window.MeetLive && MeetLive.ready()) MeetLive.notifyComposing(gloss);
     const badge = document.getElementById('meeting-compose-badge');
     const btn = document.getElementById('meeting-compose-btn');
     if (badge) badge.hidden = false;
@@ -3369,6 +3435,7 @@ button.is-busy{opacity:.6;cursor:progress}
         meetingCamStream.getTracks().forEach(track => {
           try { p.pc.addTrack(track, meetingCamStream); } catch (_) {}
         });
+        tuneVideoSenders(p.pc);
       });
 
       return true;
@@ -3451,10 +3518,44 @@ button.is-busy{opacity:.6;cursor:progress}
     initMeetingRoleUi();
   }
 
+  // The creator/joiner confirms role + sign-language model + camera in the
+  // dialog; the model then stays FIXED for the whole meeting.
+  let meetingJoinWithCam = true;
+
+  function prefillMeetingModal(prefix) {
+    const roleSel = document.getElementById(prefix + '-role');
+    const modelSel = document.getElementById(prefix + '-model');
+    const camChk = document.getElementById(prefix + '-cam');
+    const mainRole = document.getElementById('meeting-role-select');
+    const camLang = document.getElementById('cam-language-select');
+    if (roleSel && mainRole) roleSel.value = mainRole.value;
+    if (modelSel && camLang) {
+      // EgSL is the same model as ArSL — normalize.
+      modelSel.value = (camLang.value === 'arabic' || camLang.value === 'egyptian') ? 'arabic' : 'english';
+    }
+    if (camChk) camChk.checked = true;
+  }
+
+  function applyMeetingModal(prefix) {
+    const roleSel = document.getElementById(prefix + '-role');
+    const modelSel = document.getElementById(prefix + '-model');
+    const camChk = document.getElementById(prefix + '-cam');
+    const mainRole = document.getElementById('meeting-role-select');
+    const camLang = document.getElementById('cam-language-select');
+    if (roleSel && mainRole) mainRole.value = roleSel.value;
+    if (modelSel && camLang && camLang.value !== modelSel.value) {
+      camLang.value = modelSel.value;
+      camLang.dispatchEvent(new Event('change'));
+    }
+    meetingJoinWithCam = camChk ? camChk.checked : true;
+    if (window.MeetLive && MeetLive.ready()) MeetLive.updateChip();
+  }
+
   function triggerCreateMeeting() {
     const roomId = generateMeetingRoomId();
     const input = document.getElementById('meeting-room-id');
     if (input) input.value = roomId;
+    prefillMeetingModal('modal-create');
 
     const modal = document.getElementById('create-meeting-modal');
     const codeDisplay = document.getElementById('modal-created-code');
@@ -3469,6 +3570,7 @@ button.is-busy{opacity:.6;cursor:progress}
     const modal = document.getElementById('join-meeting-modal');
     const codeInput = document.getElementById('modal-meeting-code');
     if (codeInput) codeInput.value = '';
+    prefillMeetingModal('modal-join');
     if (modal) modal.style.display = 'flex';
   }
 
@@ -3488,12 +3590,14 @@ button.is-busy{opacity:.6;cursor:progress}
     if (input) input.value = code;
 
     closeJoinModal();
+    applyMeetingModal('modal-join');
     joinMeeting();
   }
 
   function closeCreateModal() {
     const modal = document.getElementById('create-meeting-modal');
     if (modal) modal.style.display = 'none';
+    applyMeetingModal('modal-create');
     // Fire the actual meeting join now that user clicked Start Meeting
     joinMeeting();
   }
@@ -3755,7 +3859,7 @@ button.is-busy{opacity:.6;cursor:progress}
 
       // Start camera before joining/syncing meeting connection
       try {
-        await startMeetingCamera();
+        if (meetingJoinWithCam) await startMeetingCamera();
       } catch (e) {
         console.error("Failed to start camera on join:", e);
       }
@@ -3769,7 +3873,7 @@ button.is-busy{opacity:.6;cursor:progress}
       initMeetingRoleUi();
 
       if (isDeafHohUser) {
-        if (!meetingSignInputOn) {
+        if (meetingJoinWithCam && !meetingSignInputOn) {
           try { startCamera(); } catch (_) {}
           meetingSignInputOn = true;
           const signBtn = document.getElementById('meeting-sign-btn');
@@ -3888,6 +3992,7 @@ button.is-busy{opacity:.6;cursor:progress}
       signBatchUrl: '/api/signs_ar/batch',
       getCamLangSelect: () => document.getElementById('cam-language-select'),
       setStatus: (m, ok) => setStatus(m, ok),
+      removePeer: (sid) => removePeer(sid),
     });
   }
 
