@@ -95,13 +95,13 @@ HERO_T, HERO_B = 200, 950
 # oversized watermark hands, right side
 logo_at(A("logo_color_hi"), BW - 320, HERO_B - 220, 620, alpha=0.10)
 logo_at(A("logo_color_hi"), BW // 2, HERO_T + 150, 235)
-fit_text(d, (M, HERO_T + 285, BW - M, HERO_T + 510), "Together",
+fit_text(d, (M, HERO_T + 270, BW - M, HERO_T + 495), "Together",
          SERIF_B, 225, 150, TEAL, 0, align="center", line_gap=1.0)
-fit_text(d, (M, HERO_T + 512, BW - M, HERO_T + 588),
+fit_text(d, (M, HERO_T + 556, BW - M, HERO_T + 632),
          "An AI-Based Sign-Language Translator — ASL & ArSL",
          SERIF_B, 60, 40, INK, 0, align="center")
-d.line([(BW // 2 - 140, HERO_T + 622), (BW // 2 + 140, HERO_T + 622)], fill=SAND, width=8)
-fit_text(d, (M + 120, HERO_T + 650, BW - M - 120, HERO_T + 738),
+d.line([(BW // 2 - 140, HERO_T + 664), (BW // 2 + 140, HERO_T + 664)], fill=SAND, width=8)
+fit_text(d, (M + 120, HERO_T + 692, BW - M - 120, HERO_T + 780),
          "Real-time, two-way translation between signed and spoken language — "
          "in the browser, with nothing but a webcam.",
          SERIF_I, 42, 30, MUTED, 0, align="center", line_gap=1.25)
