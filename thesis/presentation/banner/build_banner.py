@@ -92,24 +92,23 @@ fit_text(d, (620, 112, BW - M, 155),
 
 # ═════════════════════ 2. hero ════════════════════════════════════════════
 HERO_T, HERO_B = 200, 950
-vgrad((0, HERO_T, BW, HERO_B), TEAL, TEAL_DARKER)
 # oversized watermark hands, right side
-logo_at(A("logo_white_hi"), BW - 320, HERO_B - 220, 620, alpha=0.14)
-logo_at(A("logo_white_hi"), BW // 2, HERO_T + 150, 235)
+logo_at(A("logo_color_hi"), BW - 320, HERO_B - 220, 620, alpha=0.10)
+logo_at(A("logo_color_hi"), BW // 2, HERO_T + 150, 235)
 fit_text(d, (M, HERO_T + 285, BW - M, HERO_T + 510), "Together",
-         SERIF_B, 225, 150, WHITE, 0, align="center", line_gap=1.0)
+         SERIF_B, 225, 150, TEAL, 0, align="center", line_gap=1.0)
 fit_text(d, (M, HERO_T + 512, BW - M, HERO_T + 588),
          "An AI-Based Sign-Language Translator — ASL & ArSL",
-         SERIF_B, 60, 40, "#eaf6f3", 0, align="center")
-d.line([(BW // 2 - 140, HERO_T + 622), (BW // 2 + 140, HERO_T + 622)], fill=SAND_L, width=8)
+         SERIF_B, 60, 40, INK, 0, align="center")
+d.line([(BW // 2 - 140, HERO_T + 622), (BW // 2 + 140, HERO_T + 622)], fill=SAND, width=8)
 fit_text(d, (M + 120, HERO_T + 650, BW - M - 120, HERO_T + 738),
          "Real-time, two-way translation between signed and spoken language — "
          "in the browser, with nothing but a webcam.",
-         SERIF_I, 42, 30, "#d7efe9", 0, align="center", line_gap=1.25)
+         SERIF_I, 42, 30, MUTED, 0, align="center", line_gap=1.25)
 
 # ═════════════════════ 3. team band ═══════════════════════════════════════
 TB_T, TB_H = HERO_B, 260
-d.rectangle([0, TB_T, BW, TB_T + TB_H], fill=CREAM)
+d.line([(M, TB_T + 4), (BW - M, TB_T + 4)], fill=HAIR, width=3)
 d.text((M, TB_T + 26), "PRESENTED BY", font=F(SANS_B, 30), fill=SAND)
 names = [("Abdelfattah Moustafa", "20225889"), ("Michael Abdallah", "20213601"),
          ("Ahmed Mohamed Nagib", "20170423"), ("Ahmed Ashraf Shawareb", "20180097")]
@@ -117,7 +116,7 @@ cw = (BW - 2 * M - 3 * 40) // 4
 for i, (nm, sid) in enumerate(names):
     x = M + i * (cw + 40)
     d.rounded_rectangle([x, TB_T + 74, x + cw, TB_T + 190], radius=18,
-                        fill=WHITE, outline=HAIR, width=3)
+                        fill=CARD, outline=HAIR, width=3)
     fit_text(d, (x + 20, TB_T + 96, x + cw - 20, TB_T + 140), nm,
              SANS_B, 34, 24, INK, 0, align="center")
     fit_text(d, (x + 20, TB_T + 142, x + cw - 20, TB_T + 180), sid,
@@ -201,7 +200,6 @@ y = yy + 60
 band_t = y - 6
 box_h = 1030
 band_b = band_t + 178 + box_h + 48
-d.rectangle([0, band_t, BW, band_b], fill=CREAM)
 y = section_header(y, "Recognition", "Two models, sized to their data")
 col_w = (BW - 2 * M - 60) // 2
 for i, (title, fig, specs) in enumerate([
@@ -282,16 +280,16 @@ strip_t = BH - 460
 print(f"content ends at y={y}, conclusion strip starts at {strip_t} "
       f"(clearance {strip_t - y}px)")
 assert y <= strip_t - 10, "content overruns the conclusion strip"
-vgrad((0, strip_t, BW, BH - 120), INK, "#0b1830")
-logo_at(A("logo_white_hi"), 250, strip_t + 170, 190)
+d.line([(M, strip_t), (BW - M, strip_t)], fill=HAIR, width=3)
+logo_at(A("logo_color_hi"), 250, strip_t + 170, 190)
 fit_text(d, (440, strip_t + 60, BW - M, strip_t + 200),
          "“An accessible, bidirectional, bilingual sign-language translator is "
          "achievable today — in a browser.”",
-         SERIF_B, 54, 36, WHITE, 0, line_gap=1.2)
+         SERIF_B, 54, 36, INK, 0, line_gap=1.2)
 fit_text(d, (440, strip_t + 215, BW - M, strip_t + 300),
          "Isolated-sign recognition · gloss-mediated LLM translation · semantic sign synthesis · "
          "live meetings — CPU-only, built on public datasets.",
-         SANS_R, 32, 24, "#b9c6d8", 0, line_gap=1.25)
+         SANS_R, 32, 24, MUTED, 0, line_gap=1.25)
 d.rectangle([0, BH - 120, BW, BH], fill=WHITE)
 d.rectangle([0, BH - 120, BW, BH - 114], fill=SAND)
 f = F(SANS_R, 28)
