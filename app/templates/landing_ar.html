@@ -192,6 +192,23 @@
     .lp-footer-inner{grid-template-columns:1fr}
     .hiw-wrap::before{display:none}
   }
+  /* Mobile: stop the nav-end controls from overflowing the fixed bar.
+     (The EN landing has the same rules; without them the RTL nav spills
+     past the LEFT edge, hiding the burger and the theme toggle.) */
+  @media (max-width:680px){
+    .lp-nav{padding-inline:16px;gap:6px}
+    .lp-nav-end{margin-inline-start:auto;gap:8px;flex-wrap:nowrap;overflow-x:auto;
+                -webkit-overflow-scrolling:touch;scrollbar-width:none}
+    .lp-nav-end::-webkit-scrollbar{display:none}
+    .lp-nav-sep{display:none}
+    .lp-nav-brand-tag{display:none}
+  }
+  @media (max-width:420px){
+    .lp-btn-en{display:none} /* the mobile menu keeps an English entry */
+    .lp-btn-login{padding:8px 12px;font-size:12.5px}
+    .lp-nav-brand-name{height:18px}
+  }
+  .lp-btn-en,.lp-btn-login{white-space:nowrap}
 </style>
 {% endblock %}
 
@@ -307,6 +324,15 @@
   <a class="lp-mm-link" href="/contact?lang=ar">تواصل معنا</a>
   <a class="lp-mm-link" href="/demo?lang=ar">احجز عرضًا</a>
   <a class="lp-mm-link" href="/" lang="en" dir="ltr">English</a>
+  <div class="lp-mm-head">السمة</div>
+  <div class="t-toggle lp-mm-theme" role="group" aria-label="لون السمة">
+    <button type="button" data-theme-set="light" aria-pressed="false" aria-label="السمة الفاتحة" title="فاتح">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4 12H2M22 12h-2M5 5l1.4 1.4M17.6 17.6 19 19M19 5l-1.4 1.4M6.4 17.6 5 19"/></svg>
+    </button>
+    <button type="button" data-theme-set="dark" aria-pressed="true" aria-label="السمة الداكنة" title="داكن">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A8 8 0 1 1 11.2 3 6.2 6.2 0 0 0 21 12.8Z"/></svg>
+    </button>
+  </div>
 </div>
 <style>
 /* Mobile nav: below 760px the inline links are hidden (per-page rules hide
@@ -325,6 +351,8 @@
 .lp-mm-link{display:block;padding:11px 8px;border-radius:10px;font-size:15px;font-weight:600;
   color:var(--text);text-decoration:none}
 .lp-mm-link:hover{background:var(--surface)}
+.lp-mm-theme{margin:10px 6px 4px;width:max-content}
+.lp-mm-theme button{padding:8px 14px}
 @media(max-width:760px){
   .lp-nav .lp-nav-links{display:none}
   .lp-nav-burger{display:inline-flex}
