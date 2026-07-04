@@ -148,6 +148,7 @@
       pctPose: pct(state.framesWithPose),
       pctFace: pct(state.framesWithFace),
       payloadsSent: state.payloadsSent,
+      landmarkEngine: window.__landmarkEngineBackend || 'unknown',
     };
   }
 

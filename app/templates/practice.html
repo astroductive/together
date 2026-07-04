@@ -11,6 +11,7 @@
 <script src="/static/vendor/mediapipe/drawing_utils/drawing_utils.js"></script>
 <script src="/static/js/socket.io.js"></script>
 <script src="/static/js/sign-diag.js"></script>
+<script src="/static/js/landmark-engine.js"></script>
 <style>
   html{background:var(--bg)!important}
   body{background:transparent}
@@ -555,36 +556,31 @@
   // (see the dashboards for rationale: WASM+graph init used to run on the
   // first camera frame, costing seconds while the user's hand was raised)
   let _mpComplexity = 1;
+  let _engineCreating = null;
   function ensureHolistic() {
-    if (holistic || typeof window.Holistic === 'undefined') return holistic;
-    holistic = new Holistic({
-      locateFile: (file) => `/static/vendor/mediapipe/holistic/${file}`,
-    });
-    holistic.setOptions({
-      modelComplexity: _mpComplexity, // auto-drops to lite when the machine can't keep up
-      // selfieMode MUST stay false: true flips the image BEFORE the graph
-      // runs, feeding the models mirrored coords with swapped hands —
-      // measured ASL 66.5%→51%, ArSL 95%→10% (scripts/model_harness.py).
-      // The selfie view is done in CSS (video + skeleton canvas flipped).
-      selfieMode: false,
-      smoothLandmarks: true,
-      minDetectionConfidence: 0.5,
-      minTrackingConfidence: 0.5,
-    });
-    holistic.onResults(onHolisticResults);
+    // Backend choice (tasks-vision GPU vs legacy WASM) lives in
+    // /static/js/landmark-engine.js; creation is async and this returns null
+    // while initializing — the rAF loop skips frames until it is ready.
+    if (holistic) return holistic;
+    if (!_engineCreating && window.LandmarkEngine) {
+      _engineCreating = LandmarkEngine.create({ onResults: onHolisticResults, complexity: _mpComplexity })
+        .then((eng) => { holistic = eng; return eng; })
+        .catch((e) => { _engineCreating = null; console.error('[Practice] landmark engine init failed:', e); return null; });
+    }
     return holistic;
   }
   let _mpWarmed = false;
-  function prewarmHolistic() {
-    if (_mpWarmed || cameraOn || typeof window.Holistic === 'undefined') return;
-    const h = ensureHolistic();
-    if (!h) return;
+  async function prewarmHolistic() {
+    if (_mpWarmed || cameraOn || !window.LandmarkEngine) return;
     _mpWarmed = true;
+    ensureHolistic();
+    if (_engineCreating) { try { await _engineCreating; } catch (_) {} }
+    if (!holistic || cameraOn) return;
     const c = document.createElement('canvas');
     c.width = 320; c.height = 180;
     c.getContext('2d').fillRect(0, 0, 320, 180);
     _holisticBusy = true;
-    h.send({ image: c }).catch(() => {}).finally(() => { _holisticBusy = false; });
+    holistic.send({ image: c }).catch(() => {}).finally(() => { _holisticBusy = false; });
   }
   if ('requestIdleCallback' in window) requestIdleCallback(() => prewarmHolistic(), { timeout: 4000 });
   else setTimeout(prewarmHolistic, 1500);
@@ -593,6 +589,8 @@
   let _mpDowngraded = false;
   function _recordMpLatency(ms) {
     if (_mpDowngraded) return;
+    if (holistic && holistic.backend !== 'legacy-wasm') return; // GPU path: diagnostics only
+
     _mpLat.push(ms);
     if (_mpLat.length < 30) return;
     const sorted = [..._mpLat].sort((a, b) => a - b);
@@ -775,8 +773,8 @@
     if (cameraOn) return;
     clearBanner();
 
-    if (typeof window.Holistic === 'undefined') {
-      showBanner('MediaPipe Holistic failed to load from the CDN, so live grading is unavailable. Check your connection and refresh.');
+    if (!window.LandmarkEngine) {
+      showBanner('The landmark engine script failed to load, so live grading is unavailable. Check your connection and refresh.');
       return;
     }
     const media = ensureMediaApi();
@@ -799,7 +797,8 @@
       setPill('idle', 'Waiting for hands…', '');
 
       try {
-        if (!ensureHolistic()) throw new Error('MediaPipe Holistic unavailable');
+        ensureHolistic();  // async engine creation; frames flow once ready
+        if (!holistic && !_engineCreating) throw new Error('landmark engine unavailable');
       } catch (e) {
         console.error('[Practice] Holistic init failed:', e);
         showBanner('Could not initialise the sign-recognition engine. Live grading is unavailable on this device.');
