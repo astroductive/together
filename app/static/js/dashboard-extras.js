@@ -175,7 +175,9 @@
       '.dx-cluster{position:fixed;inset-block-end:18px;inset-inline-end:18px;display:flex;flex-direction:column;gap:8px;z-index:40;align-items:flex-end}',
       '.dx-fab{display:inline-flex;align-items:center;justify-content:center;gap:6px;width:40px;height:40px;border-radius:var(--radius-full,999px);background:var(--surface,#16161a);color:var(--text,#eee);border:1px solid var(--border,#2a2a32);cursor:pointer;box-shadow:var(--shadow,0 8px 24px rgba(0,0,0,.4));font-size:16px;line-height:1;transition:transform .15s,border-color .15s}',
       '.dx-fab:hover{transform:translateY(-1px);border-color:var(--accent,#1f8a82)}',
-      '.dx-fab--kbd{position:fixed;inset-block-end:18px;inset-inline-start:18px;z-index:30}',
+      /* kbd fab lives INSIDE the bottom-end cluster: fixed bottom-START put
+         it directly on top of the sidebar's Sign Out button. */
+      '.dx-fab--kbd{font-size:15px}',
       '.dx-fab--wide{width:auto;padding:0 12px;font-size:13px;font-weight:600}',
       /* On phones the fixed bottom nav (~56-64px + safe area, z-index 60) covers
          anything parked at the very bottom edge — lift the cluster above it and
@@ -432,7 +434,9 @@
         'aria-label': t('Keyboard shortcuts', 'اختصارات لوحة المفاتيح'),
         onclick: openHelp
       }, '⌨');
-      document.body.appendChild(fab);
+      // Join the shared bottom-end cluster (export/demo/settings) — a fixed
+      // bottom-start button covered the sidebar's Sign Out.
+      getCluster().appendChild(fab);
     }
 
     document.addEventListener('keydown', function (e) {
