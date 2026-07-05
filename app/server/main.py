@@ -2100,6 +2100,14 @@ _STREAM_MIN_SEQ_AR = 15
 # 0.025s = 40 inferences/s.  Client sends at 20fps so this never over-runs the
 # frame arrival rate; it just means we never throttle on this machine.
 _STREAM_MIN_INTERVAL = float(os.environ.get("STREAM_MIN_INTERVAL_S", "0.025"))
+# NOTE — measured streaming characteristic (kept as-is on purpose): a long
+# Arabic gesture can emit a WRONG early word before the right one ("eat"
+# streamed frame-by-frame yields "good"@0.99 at ~15 frames, then "eat"@0.99
+# once the window covers the full motion). Spacing the votes out in time was
+# tried and made it WORSE (the correct word never re-fired before the clip
+# ended). The early-commit latency tradeoff stands; the transcript chips'
+# tap-to-remove is the designed correction path. See docs/HANDSCRIPT_BUG_HUNT.md.
+_STREAM_MIN_INTERVAL_AR = float(os.environ.get("STREAM_MIN_INTERVAL_AR_S", "0.025"))
 
 
 class _StreamState:
@@ -2190,7 +2198,10 @@ async def sign_frame(sid, data):
     # here (before the await) made the throttle a no-op because `busy` already
     # serialized inference and the elapsed time always exceeded the interval.
     now = time.monotonic()
-    if now - st.last_infer < _STREAM_MIN_INTERVAL:
+    _min_iv = (_STREAM_MIN_INTERVAL_AR
+               if st.language in ("arabic", "ar", "egyptian", "eg")
+               else _STREAM_MIN_INTERVAL)
+    if now - st.last_infer < _min_iv:
         return
 
     st.busy = True
