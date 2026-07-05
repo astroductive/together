@@ -3216,6 +3216,9 @@ button.t-nav-item[aria-label="Sign out"]:hover svg{color:var(--danger,#ef4444)}
     pc.onconnectionstatechange = () => {
       const st = pc.connectionState;
       console.log('[WebRTC]', remoteSid, 'connection:', st);
+      // setParameters before negotiation may not stick — re-assert the
+      // framerate-first policy once the connection is actually up.
+      if (st === 'connected') tuneVideoSenders(pc);
       // A transient 'disconnected' may recover; only tear down on failed/closed.
       if (st === 'failed' || st === 'closed') removePeer(remoteSid);
     };
@@ -4061,6 +4064,11 @@ button.t-nav-item[aria-label="Sign out"]:hover svg{color:var(--danger,#ef4444)}
         // Live signing progress from the signer (before the sentence is composed)
         socket.on('meeting_gloss', (data) => {
           if (window.MeetLive && MeetLive.ready()) MeetLive.onRemoteGloss(data);
+        });
+
+        // Recent room captions replayed to late joiners / rejoins
+        socket.on('caption_history', (data) => {
+          if (window.MeetLive && MeetLive.ready()) MeetLive.onCaptionHistory(data);
         });
 
         // ── Mesh signaling ──
