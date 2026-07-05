@@ -322,15 +322,19 @@ app.mount("/static", StaticFiles(directory=os.path.join(BASE_DIR, "static")), na
 templates = Jinja2Templates(directory=os.path.join(BASE_DIR, "templates"))
 
 # ── Socket.IO ─────────────────────────────────────────────────
-# ping_interval/ping_timeout tightened from the 25s/20s defaults: when a
-# meeting participant's tab dies without a clean leave_room, the others only
-# learn about it via the engine.io ping timeout — at the defaults that meant
-# up to ~45s of a frozen tile before 'peer_left' fired.
+# ping_interval tightened from the 25s default: when a meeting participant's
+# tab dies without a clean leave_room, the others only learn about it via the
+# engine.io ping timeout — at the defaults that meant up to ~45s of a frozen
+# tile before 'peer_left' fired. ping_timeout stays at the 20s default ON
+# PURPOSE: a shorter timeout spuriously drops clients whose main thread
+# stalls (slow machines running the landmark models), and every spurious
+# reconnect loses the captions relayed during the gap. The frozen-tile UX is
+# covered client-side (track-mute overlay + 12s watchdog) regardless.
 sio = socketio.AsyncServer(
     async_mode="asgi",
     cors_allowed_origins=_cors_origins,
     ping_interval=15,
-    ping_timeout=10,
+    ping_timeout=20,
 )
 socket_app = socketio.ASGIApp(sio, app)
 
@@ -1876,6 +1880,13 @@ rooms: dict = {}  # Map sid -> room_id
 # this modest (each peer holds N-1 connections).
 MEETING_ROOM_CAP = int(os.environ.get("MEETING_ROOM_CAP", "6"))
 
+# Rolling caption history per room (replayed to late joiners / reconnectors).
+# In-memory is correct here: meetings are ephemeral and the app runs a single
+# worker by design (owner-accepted OTP-store decision documents the same).
+from collections import deque as _deque
+_CAPTION_HISTORY_MAX = 20
+_room_captions: dict = {}
+
 # Serializes the check-then-commit in join_room: socketio runs handlers
 # concurrently (async_handlers=True), so two simultaneous joins could both
 # pass the cap check before either records itself in `rooms`.
@@ -1902,6 +1913,8 @@ async def on_disconnect(sid):
     room_id = rooms.pop(sid, None)
     if room_id:
         await sio.emit("peer_left", {"sid": sid}, room=room_id)
+        if room_id not in rooms.values():
+            _room_captions.pop(room_id, None)  # room emptied — free its history
         print(f"[WS] {sid} disconnected and left room '{room_id}'")
 
 @sio.on("join_room")
@@ -1933,6 +1946,15 @@ async def join_room(sid, data):
     # existing peers that a new peer arrived (they will answer the incoming offer).
     await sio.emit("room_peers", {"peers": existing}, to=sid)
     await sio.emit("new_peer", {"sid": sid}, room=room_id, skip_sid=sid)
+    # Catch the joiner up on recent captions (late join / rejoin). A joiner
+    # entering an EMPTY room starts a fresh meeting — drop any history a
+    # previous meeting left under the same code instead of replaying it.
+    if not existing:
+        _room_captions.pop(room_id, None)
+    else:
+        history = list(_room_captions.get(room_id) or [])
+        if history:
+            await sio.emit("caption_history", {"captions": history}, to=sid)
     print(f"[WS] {sid} joined room '{room_id}' ({len(existing)+1} now present)")
 
 @sio.on("leave_room")
@@ -1944,6 +1966,8 @@ async def leave_room(sid, data):
     # its CURRENT room membership.
     if rooms.get(sid) == room_id:
         rooms.pop(sid, None)
+    if room_id not in rooms.values():
+        _room_captions.pop(room_id, None)  # room emptied — free its history
     await sio.emit("peer_left", {"sid": sid}, room=room_id, skip_sid=sid)
     print(f"[WS] {sid} left room '{room_id}'")
 
@@ -2003,6 +2027,17 @@ async def translate_sentence(sid, data):
         return
     payload = dict(data)
     payload["sender_sid"] = sid
+    # Size caps — one hostile/buggy client must not be able to fan a
+    # megabyte payload out to every participant.
+    if isinstance(payload.get("text"), str):
+        payload["text"] = payload["text"][:4000]
+    if isinstance(payload.get("senderName"), str):
+        payload["senderName"] = payload["senderName"][:80]
+    payload["ts"] = time.time()  # lets replayed rows show their real time
+    # Keep a short rolling history per room so a participant who joins late
+    # (or rejoins) can catch up instead of facing an empty panel. Replayed by
+    # join_room.
+    _room_captions.setdefault(room, _deque(maxlen=_CAPTION_HISTORY_MAX)).append(payload)
     await sio.emit("remote_sentence", payload, room=room, skip_sid=sid)
 
 
@@ -2021,6 +2056,8 @@ async def meeting_gloss(sid, data):
         payload["words"] = []
     else:
         payload["words"] = [str(w)[:40] for w in words[:12]]
+    if isinstance(payload.get("name"), str):
+        payload["name"] = payload["name"][:80]
     await sio.emit("meeting_gloss", payload, room=room, skip_sid=sid)
 
 

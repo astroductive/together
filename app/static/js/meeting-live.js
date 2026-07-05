@@ -232,7 +232,11 @@
   // ── captions ──────────────────────────────────────────────────
   function captionHost() { return $('meeting-caption-history'); }
 
+  var editingActive = false;   // an open caption-edit input must survive re-renders
+  var pendingRender = false;
+
   function renderCaptions() {
+    if (editingActive) { pendingRender = true; return; }
     var host = captionHost();
     if (!host) return;
     host.textContent = '';
@@ -277,6 +281,12 @@
     input.value = c.text;
     input.style.cssText = 'flex:1;font-size:13px;padding:4px 8px';
     var done = false;
+    editingActive = true;
+    var finish = function () {
+      editingActive = false;
+      renderCaptions();
+      if (pendingRender) { pendingRender = false; }
+    };
     var save = function () {
       if (done) return; done = true;
       var v = (input.value || '').trim();
@@ -290,11 +300,11 @@
           });
         }
       }
-      renderCaptions();
+      finish();
     };
     input.onkeydown = function (e) {
       if (e.key === 'Enter') save();
-      if (e.key === 'Escape') { done = true; renderCaptions(); }
+      if (e.key === 'Escape') { done = true; finish(); }
     };
     input.onblur = save;
     txtEl.replaceWith(input);
@@ -339,6 +349,26 @@
     renderCaptions();
   }
 
+  // Server replay of the room's recent captions (late join / rejoin). Only
+  // applied onto an EMPTY panel — no TTS, no avatar, no gloss side effects.
+  function onCaptionHistory(data) {
+    var list = data && Array.isArray(data.captions) ? data.captions : [];
+    if (!list.length || captions.length) return;
+    list.forEach(function (p) {
+      var text = (p && p.text != null ? String(p.text) : '').trim();
+      if (!text) return;
+      var t = '';
+      try { if (p.ts) t = new Date(p.ts * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }); } catch (_) {}
+      captions.push({
+        time: t || '', name: nameFor(p.sender_sid, p.senderName),
+        role: p.senderRole || '', text: text, mine: false, sid: p.sender_sid || null,
+      });
+    });
+    if (captions.length) {
+      addSystemNote(AR ? '— الرسائل السابقة أعلاه —' : '— earlier messages above —');
+    }
+  }
+
   // ── local gloss (signer's pending words) ──────────────────────
   function glossBuf() {
     if (!Array.isArray(window.__meetGlossBuf)) window.__meetGlossBuf = [];
@@ -362,6 +392,10 @@
   }
 
   function renderLocalGloss() {
+    // Also (re-)relay the buffer: compose FAILURE restores the words and
+    // re-renders — without this emit the other side stayed stuck on
+    // "composing…" for 25s even though the compose had already failed.
+    emitGloss();
     var elp = $('meeting-gloss-preview');
     if (elp) {
       // neutralize the legacy one-line inline styles once
@@ -384,7 +418,6 @@
           chip.addEventListener('click', function () {
             buf.splice(i, 1);
             renderLocalGloss();
-            emitGloss();
           });
           elp.appendChild(chip);
         });
@@ -395,15 +428,17 @@
   }
 
   function onLocalSign(word) {
-    glossBuf().push(word);
+    var buf = glossBuf();
+    buf.push(word);
+    // A signer who never composes could grow this without bound — the chips
+    // UI and the relay only ever need a recent window.
+    while (buf.length > 24) buf.shift();
     renderLocalGloss();
-    emitGloss();
   }
 
   function clearLocalGloss() {
     window.__meetGlossBuf = [];
-    renderLocalGloss();
-    emitGloss();
+    renderLocalGloss(); // emits the now-empty buffer too
   }
 
   // ── remote gloss line ("✋ NAME is signing: …") ────────────────
@@ -475,6 +510,7 @@
     toast((known && known.name ? known.name : S.peer) + ' ' + S.left);
     hideRemoteGloss(sid);
     delete peerNames[sid];
+    if (deadTimers[sid]) { clearTimeout(deadTimers[sid]); delete deadTimers[sid]; }
     // Last peer gone → clear the stale subtitle overlay (it kept showing the
     // final caption under a "Waiting for peer" stage).
     setTimeout(function () {
@@ -983,8 +1019,9 @@
       });
       if (notFound.length) {
         // Surface it where the user is looking instead of failing silently.
-        addSystemNote('⚠ ' + S.avatarMissing + ' ' + notFound.join('، '));
-        toast(S.avatarMissing + ' ' + notFound.slice(0, 3).join('، '));
+        var sep = isArText ? '، ' : ', ';
+        addSystemNote('⚠ ' + S.avatarMissing + ' ' + notFound.join(sep));
+        toast(S.avatarMissing + ' ' + notFound.slice(0, 3).join(sep));
       }
       if (!playlist.length) continue;
 
@@ -1040,6 +1077,11 @@
     stopMic();
     resetAvatar();
     hideRemoteGloss();
+    Object.keys(rgTimers).forEach(function (k) { clearTimeout(rgTimers[k]); });
+    rgTimers = {};
+    Object.keys(deadTimers).forEach(function (k) { clearTimeout(deadTimers[k]); });
+    deadTimers = {};
+    editingActive = false;
     captions = [];
     clearLocalGloss();
     renderCaptions();
@@ -1064,6 +1106,7 @@
     ready: function () { return !!opts; },
     addCaption: addCaption,
     addSystemNote: addSystemNote,
+    onCaptionHistory: onCaptionHistory,
     notifyComposing: notifyComposing,
     onLocalSign: onLocalSign,
     clearLocalGloss: clearLocalGloss,
