@@ -2277,11 +2277,15 @@ button.is-busy{opacity:.6;cursor:progress}
           room: roomId,
           mode: 'sign_sentence',
           senderRole: userRole,
+          senderName: displayName,
         });
       }
 
       // TTS is disabled in the Sign to Text feature (Feature 1) as requested.
     } catch (err) {
+      // Give the words back (cleared optimistically) so a transient failure
+      // doesn't force the user to re-sign the whole sentence.
+      glossBuffer = gloss.concat(glossBuffer);
       updateTranscription(isArabicMode ? 'تعذر تكوين الجملة — حاول مرة أخرى' : 'Could not compose sentence — please try again', true);
       console.error('[compose ar] sentence error:', err);
     } finally {
