@@ -29,7 +29,7 @@
 - **Proposed fix — tried and rejected:** Spacing Arabic votes 0.22 s apart was implemented and measured: it made things *worse* (the phantom still won and the correct "eat" never re-fired before the clip ended). Reverted; the knob remains available as `STREAM_MIN_INTERVAL_AR_S` for future experiments.
 - **Mitigation in place:** detection flushes the buffer + 8-frame cooldown (the *next* window is fresh), the rest-pose gate kills idle-posture phantoms, and transcript chips are tap-to-remove — the designed correction path.
 - **Risk of leaving as-is:** occasional extra word on long ArSL signs; user-correctable in one tap.
-- **Status:** **Confirmed intentional tradeoff** (documented in code); real fix is gesture segmentation — see suggestions.
+- **Status:** **FIXED via gesture segmentation** (follow-up phase). Both dashboards now start ArSL vision streams with `{segmented: true}`: a client-side wrist-motion detector marks gesture boundaries (~300 ms stillness, hands dropped, or entering rest) and the server's new `sign_boundary` event classifies each full boundary-to-boundary segment exactly once (no mid-gesture voting; low-cadence `sign_conf` pulses keep the confidence ring alive). Continuous mode is unchanged for every other caller (Practice page, HTTP fallback, old clients) and remains the documented tradeoff there. Sandbox-verified with the real model through the production socket: the "eat" clip that yields `good, eat` in continuous mode produces **zero mid-stream commits and exactly one boundary commit = eat@1.00** in segmented mode; fragments under 15 frames are discarded; harness gate unchanged (ASL 0.6653 / ArSL 0.95).
 
 ### LOW
 
@@ -61,9 +61,9 @@
 
 ## Feature / optimization suggestions (Proposed)
 
-1. **Gesture segmentation for ArSL** (the real fix for finding #1): use the rest-pose gate's motion signal to detect gesture *boundaries* and only vote on windows that span a full boundary-to-boundary segment. Medium effort, big phantom reduction.
+1. **Gesture segmentation for ArSL** — **IMPLEMENTED** (see finding #1 status): boundary detector in both dashboards + opt-in `segmented` stream mode and `sign_boundary` handler in `main.py`.
 2. **Per-word confidence chips:** tint each transcript chip by its detection confidence (data already flows through `handleDetectedSign`) so users see which words to double-check before composing.
-3. **Undo for tap-to-remove** (a small toast with "undo" restoring the removed word) — symmetrical with the existing dashboard transcript undo.
+3. **Undo for tap-to-remove** — **IMPLEMENTED**: removing a chip (HandScript transcript or VoiceBridge gloss, both dashboards) shows a 5-second toast whose Undo button restores the word at its original position.
 4. **Auto-compose on rest** — shared with the meeting suggestion list; the rest gate already knows when the signer stopped.
 
 ---

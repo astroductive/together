@@ -36,7 +36,9 @@ DASHBOARDS = ["index.html", "index_ar.html"]
 #   debug-error-banner*  – created on demand by showDebugError()
 #   topbar-signout       – optional duplicate of the sidebar sign-out (guarded)
 #   tts-btn              – orphan reference; toggleTTS is never wired to a button
-SAFE_MISSING_IDS = {"debug-error-banner", "debug-error-banner-text", "topbar-signout", "tts-btn"}
+#   gloss-undo-toast     – created on demand by showUndoToast() (chip removal undo)
+SAFE_MISSING_IDS = {"debug-error-banner", "debug-error-banner-text", "topbar-signout", "tts-btn",
+                    "gloss-undo-toast"}
 
 
 class _StubRequest:
