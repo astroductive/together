@@ -645,6 +645,18 @@ async def page_talkside(request: Request, lang: str | None = None):
 async def page_signline(request: Request, lang: str | None = None):
     return _localized_page(request, "products/signline", lang)
 
+@app.get("/products/dictionary", response_class=HTMLResponse)
+async def page_product_dictionary(request: Request, lang: str | None = None):
+    return _localized_page(request, "products/dictionary", lang)
+
+@app.get("/products/practice", response_class=HTMLResponse)
+async def page_product_practice(request: Request, lang: str | None = None):
+    return _localized_page(request, "products/practice", lang)
+
+@app.get("/products/analytics", response_class=HTMLResponse)
+async def page_product_analytics(request: Request, lang: str | None = None):
+    return _localized_page(request, "products/analytics", lang)
+
 @app.get("/languages/asl", response_class=HTMLResponse)
 async def page_asl(request: Request, lang: str | None = None):
     return _localized_page(request, "languages/asl", lang)

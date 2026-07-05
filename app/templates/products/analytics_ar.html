@@ -1,0 +1,64 @@
+{% extends "_inner_base_ar.html" %}
+{% block title %}التحليلات — إحصاءات إشارتك{% endblock %}
+{% block content %}
+<canvas id="sf-canvas" aria-hidden="true"></canvas>
+<div class="pg-hero">
+  <span class="pg-badge">إحصاءاتك</span>
+  <h1 class="pg-h1">شاهد نفسك<br><em>تتحسّن.</em></h1>
+  <p class="pg-lead">تحوّل التحليلات كل اكتشاف تقوم به المنصة إلى تقرير تقدّم شخصي — اتجاهات الثقة، والإشارات الأكثر استخداماً، وسجلّ الجلسات — مخزَّنة بالكامل على جهازك.</p>
+</div>
+
+<div class="pg-section">
+  <h2>ماذا تتتبّع</h2>
+  <div class="spec-grid">
+    <div class="spec-card"><div class="spec-val">2000</div><div class="spec-key">أحدث الاكتشافات المحفوظة</div></div>
+    <div class="spec-card"><div class="spec-val">2</div><div class="spec-key">لغتان بتتبّع منفصل</div></div>
+    <div class="spec-card"><div class="spec-val">CSV</div><div class="spec-key">+ تصدير للطباعة/PDF</div></div>
+    <div class="spec-card"><div class="spec-val">0</div><div class="spec-key">بايت يُرسَل إلى أي خادم</div></div>
+  </div>
+</div>
+
+<div class="pg-section">
+  <h2>كيف يعمل</h2>
+  <p>كل إشارة يقبلها محرّك التعرّف — على لوحة التحكم، أو في التدريب، أو أثناء اجتماع SignLine — تُسجَّل محلياً مع الكلمة ودرجة الثقة واللغة والوقت. تقرأ التحليلات هذا السجل وتعرض اكتشافاتك: أي الإشارات تستخدم أكثر، وكيف تتّجه ثقة التعرّف عبر الزمن، ومدى نشاط جلساتك.</p>
+  <p>يعيش السجل في التخزين المحلي لمتصفحك، بسقف أحدث 2000 اكتشاف. لا يُرفع أي شيء؛ ومسح بيانات المتصفح يمسح السجل. نقرة واحدة تصدّر السجل الخام كملف CSV لجداول البيانات، أو عرضاً منسّقاً للطباعة كتقرير PDF.</p>
+</div>
+
+<div class="pg-section">
+  <h2>حالات الاستخدام</h2>
+  <div class="uc-grid">
+    <div class="uc-card">
+      <div class="uc-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 20V10M18 20V4M6 20v-4"/></svg></div>
+      <div class="uc-title">المتعلمون</div>
+      <p class="uc-desc">راقب متوسط الثقة يرتفع أسبوعاً بعد أسبوع — دليل موضوعي على أن إشارتك تزداد وضوحاً.</p>
+    </div>
+    <div class="uc-card">
+      <div class="uc-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/></svg></div>
+      <div class="uc-title">المعلمون</div>
+      <p class="uc-desc">يسلّم الطلاب ملفات CSV المصدَّرة دليلاً على التدريب؛ ويُظهر توزيع المفردات ما ينبغي التركيز عليه تالياً.</p>
+    </div>
+    <div class="uc-card">
+      <div class="uc-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></div>
+      <div class="uc-title">المعالجون والمدرّبون</div>
+      <p class="uc-desc">تقارير جلسة بجلسة توثّق التقدّم لجلسات علاج النطق والتواصل.</p>
+    </div>
+    <div class="uc-card">
+      <div class="uc-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 3C8 5 4 5.5 4 5.5v6c0 5 3.5 8 8 9 4.5-1 8-4 8-9v-6S16 5 12 3Z"/></svg></div>
+      <div class="uc-title">أصحاب الخصوصية أولاً</div>
+      <p class="uc-desc">كل الرؤى بلا أي تتبّع — البيانات لا تغادر الجهاز الذي أُنشئت عليه أبداً.</p>
+    </div>
+  </div>
+</div>
+
+<div class="pg-section">
+  <h2>أرقام صادقة</h2>
+  <p>تعرض التحليلات ما قاسه النموذج فعلاً — نفس درجات الثقة التي تتحكم في الاكتشاف المباشر، لا مقاييس تجميلية. إذا صعد خط الاتجاه، فالتعرّف يجد إشارتك أسهل قراءةً حقاً.</p>
+</div>
+
+<div class="cta-strip">
+  <h3>شاهد إحصاءاتك</h3>
+  <p>أشِر ببضع كلمات على لوحة التحكم، ثم افتح التحليلات لترى الأرقام تظهر.</p>
+  <a href="/analytics?lang=ar">افتح التحليلات</a>
+  <a href="/demo?lang=ar" class="sec">احجز عرضاً</a>
+</div>
+{% endblock %}

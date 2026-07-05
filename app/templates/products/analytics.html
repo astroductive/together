@@ -1,0 +1,64 @@
+{% extends "_inner_base.html" %}
+{% block title %}Analytics — Your Signing Stats{% endblock %}
+{% block content %}
+<canvas id="sf-canvas" aria-hidden="true"></canvas>
+<div class="pg-hero">
+  <span class="pg-badge">Your Stats</span>
+  <h1 class="pg-h1">See yourself<br><em>getting better.</em></h1>
+  <p class="pg-lead">Analytics turns every detection the platform makes into a personal progress report — confidence trends, most-used signs and session history — stored entirely on your device.</p>
+</div>
+
+<div class="pg-section">
+  <h2>What it tracks</h2>
+  <div class="spec-grid">
+    <div class="spec-card"><div class="spec-val">2000</div><div class="spec-key">Most recent detections kept</div></div>
+    <div class="spec-card"><div class="spec-val">2</div><div class="spec-key">Languages, tracked separately</div></div>
+    <div class="spec-card"><div class="spec-val">CSV</div><div class="spec-key">+ print/PDF export</div></div>
+    <div class="spec-card"><div class="spec-val">0</div><div class="spec-key">Bytes sent to any server</div></div>
+  </div>
+</div>
+
+<div class="pg-section">
+  <h2>How it works</h2>
+  <p>Every sign the recognition engine accepts — on the dashboard, in Practice, or during a SignLine meeting — is logged locally with its word, confidence score, language and timestamp. Analytics reads that log and renders your discoveries: which signs you use most, how recognition confidence trends over time, and how active your sessions are.</p>
+  <p>The log lives in your browser's local storage, capped at the most recent 2,000 detections. Nothing is uploaded; clearing your browser data clears the history. One click exports the raw log as CSV for a spreadsheet, or a formatted print view for a PDF report.</p>
+</div>
+
+<div class="pg-section">
+  <h2>Use cases</h2>
+  <div class="uc-grid">
+    <div class="uc-card">
+      <div class="uc-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 20V10M18 20V4M6 20v-4"/></svg></div>
+      <div class="uc-title">Learners</div>
+      <p class="uc-desc">Watch average confidence climb week over week — objective proof your signing is getting clearer.</p>
+    </div>
+    <div class="uc-card">
+      <div class="uc-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/></svg></div>
+      <div class="uc-title">Teachers</div>
+      <p class="uc-desc">Students hand in exported CSVs as practice evidence; the vocabulary breakdown shows what to drill next.</p>
+    </div>
+    <div class="uc-card">
+      <div class="uc-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></div>
+      <div class="uc-title">Therapists &amp; coaches</div>
+      <p class="uc-desc">Session-over-session reports document progress for speech-language and communication therapy.</p>
+    </div>
+    <div class="uc-card">
+      <div class="uc-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 3C8 5 4 5.5 4 5.5v6c0 5 3.5 8 8 9 4.5-1 8-4 8-9v-6S16 5 12 3Z"/></svg></div>
+      <div class="uc-title">Privacy-first users</div>
+      <p class="uc-desc">All the insight, none of the tracking — the data never leaves the machine it was created on.</p>
+    </div>
+  </div>
+</div>
+
+<div class="pg-section">
+  <h2>Honest numbers</h2>
+  <p>Analytics reports what the model actually measured — the same confidence scores that gate live detection, not vanity metrics. If the trend line climbs, recognition is genuinely finding your signing easier to read.</p>
+</div>
+
+<div class="cta-strip">
+  <h3>See your stats</h3>
+  <p>Sign a few words on the dashboard, then open Analytics to watch the numbers appear.</p>
+  <a href="/analytics?lang=en">Open Analytics</a>
+  <a href="/demo" class="sec">Book a Demo</a>
+</div>
+{% endblock %}
