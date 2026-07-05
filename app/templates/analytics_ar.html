@@ -156,8 +156,9 @@
 
       <div class="an-card">
         <div class="an-card-title">اتجاه الثقة</div>
-        <svg class="an-trend-svg" id="an-trend" viewBox="0 0 920 240" preserveAspectRatio="none" role="img" aria-label="اتجاه الثقة عبر الاكتشافات الأخيرة"></svg>
+        <svg class="an-trend-svg" id="an-trend" viewBox="0 0 920 240" preserveAspectRatio="none" role="img" aria-label="اتجاه الثقة عبر الاكتشافات الأخيرة حسب اللغة"></svg>
         <div class="an-trend-meta"><span id="trend-from">—</span><span id="trend-to">الأحدث</span></div>
+        <div class="an-legend" id="trend-legend" style="margin-top:10px"></div>
       </div>
 
       <div class="an-grid">
@@ -287,25 +288,49 @@
       grid += `<text x="${padX + 2}" y="${(yAt(v) - 4).toFixed(1)}" font-size="10" fill="var(--faint)">${v}%</text>`;
     });
 
-    const pts = recent.map((e, i) => `${xAt(i).toFixed(1)},${yAt(e.c).toFixed(1)}`);
-    const line = pts.join(' ');
     const baseY = (H - padBot).toFixed(1);
-    const firstX = xAt(0).toFixed(1);
-    const lastX = xAt(n - 1).toFixed(1);
-    const area = `${firstX},${baseY} ${line} ${lastX},${baseY}`;
+    // One series per language on a shared x axis (overall detection order),
+    // so the EN and AR lines stay time-aligned.
+    const SERIES = [
+      { lang: 'en', stroke: 'var(--accent)', fill: 'url(#an-fill)' },
+      { lang: 'ar', stroke: 'var(--accent-sand,#c9925b)', fill: 'url(#an-fill-b)' },
+    ];
+    let body = '';
+    SERIES.forEach(sr => {
+      const pts = [];
+      recent.forEach((e, i) => { if (e.lang === sr.lang) pts.push({ x: xAt(i), y: yAt(e.c) }); });
+      if (!pts.length) return;
+      const line = pts.map(p => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ');
+      body += `<polygon points="${pts[0].x.toFixed(1)},${baseY} ${line} ${pts[pts.length - 1].x.toFixed(1)},${baseY}" fill="${sr.fill}" stroke="none"/>`;
+      body += `<polyline points="${line}" fill="none" stroke="${sr.stroke}" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>`;
+      if (n <= 60 || pts.length === 1) {
+        body += pts.map(p => `<circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="2.4" fill="${sr.stroke}"/>`).join('');
+      }
+    });
 
     svg.innerHTML = `
       <defs>
         <linearGradient id="an-fill" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stop-color="var(--accent)" stop-opacity="0.28"/>
+          <stop offset="0%" stop-color="var(--accent)" stop-opacity="0.22"/>
           <stop offset="100%" stop-color="var(--accent)" stop-opacity="0"/>
+        </linearGradient>
+        <linearGradient id="an-fill-b" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="var(--accent-sand,#c9925b)" stop-opacity="0.22"/>
+          <stop offset="100%" stop-color="var(--accent-sand,#c9925b)" stop-opacity="0"/>
         </linearGradient>
       </defs>
       ${grid}
-      <polygon points="${area}" fill="url(#an-fill)" stroke="none"/>
-      <polyline points="${line}" fill="none" stroke="var(--accent)" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
-      ${n <= 60 ? recent.map((e, i) => `<circle cx="${xAt(i).toFixed(1)}" cy="${yAt(e.c).toFixed(1)}" r="2.4" fill="var(--accent)"/>`).join('') : ''}
+      ${body}
     `;
+
+    // Legend lists only the languages present in the window.
+    const langsPresent = new Set(recent.map(e => e.lang));
+    const legend = $('trend-legend');
+    if (legend) {
+      legend.innerHTML =
+        (langsPresent.has('en') ? '<span><i class="an-dot a"></i>لغة الإشارة الأمريكية (en)</span>' : '') +
+        (langsPresent.has('ar') ? '<span><i class="an-dot b"></i>لغة الإشارة العربية (ar)</span>' : '');
+    }
 
     $('trend-from').textContent = `${recent.length} من الأحدث · من ${fmtDate(recent[0].t)}`;
   }
