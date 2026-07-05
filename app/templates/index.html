@@ -3052,7 +3052,7 @@ button.t-nav-item[aria-label="Sign out"]:hover svg{color:var(--danger,#ef4444)}
           const data = await res.json();
           const text = data.text || '';
           console.log(`[STT] Backend transcript: "${text}"`);
-          el.innerHTML = `<span>${text}</span>`;
+          el.innerHTML = `<span>${escHtml(text)}</span>`;
           if (text.trim()) {
             setStatus('Animating…', true);
             await s2sAnimateText(text.trim());
@@ -3109,6 +3109,11 @@ button.t-nav-item[aria-label="Sign out"]:hover svg{color:var(--danger,#ef4444)}
   }
 
   async function s2sAnimateText(text) {
+    // A transcript arriving while a previous one is still animating must
+    // QUEUE (the drain at the bottom already exists) — running two
+    // playLandmarkSequence loops concurrently interleaves frames on the
+    // same canvas.
+    if (s2sPlaying) { pendingSpeechText = text; return; }
     s2sPlaying = true;
     const words = normalizeSignWords(text);
     if (words.length === 0) { s2sPlaying = false; return; }

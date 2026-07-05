@@ -2725,7 +2725,7 @@ button.is-busy{opacity:.6;cursor:progress}
           const data = await res.json();
           const text = data.text || '';
           console.log(`[STT] Backend transcript: "${text}"`);
-          el.innerHTML = `<span>${text}</span>`;
+          el.innerHTML = `<span>${escHtml(text)}</span>`;
           if (text.trim()) {
             setStatus('Animating…', true);
             await s2sAnimateText(text.trim());
@@ -2782,6 +2782,11 @@ button.is-busy{opacity:.6;cursor:progress}
   }
 
   async function s2sAnimateText(text) {
+    // A transcript arriving while a previous one is still animating must
+    // QUEUE (the drain at the bottom already exists) — running two
+    // playLandmarkSequence loops concurrently interleaves frames on the
+    // same canvas.
+    if (s2sPlaying) { pendingSpeechText = text; return; }
     s2sPlaying = true;
     // Send Arabic text directly to Arabic endpoint
     const words = text.split(/\s+/).filter(Boolean);
