@@ -2578,7 +2578,7 @@ button.t-nav-item[aria-label="Sign out"]:hover svg{color:var(--danger,#ef4444)}
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ gloss, language: forcedLang }),
       });
-      if (!res.ok) return;
+      if (!res.ok) throw new Error('sentence api ' + res.status);
       const data = await res.json();
       const sentence = data.sentence || (isArabicMode ? 'تعذر إنشاء الترجمة العربية' : gloss.join(' '));
 
@@ -2596,11 +2596,15 @@ button.t-nav-item[aria-label="Sign out"]:hover svg{color:var(--danger,#ef4444)}
           room: roomId,
           mode: 'sign_sentence',
           senderRole: userRole,
+          senderName: displayName,
         });
       }
 
       // TTS is disabled in the Sign to Text feature (Feature 1) as requested.
     } catch (err) {
+      // Give the words back (cleared optimistically) so a transient failure
+      // doesn't force the user to re-sign the whole sentence.
+      glossBuffer = gloss.concat(glossBuffer);
       // Surface the failure instead of silently swallowing it
       updateTranscription(isArabicMode ? 'تعذر تكوين الجملة — حاول مرة أخرى' : 'Could not compose sentence — please try again', true);
       console.error('[compose] sentence error:', err);
@@ -4658,7 +4662,7 @@ button.t-nav-item[aria-label="Sign out"]:hover svg{color:var(--danger,#ef4444)}
     log.innerHTML = s2spSentences.slice(0, 20).map(s =>
       `<div class="d-log-item">
         <span class="d-log-time">${s.time}</span>
-        <span class="d-log-msg">${s.text}</span>
+        <span class="d-log-msg">${escHtml(s.text)}</span>
       </div>`
     ).join('');
   }
@@ -4685,12 +4689,12 @@ button.t-nav-item[aria-label="Sign out"]:hover svg{color:var(--danger,#ef4444)}
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ gloss, language: forcedLang }),
       });
-      if (!res.ok) return;
+      if (!res.ok) throw new Error('sentence api ' + res.status);
       const data = await res.json();
       const sentence = data.sentence || (isArabicMode ? 'تعذر إنشاء الترجمة العربية' : gloss.join(' '));
 
       document.getElementById('s2sp-sentence-output').innerHTML =
-        `<span>${sentence}</span>`;
+        `<span>${escHtml(sentence)}</span>`;
 
       // Store for replay button and speak
       s2spLastSentence = sentence;
@@ -4704,6 +4708,10 @@ button.t-nav-item[aria-label="Sign out"]:hover svg{color:var(--danger,#ef4444)}
       document.getElementById('s2sp-sentence-output').innerHTML =
         `<span style="color:var(--danger,#ef4444);">${isArabicMode ? 'تعذر تكوين الجملة — حاول مرة أخرى' : 'Could not compose sentence — please try again'}</span>`;
       console.error('[compose s2sp] error:', err);
+      // Give the words back — they were cleared optimistically, and losing
+      // them on a transient failure forced the user to re-sign everything.
+      s2spGlossBuf = gloss.concat(s2spGlossBuf);
+      renderS2spGloss();
     } finally {
       s2spSetComposing(false);
     }
