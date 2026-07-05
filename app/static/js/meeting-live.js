@@ -68,6 +68,18 @@
     composing: 'يقوم بتكوين الجملة…',
     avatarLoading: 'جارٍ تحميل الإشارات…',
     peerDead: 'انقطع اتصال المشارك',
+    cameraOff: 'الكاميرا مغلقة',
+    raiseHand: '✋ لفت الانتباه',
+    handRaised: 'يطلب الانتباه!',
+    exportTxt: 'تصدير النص',
+    fontSize: 'حجم الخط',
+    ptt: 'اضغط للتحدث',
+    liveMic: 'ميكروفون مباشر',
+    pttHint: 'اضغط مطولاً (مسافة) للتحدث',
+    holdSpace: 'أمسك المسافة…',
+    selfSkeleton: 'معاينتك',
+    composingSelf: 'جارٍ التكوين…',
+    autoComposeHint: 'تكوين تلقائي عند الراحة',
   };
   var STRINGS_EN = {
     you: 'You',
@@ -101,6 +113,18 @@
     composing: 'is composing a sentence…',
     avatarLoading: 'Loading signs…',
     peerDead: 'Participant connection lost',
+    cameraOff: 'Camera off',
+    raiseHand: '✋ Get attention',
+    handRaised: 'wants your attention!',
+    exportTxt: 'Export transcript',
+    fontSize: 'Caption size',
+    ptt: 'Push-to-talk',
+    liveMic: 'Live mic',
+    pttHint: 'Hold Space to talk',
+    holdSpace: 'Hold Space…',
+    selfSkeleton: 'Your preview',
+    composingSelf: 'Composing…',
+    autoComposeHint: 'Auto-compose on rest',
   };
   var S = AR ? STRINGS_AR : STRINGS_EN;
 
@@ -192,8 +216,33 @@
       '.ml-chip.hit .ml-dot{background:#22c55e;box-shadow:0 0 0 3px rgba(34,197,94,.25)}',
       '.ml-mic-meter{width:64px;height:26px;border-radius:8px;border:1px solid var(--border);background:var(--surface-2);flex:none;display:none}',
       '.ml-mic-meter.on{display:block}',
-      '.ml-mic-sel{max-width:180px;display:none}',
+      '.ml-mic-sel{max-width:170px;display:none}',
       '.ml-mic-sel.on{display:inline-block}',
+      '.ml-mic-mode{font-size:12px;padding:6px 10px;white-space:nowrap}',
+      '.ml-mic-mode[aria-pressed="true"]{border-color:var(--accent,#1f8a82);color:var(--accent,#1f8a82)}',
+      '.ml-ptt-hint{display:none;align-items:center;font-size:11px;font-weight:700;color:#f59e0b;gap:4px}',
+      /* camera-off overlay on a peer tile (stopped WebRTC track freezes the last frame) */
+      '.ml-cam-off{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;background:var(--surface-2,#16161a);color:var(--faint);font-size:13px;font-weight:700;z-index:7}',
+      '.ml-cam-off svg{width:34px;height:34px;opacity:.6}',
+      /* raise-hand attention flash + banner */
+      '@keyframes mlflash{0%,100%{box-shadow:inset 0 0 0 0 rgba(245,158,11,0)}50%{box-shadow:inset 0 0 0 5px rgba(245,158,11,.85)}}',
+      '.ml-attn{animation:mlflash 0.55s ease-in-out 3}',
+      '.ml-hand-banner{position:absolute;top:12px;inset-inline:0;display:flex;justify-content:center;z-index:31;pointer-events:none}',
+      '.ml-hand-banner>span{background:#f59e0b;color:#1a1205;font-weight:800;font-size:13px;padding:7px 16px;border-radius:999px;box-shadow:0 8px 24px rgba(0,0,0,.4)}',
+      /* caption font-size scale (set on the caption box via --ml-cap-scale) */
+      '#meeting-caption-history{font-size:calc(13.5px*var(--ml-cap-scale,1))}',
+      '#meeting-caption-history .ml-cap-text{font-size:1em}',
+      '#meeting-subtitle-overlay{font-size:calc(15px*var(--ml-cap-scale,1)) !important}',
+      '.ml-tools{display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:8px}',
+      '.ml-tool-btn{border:1px solid var(--border);background:var(--surface);color:var(--muted);border-radius:9px;cursor:pointer;font-size:12px;font-weight:700;padding:4px 9px;line-height:1}',
+      '.ml-tool-btn:hover{color:var(--text);border-color:var(--accent,#1f8a82)}',
+      '.ml-font-group{display:inline-flex;border:1px solid var(--border);border-radius:9px;overflow:hidden}',
+      '.ml-font-group button{border:none;background:var(--surface);color:var(--muted);cursor:pointer;padding:4px 8px;font-weight:800;line-height:1}',
+      '.ml-font-group button.on{background:var(--accent-soft,rgba(31,138,130,.15));color:var(--accent,#1f8a82)}',
+      /* signer self-preview skeleton overlay on the local tile */
+      '#ml-self-skel{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:6;transform:scaleX(-1)}',
+      '.ml-self-tag{position:absolute;top:8px;inset-inline-start:8px;background:rgba(0,0,0,.5);color:#8ff5c9;font-size:10px;font-weight:700;padding:2px 7px;border-radius:6px;z-index:7}',
+      '.ml-stage-metric{font-size:11px;color:var(--faint);margin-inline-start:8px;font-variant-numeric:tabular-nums}',
       '.ml-avatar-tile{position:relative;background:var(--surface-2);aspect-ratio:4/3;max-height:min(52vh,460px);overflow:hidden}',
       '.ml-avatar-tile canvas{width:100%;height:100%;object-fit:contain;background:radial-gradient(circle at 50% 30%,rgba(31,138,130,.18),transparent 70%)}',
       '.ml-avatar-word{position:absolute;bottom:12px;inset-inline:0;text-align:center;color:#fff;font-weight:800;font-size:16px;text-shadow:0 2px 8px rgba(0,0,0,.7);letter-spacing:.04em}',
@@ -470,9 +519,11 @@
     words.slice(-8).forEach(function (w) { host.appendChild(el('span', 'ml-rg-word', w)); });
     if (composing) host.appendChild(el('span', 'ml-rg-spin'));
     if (rgTimers[sid]) clearTimeout(rgTimers[sid]);
-    // While composing, hold the line until the sentence caption arrives (or a
-    // generous timeout — the LLM can take several seconds).
-    rgTimers[sid] = setTimeout(function () { hideRemoteGloss(sid); }, composing ? 25000 : 8000);
+    // While composing, hold the line until the sentence caption arrives — the
+    // caption's addCaption() calls hideRemoteGloss(senderSid). The timeout is
+    // only a safety net for a lost sentence, so keep it long (a vanished feed
+    // with no caption was the reported "disappearing feed" symptom).
+    rgTimers[sid] = setTimeout(function () { hideRemoteGloss(sid); }, composing ? 90000 : 10000);
   }
 
   // The signer pressed Compose: tell the room the words are being turned
@@ -572,6 +623,7 @@
     }
     bindTracks();
     videoEl.addEventListener('loadedmetadata', bindTracks);
+    applyCamOff(sid); // re-apply a known camera-off state to a freshly built tile
     if (pc && !pc.__mlWatched) {
       pc.__mlWatched = true;
       pc.addEventListener('connectionstatechange', function () {
@@ -579,6 +631,97 @@
         else if (pc.connectionState === 'connected') tileNote(sid, false);
       });
     }
+  }
+
+  // ── media state (camera on/off) — peers overlay "Camera off" instead of
+  //    freezing on the last decoded frame of a stopped WebRTC track ────────
+  var camOffSids = {};
+  function tileFor(sid) {
+    return document.getElementById('remote-tile-' + String(sid || '').replace(/[^A-Za-z0-9_-]/g, '_'));
+  }
+  function setCamOff(sid, off) {
+    if (off) camOffSids[sid] = true; else delete camOffSids[sid];
+    applyCamOff(sid);
+  }
+  function applyCamOff(sid) {
+    var tile = tileFor(sid);
+    if (!tile) return;
+    var overlay = tile.querySelector('.ml-cam-off');
+    if (camOffSids[sid]) {
+      if (!overlay) {
+        overlay = el('div', 'ml-cam-off');
+        overlay.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M16 16v2a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h2"/><path d="m22 8-6 4 6 4V8z"/><line x1="2" y1="2" x2="22" y2="22"/></svg>';
+        overlay.appendChild(el('div', null, (peerNames[sid] && peerNames[sid].name ? peerNames[sid].name + ' — ' : '') + S.cameraOff));
+        tile.appendChild(overlay);
+      }
+    } else if (overlay) {
+      overlay.remove();
+    }
+  }
+  function onMediaState(data) {
+    var sid = data && data.sender_sid;
+    if (!sid) return;
+    if (typeof data.camera === 'boolean') setCamOff(sid, !data.camera);
+  }
+  function emitMedia() {
+    var sock = opts.getSocket();
+    if (sock && sock.connected && opts.isInMeeting()) {
+      sock.emit('meeting_media', { room: opts.getRoom(), mic: micArmed });
+    }
+  }
+  // Called by the page's camera toggle so peers hide/show the "Camera off"
+  // overlay (WebRTC track stop alone leaves them on a frozen last frame).
+  function emitCameraState(on) {
+    var sock = opts.getSocket();
+    if (sock && sock.connected && opts.isInMeeting()) {
+      sock.emit('meeting_media', { room: opts.getRoom(), camera: !!on, mic: micArmed });
+    }
+  }
+
+  // ── raise-hand / attention buzz ───────────────────────────────
+  function raiseHand() {
+    var sock = opts.getSocket();
+    if (!sock || !sock.connected || !opts.isInMeeting()) return;
+    sock.emit('meeting_raise_hand', { room: opts.getRoom(), name: opts.getDisplayName() });
+    toast(AR ? 'تم إرسال طلب الانتباه' : 'Attention sent');
+  }
+  function attentionFlash() {
+    var box = document.querySelector('.d-meet-videos');
+    if (!box) return;
+    box.classList.remove('ml-attn');
+    // reflow to restart the animation
+    void box.offsetWidth;
+    box.classList.add('ml-attn');
+    setTimeout(function () { box.classList.remove('ml-attn'); }, 1800);
+  }
+  function handBanner(name) {
+    var stageBox = document.querySelector('.d-meet-videos');
+    var host = stageBox ? stageBox.parentElement : null;
+    if (!host) return;
+    if (getComputedStyle(host).position === 'static') host.style.position = 'relative';
+    var b = el('div', 'ml-hand-banner');
+    b.appendChild(el('span', null, '✋ ' + (name || S.peer) + ' ' + S.handRaised));
+    host.appendChild(b);
+    setTimeout(function () { b.remove(); }, 3200);
+  }
+  function playBeep() {
+    try {
+      var ac = new (window.AudioContext || window.webkitAudioContext)();
+      var o = ac.createOscillator(), g = ac.createGain();
+      o.connect(g); g.connect(ac.destination);
+      o.type = 'sine'; o.frequency.value = 880;
+      g.gain.setValueAtTime(0.0001, ac.currentTime);
+      g.gain.exponentialRampToValueAtTime(0.2, ac.currentTime + 0.02);
+      g.gain.exponentialRampToValueAtTime(0.0001, ac.currentTime + 0.5);
+      o.start(); o.stop(ac.currentTime + 0.5);
+      setTimeout(function () { try { ac.close(); } catch (_) {} }, 800);
+    } catch (_) {}
+  }
+  function onRaiseHand(data) {
+    var name = (data && data.name) || nameFor(data && data.sender_sid);
+    handBanner(name);
+    attentionFlash();
+    playBeep();
   }
 
   // ── model indicator chip + meeting sign-language picker ───────
@@ -590,6 +733,7 @@
     if (v === 'egyptian') return S.modelEgsl;
     return S.modelAsl;
   }
+  var metricEl = null, metricTimer = null, meetingStartMs = 0;
   function ensureIndicators() {
     var stageLabel = $('meeting-stage-label');
     if (!stageLabel || !stageLabel.parentElement) return;
@@ -601,6 +745,15 @@
       chipEl.title = (window.__landmarkEngineBackend || '');
       stageLabel.parentElement.insertBefore(chipEl, stageLabel);
     }
+    // Stage-chip extras: live elapsed timer + participant count.
+    if (!metricEl) {
+      metricEl = el('span', 'ml-stage-metric');
+      metricEl.id = 'ml-stage-metric';
+      chipEl.insertAdjacentElement('afterend', metricEl);
+    }
+    if (!meetingStartMs) meetingStartMs = mlNow();
+    if (!metricTimer) metricTimer = setInterval(updateMetric, 1000);
+    updateMetric();
     // The model is chosen ONCE in the create/join dialog and stays fixed for
     // the whole meeting (a mid-meeting picker invited exactly the "unusual
     // bugs" the owner asked to prevent) — the chip only REPORTS it.
@@ -611,6 +764,17 @@
     }
     updateChip();
   }
+  function mlNow() { try { return performance.now(); } catch (_) { return 0; } }
+  function updateMetric() {
+    if (!metricEl) return;
+    var secs = Math.max(0, Math.floor((mlNow() - meetingStartMs) / 1000));
+    var mm = String(Math.floor(secs / 60)).padStart(2, '0');
+    var ss = String(secs % 60).padStart(2, '0');
+    var n = 1 + Object.keys((opts.getPeers && opts.getPeers()) || {}).length; // include self
+    var ppl = AR ? (n + ' مشارك') : (n + (n === 1 ? ' participant' : ' participants'));
+    metricEl.textContent = '⏱ ' + mm + ':' + ss + ' · 👥 ' + ppl;
+  }
+  window.MeetLive_updateMetric = updateMetric; // page calls after peer add/remove
   function updateChip() {
     if (!chipEl) return;
     var t = chipEl.querySelector('.ml-chip-txt');
@@ -638,14 +802,68 @@
     try { return localStorage.getItem('meeting-mic-device') || ''; } catch (_) { return ''; }
   }
 
+  // Mic mode: 'ptt' (hold Space / hold the button to talk) or 'live'
+  // (continuous). Persisted; the picker + mode toggle are ALWAYS visible
+  // whenever the mic controls exist (the old code hid the picker unless ≥2
+  // devices AND hid it while the mic was off).
+  var micModeEl = null, pttHintEl = null;
+  function micMode() {
+    try { return localStorage.getItem('meeting-mic-mode') === 'live' ? 'live' : 'ptt'; }
+    catch (_) { return 'ptt'; }
+  }
+  function setMicMode(m) {
+    try { localStorage.setItem('meeting-mic-mode', m); } catch (_) {}
+    syncMicModeUi();
+  }
+  function syncMicModeUi() {
+    if (micModeEl) {
+      var live = micMode() === 'live';
+      micModeEl.textContent = live ? ('🎧 ' + S.liveMic) : ('🎙️ ' + S.ptt);
+      micModeEl.setAttribute('aria-pressed', live ? 'true' : 'false');
+    }
+    if (pttHintEl) pttHintEl.style.display = (micArmed && micMode() === 'ptt') ? 'inline-flex' : 'none';
+  }
+
+  function populateMicList() {
+    if (!micSelEl || !navigator.mediaDevices || !navigator.mediaDevices.enumerateDevices) return;
+    navigator.mediaDevices.enumerateDevices().then(function (devs) {
+      var mics = devs.filter(function (d) { return d.kind === 'audioinput'; });
+      var want = chosenMicId();
+      micSelEl.textContent = '';
+      var d0 = document.createElement('option');
+      d0.value = ''; d0.textContent = S.defaultMic;
+      micSelEl.appendChild(d0);
+      mics.forEach(function (d, i) {
+        var o = document.createElement('option');
+        o.value = d.deviceId;
+        o.textContent = d.label || (S.micDevice + ' ' + (i + 1));
+        micSelEl.appendChild(o);
+      });
+      micSelEl.value = want;
+      if (micSelEl.value !== want) micSelEl.value = '';
+      micSelEl.classList.add('on'); // ALWAYS visible
+    }).catch(function () {});
+  }
+
   function ensureMicUi() {
     var btn = micBtn();
-    if (!btn || $('ml-mic-meter')) return;
+    if (!btn || $('ml-mic-meter')) { syncMicModeUi(); return; }
     micMeterEl = document.createElement('canvas');
     micMeterEl.id = 'ml-mic-meter';
     micMeterEl.className = 'ml-mic-meter';
     micMeterEl.width = 128; micMeterEl.height = 52;
     btn.insertAdjacentElement('afterend', micMeterEl);
+
+    // Mode toggle (PTT / Live) — always visible next to the mic button.
+    micModeEl = document.createElement('button');
+    micModeEl.type = 'button';
+    micModeEl.id = 'ml-mic-mode';
+    micModeEl.className = 't-btn t-btn--ghost ml-mic-mode';
+    micModeEl.addEventListener('click', function () {
+      setMicMode(micMode() === 'live' ? 'ptt' : 'live');
+      if (micArmed) { disarmMic(); armMic(); } // re-arm under the new mode
+    });
+    micMeterEl.insertAdjacentElement('afterend', micModeEl);
 
     micSelEl = document.createElement('select');
     micSelEl.id = 'ml-mic-sel';
@@ -653,29 +871,17 @@
     micSelEl.setAttribute('aria-label', S.micDevice);
     micSelEl.addEventListener('change', function () {
       try { localStorage.setItem('meeting-mic-device', micSelEl.value); } catch (_) {}
-      if (micOn) { stopMic(); startMic(); } // hot-swap device
+      if (micArmed && micMode() === 'live') { disarmMic(); armMic(); } // hot-swap
     });
-    micMeterEl.insertAdjacentElement('afterend', micSelEl);
+    micModeEl.insertAdjacentElement('afterend', micSelEl);
 
-    if (navigator.mediaDevices && navigator.mediaDevices.enumerateDevices) {
-      navigator.mediaDevices.enumerateDevices().then(function (devs) {
-        var mics = devs.filter(function (d) { return d.kind === 'audioinput'; });
-        if (mics.length < 2) return; // nothing to pick
-        micSelEl.textContent = '';
-        var d0 = document.createElement('option');
-        d0.value = ''; d0.textContent = S.defaultMic;
-        micSelEl.appendChild(d0);
-        mics.forEach(function (d, i) {
-          var o = document.createElement('option');
-          o.value = d.deviceId;
-          o.textContent = d.label || (S.micDevice + ' ' + (i + 1));
-          micSelEl.appendChild(o);
-        });
-        micSelEl.value = chosenMicId();
-        if (micSelEl.value !== chosenMicId()) micSelEl.value = '';
-        micSelEl.classList.add('on');
-      }).catch(function () {});
-    }
+    pttHintEl = el('span', 'ml-ptt-hint', S.holdSpace);
+    pttHintEl.id = 'ml-ptt-hint';
+    micSelEl.insertAdjacentElement('afterend', pttHintEl);
+
+    populateMicList();
+    installPttKey();
+    syncMicModeUi();
   }
 
   function startMeter(stream) {
@@ -730,17 +936,24 @@
     }
   }
 
-  function setMicButton(state) {
+  function refreshMicButton() {
     var btn = micBtn();
     if (!btn) return;
     btn.classList.remove('on');
     btn.style.background = ''; btn.style.color = '';
-    if (state === 'on') { btn.textContent = S.micOn; btn.classList.add('on'); }
-    else if (state === 'rec') {
+    if (pttHolding) {
       btn.textContent = S.micRecording;
       btn.style.background = 'rgba(220,50,50,.22)'; btn.style.color = '#ff6b6b';
-    } else btn.textContent = S.micOff;
+      btn.classList.add('on');
+    } else if (micArmed && micMode() === 'live') {
+      btn.textContent = S.micOn; btn.classList.add('on');
+    } else if (micArmed) {
+      btn.textContent = '🎙️ ' + S.ptt; btn.classList.add('on'); // armed, waiting for hold
+    } else {
+      btn.textContent = S.micOff;
+    }
   }
+  function setMicButton() { refreshMicButton(); } // legacy shim
 
   function micConstraints() {
     var id = micSelEl ? micSelEl.value : chosenMicId();
@@ -798,36 +1011,81 @@
       }
     };
     micMediaRec.start();
-    setMicButton('rec');
+    refreshMicButton();
     return true;
   }
 
-  async function startMic() {
-    var useRecorder = AR || (micSelEl && micSelEl.value);
-    if (useRecorder) {
-      var ok = await startRecorder(AR ? 'arabic' : 'english');
-      micOn = !!ok;
-      return;
-    }
+  // ── PTT vs Live mic control ───────────────────────────────────
+  var micArmed = false, pttHolding = false, pttKeyInstalled = false;
 
-    // English on the default device → continuous SpeechRecognition
+  function installPttKey() {
+    if (pttKeyInstalled) return;
+    pttKeyInstalled = true;
+    var typing = function (t) {
+      return t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable);
+    };
+    document.addEventListener('keydown', function (e) {
+      if (e.code !== 'Space' && e.key !== ' ') return;
+      if (!micArmed || micMode() !== 'ptt') return;
+      if (typing(e.target)) return;
+      e.preventDefault();
+      pttStart();
+    });
+    document.addEventListener('keyup', function (e) {
+      if (e.code !== 'Space' && e.key !== ' ') return;
+      if (micMode() !== 'ptt') return;
+      pttEnd();
+    });
+  }
+
+  async function armMic() {
+    if (micArmed) return;
+    micArmed = true;
+    emitMedia(); // mic state to peers (best-effort)
+    if (micMode() === 'live') {
+      await startLive();
+    } else {
+      // PTT armed: open a monitor stream so the level meter shows the user
+      // their mic is live; recording only happens while holding.
+      try {
+        var monitor = await navigator.mediaDevices.getUserMedia(micConstraints());
+        startMeter(monitor);
+      } catch (e) { opts.setStatus(S.micDenied, false); micArmed = false; }
+      populateMicList(); // device labels are available now that we have permission
+    }
+    refreshMicButton();
+    syncMicModeUi();
+  }
+
+  function disarmMic() {
+    micArmed = false;
+    pttHolding = false;
+    if (micRec) { try { micRec.onend = null; micRec.stop(); } catch (_) {} micRec = null; }
+    if (micMediaRec && micMediaRec.state !== 'inactive') {
+      try { micMediaRec.stop(); } catch (_) {} // onstop transcribes + refreshes
+    } else {
+      micMediaRec = null;
+      stopMeter();
+    }
+    emitMedia();
+    refreshMicButton();
+    syncMicModeUi();
+  }
+
+  async function startLive() {
     var SR = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SR) {
-      // no SR in this browser → fall back to push-to-talk
-      var ok2 = await startRecorder('english');
-      micOn = !!ok2;
+      // No continuous recognition here — fall back to push-to-talk.
+      setMicMode('ptt');
+      opts.setStatus(AR ? 'الاستماع المباشر غير مدعوم — استخدم اضغط للتحدث' : 'Live listening unsupported — using push-to-talk', false);
+      try { var m = await navigator.mediaDevices.getUserMedia(micConstraints()); startMeter(m); } catch (_) {}
       return;
     }
-    // a parallel monitor stream feeds the level meter (SR exposes no audio)
-    try {
-      var monitor = await navigator.mediaDevices.getUserMedia(micConstraints());
-      startMeter(monitor); // takes ownership
-    } catch (_) { /* SR may still work */ }
-
+    try { var monitor = await navigator.mediaDevices.getUserMedia(micConstraints()); startMeter(monitor); } catch (_) {}
     micRec = new SR();
     micRec.continuous = true;
     micRec.interimResults = false;
-    micRec.lang = navigator.language || 'en-US';
+    micRec.lang = AR ? 'ar-EG' : (navigator.language || 'en-US');
     micRec.onresult = function (e) {
       for (var i = e.resultIndex; i < e.results.length; i++) {
         if (e.results[i].isFinal) {
@@ -838,36 +1096,58 @@
     };
     var FATAL = { 'not-allowed': 1, 'service-not-allowed': 1, 'bad-grammar': 1, 'language-not-supported': 1 };
     micRec.onerror = function (e) {
-      if (FATAL[e.error]) { stopMic(); opts.setStatus(S.micDenied + ' (' + e.error + ')', false); }
+      if (FATAL[e.error]) { disarmMic(); opts.setStatus(S.micDenied + ' (' + e.error + ')', false); }
     };
     micRec.onend = function () {
-      if (micOn && micRec) {
+      if (micArmed && micRec) {
         try { micRec.start(); } catch (err) {
-          if (String(err && err.name) !== 'InvalidStateError') stopMic();
+          if (String(err && err.name) !== 'InvalidStateError') disarmMic();
         }
       }
     };
-    try { micRec.start(); micOn = true; setMicButton('on'); }
-    catch (_) { stopMic(); opts.setStatus(AR ? 'الميكروفون مشغول' : 'Mic busy — press again', false); }
+    try { micRec.start(); }
+    catch (_) { disarmMic(); opts.setStatus(AR ? 'الميكروفون مشغول' : 'Mic busy — press again', false); }
   }
 
-  function stopMic() {
-    micOn = false;
-    if (micRec) { try { micRec.stop(); } catch (_) {} micRec = null; }
+  async function pttStart() {
+    if (!micArmed || micMode() !== 'ptt' || pttHolding) return;
+    if (micMediaRec && micMediaRec.state !== 'inactive') return; // already recording
+    pttHolding = true;
+    refreshMicButton();
+    var ok = await startRecorder(AR ? 'arabic' : 'english');
+    if (!ok) { pttHolding = false; refreshMicButton(); }
+  }
+  function pttEnd() {
+    if (!pttHolding) return;
+    pttHolding = false;
     if (micMediaRec && micMediaRec.state !== 'inactive') {
-      try { micMediaRec.stop(); } catch (_) {} // onstop finishes transcription
-      return; // button state handled by onstop
+      try { micMediaRec.stop(); } catch (_) {} // onstop transcribes + refreshes button
     }
-    micMediaRec = null;
-    stopMeter();
-    setMicButton('off');
+    refreshMicButton();
+  }
+
+  // The mic button ARMS/DISARMS. In PTT mode a pointer-hold on the button
+  // also works as push-to-talk (in addition to the Space key).
+  var micBtnBound = false;
+  function bindMicButton() {
+    var btn = micBtn();
+    if (!btn || micBtnBound) return;
+    micBtnBound = true;
+    btn.addEventListener('pointerdown', function (e) {
+      if (micArmed && micMode() === 'ptt') { e.preventDefault(); pttStart(); }
+    });
+    var endHold = function () { if (micMode() === 'ptt') pttEnd(); };
+    btn.addEventListener('pointerup', endHold);
+    btn.addEventListener('pointerleave', endHold);
+    btn.addEventListener('pointercancel', endHold);
   }
 
   async function toggleMic() {
     if (!opts.isInMeeting()) { opts.setStatus(AR ? 'انضم إلى اجتماع أولاً' : 'Join meeting first', false); return; }
     ensureMicUi();
-    if (micOn || (micMediaRec && micMediaRec.state !== 'inactive')) stopMic();
-    else await startMic();
+    bindMicButton();
+    if (micArmed) disarmMic();
+    else await armMic();
   }
 
   // ── speech-out (read incoming captions aloud) ─────────────────
@@ -1057,6 +1337,130 @@
     if (t) t.style.display = 'none';
   }
 
+  // ── caption tools: font-size, transcript export, raise-hand ───
+  var FONT_STEPS = [0.85, 1, 1.2, 1.45];
+  function fontScaleIndex() {
+    try {
+      var i = parseInt(localStorage.getItem('meeting-cap-size'), 10);
+      return (i >= 0 && i < FONT_STEPS.length) ? i : 1;
+    } catch (_) { return 1; }
+  }
+  function applyFontScale() {
+    var box = $('meeting-caption-history');
+    var scale = FONT_STEPS[fontScaleIndex()];
+    if (box) box.style.setProperty('--ml-cap-scale', scale);
+    var ov = $('meeting-subtitle-overlay');
+    if (ov) ov.style.setProperty('--ml-cap-scale', scale);
+    if (fontGroupEl) {
+      Array.prototype.forEach.call(fontGroupEl.children, function (b, i) {
+        b.classList.toggle('on', i === fontScaleIndex());
+      });
+    }
+  }
+  function setFontScale(i) {
+    try { localStorage.setItem('meeting-cap-size', String(i)); } catch (_) {}
+    applyFontScale();
+  }
+
+  var toolsEl = null, fontGroupEl = null;
+  function ensureCaptionTools() {
+    if (toolsEl && toolsEl.isConnected) { applyFontScale(); return; }
+    var label = $('meeting-caption-label');
+    if (!label || !label.parentElement) return;
+    toolsEl = el('div', 'ml-tools');
+    toolsEl.id = 'ml-caption-tools';
+
+    // raise-hand / attention
+    var hand = el('button', 'ml-tool-btn', S.raiseHand);
+    hand.type = 'button';
+    hand.title = S.raiseHand;
+    hand.addEventListener('click', raiseHand);
+    toolsEl.appendChild(hand);
+
+    // transcript export
+    var exp = el('button', 'ml-tool-btn', '⬇ ' + S.exportTxt);
+    exp.type = 'button';
+    exp.addEventListener('click', exportTranscript);
+    toolsEl.appendChild(exp);
+
+    // font-size A / A+ / A++
+    fontGroupEl = el('div', 'ml-font-group');
+    fontGroupEl.setAttribute('aria-label', S.fontSize);
+    ['A', 'A', 'A', 'A'].forEach(function (_t, i) {
+      var b = el('button', null, 'A');
+      b.type = 'button';
+      b.style.fontSize = (11 + i * 3) + 'px';
+      b.title = S.fontSize;
+      b.addEventListener('click', function () { setFontScale(i); });
+      fontGroupEl.appendChild(b);
+    });
+    toolsEl.appendChild(fontGroupEl);
+
+    label.parentElement.insertBefore(toolsEl, label.nextSibling);
+    applyFontScale();
+  }
+
+  function exportTranscript() {
+    var lines = captions.filter(function (c) { return !c.system; }).map(function (c) {
+      var who = c.mine ? S.you : (c.name || S.peer);
+      var rl = roleLabel(c.role);
+      return '[' + (c.time || '') + '] ' + who + (rl ? ' (' + rl + ')' : '') + ': ' + c.text;
+    });
+    if (!lines.length) { toast(S.noMessages); return; }
+    var header = (AR ? 'نص اجتماع Together — الغرفة ' : 'Together meeting transcript — room ') + (opts.getRoom() || '') + '\n' +
+      '='.repeat(40) + '\n\n';
+    var blob = new Blob([header + lines.join('\n') + '\n'], { type: 'text/plain;charset=utf-8' });
+    try {
+      var a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = 'together-meeting-' + (opts.getRoom() || 'room') + '.txt';
+      document.body.appendChild(a);
+      a.click();
+      setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 500);
+    } catch (_) {}
+  }
+
+  // ── signer self-preview skeleton (drawn on the local meeting tile) ──
+  var selfSkelCanvas = null, selfSkelTag = null;
+  function ensureSelfSkel() {
+    if (selfSkelCanvas && selfSkelCanvas.isConnected) return selfSkelCanvas;
+    var video = $('meeting-local-video');
+    var wrap = video ? video.closest('.d-meet-vid-wrap') : null;
+    if (!wrap) return null;
+    if (getComputedStyle(wrap).position === 'static') wrap.style.position = 'relative';
+    selfSkelCanvas = document.createElement('canvas');
+    selfSkelCanvas.id = 'ml-self-skel';
+    wrap.appendChild(selfSkelCanvas);
+    selfSkelTag = el('div', 'ml-self-tag', S.selfSkeleton);
+    wrap.appendChild(selfSkelTag);
+    return selfSkelCanvas;
+  }
+  // Called by the page's onHolisticResults while a signer is in a meeting —
+  // gives the signer visual confirmation their hands are being tracked.
+  function drawSelfSkeleton(results) {
+    if (!opts.isSigner() || !opts.isInMeeting() || !results) return;
+    var cv = ensureSelfSkel();
+    if (!cv) return;
+    var w = (results.image && results.image.width) || 640;
+    var h = (results.image && results.image.height) || 480;
+    if (cv.width !== w) cv.width = w;
+    if (cv.height !== h) cv.height = h;
+    var ctx = cv.getContext('2d');
+    ctx.clearRect(0, 0, w, h);
+    if (window.drawConnectors && window.HAND_CONNECTIONS) {
+      if (results.leftHandLandmarks) window.drawConnectors(ctx, results.leftHandLandmarks, window.HAND_CONNECTIONS, { color: '#00ffff', lineWidth: 2 });
+      if (results.rightHandLandmarks) window.drawConnectors(ctx, results.rightHandLandmarks, window.HAND_CONNECTIONS, { color: '#ff00ff', lineWidth: 2 });
+    }
+    if (window.drawLandmarks) {
+      if (results.leftHandLandmarks) window.drawLandmarks(ctx, results.leftHandLandmarks, { color: '#fff', lineWidth: 0.5, radius: 2 });
+      if (results.rightHandLandmarks) window.drawLandmarks(ctx, results.rightHandLandmarks, { color: '#fff', lineWidth: 0.5, radius: 2 });
+    }
+  }
+  function clearSelfSkel() {
+    if (selfSkelCanvas) { try { selfSkelCanvas.remove(); } catch (_) {} selfSkelCanvas = null; }
+    if (selfSkelTag) { try { selfSkelTag.remove(); } catch (_) {} selfSkelTag = null; }
+  }
+
   // ── lifecycle ─────────────────────────────────────────────────
   function onJoined() {
     // The animated aurora background (three blur(100px) blobs) competes with
@@ -1064,28 +1468,37 @@
     document.body.classList.add('ml-in-meeting');
     ensureIndicators();
     ensureMicUi();
+    ensureCaptionTools();
+    bindMicButton();
     // The signer's role UI hides the mic button — hide its companions too.
     var micHidden = opts.isSigner();
-    if (micSelEl) micSelEl.style.display = micHidden ? 'none' : '';
-    if (micMeterEl) micMeterEl.style.display = micHidden ? 'none' : '';
+    [micSelEl, micMeterEl, micModeEl, pttHintEl].forEach(function (e2) {
+      if (e2) e2.style.display = micHidden ? 'none' : '';
+    });
+    if (!micHidden) syncMicModeUi(); // restores pttHint display rule
     renderLocalGloss();
     renderCaptions();
+    applyFontScale();
   }
 
   function onLeave() {
     document.body.classList.remove('ml-in-meeting');
-    stopMic();
+    disarmMic();
     resetAvatar();
     hideRemoteGloss();
     Object.keys(rgTimers).forEach(function (k) { clearTimeout(rgTimers[k]); });
     rgTimers = {};
     Object.keys(deadTimers).forEach(function (k) { clearTimeout(deadTimers[k]); });
     deadTimers = {};
+    camOffSids = {};
     editingActive = false;
     captions = [];
     clearLocalGloss();
     renderCaptions();
     peerNames = {};
+    if (metricTimer) { clearInterval(metricTimer); metricTimer = null; }
+    meetingStartMs = 0;
+    clearSelfSkel();
     var sel = $('ml-sign-lang');
     if (sel) sel.remove();
     if (micSelEl) micSelEl.classList.remove('on');
@@ -1116,12 +1529,19 @@
     onPeerLeft: onPeerLeft,
     watchTile: watchTile,
     toggleMic: toggleMic,
-    stopMic: stopMic,
+    stopMic: disarmMic,
     toggleSpeechOut: toggleSpeechOut,
     enqueueAvatar: enqueueAvatar,
     noteSignEvent: noteSignEvent,
     onJoined: onJoined,
     onLeave: onLeave,
     updateChip: updateChip,
+    // round-4 additions
+    onMediaState: onMediaState,
+    emitCameraState: emitCameraState,
+    onRaiseHand: onRaiseHand,
+    raiseHand: raiseHand,
+    drawSelfSkeleton: drawSelfSkeleton,
+    updateMetric: updateMetric,
   };
 })();

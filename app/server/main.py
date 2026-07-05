@@ -1883,6 +1883,27 @@ async def webrtc_config(current_user: dict = Depends(get_current_user)):
         return {"iceServers": _STUN_FALLBACK, "turn": False}
 
 
+@app.get("/api/meeting/qr.svg")
+async def meeting_qr(text: str):
+    """Render a scannable QR of a meeting link as inline SVG (no external
+    library — see app/server/qr.py). Cached; the link is not sensitive."""
+    from fastapi.responses import Response
+    try:
+        from qr import svg as _qr_svg  # app/server on sys.path
+    except Exception:
+        import qr as _qr_mod  # fallback import path
+        _qr_svg = _qr_mod.svg
+    safe = (text or "")[:512]
+    if not safe:
+        raise HTTPException(status_code=400, detail="text required")
+    try:
+        markup = _qr_svg(safe, level="M", scale=6, quiet=4)
+    except Exception as e:
+        raise HTTPException(status_code=422, detail=f"cannot encode: {e}")
+    return Response(content=markup, media_type="image/svg+xml",
+                    headers={"Cache-Control": "public, max-age=86400"})
+
+
 # ═══════════════════════════════════════════════════════════════
 # SOCKET.IO — WebRTC signaling & meeting relay
 # ═══════════════════════════════════════════════════════════════
@@ -2071,6 +2092,36 @@ async def meeting_gloss(sid, data):
     if isinstance(payload.get("name"), str):
         payload["name"] = payload["name"][:80]
     await sio.emit("meeting_gloss", payload, room=room, skip_sid=sid)
+
+
+@sio.on("meeting_media")
+async def meeting_media(sid, data):
+    """Relay a participant's camera/mic on-off state so peers can overlay a
+    'Camera off' placeholder instead of freezing on the last decoded frame
+    (a stopped WebRTC track leaves the remote <video> stuck on its last frame).
+    Room-gated + server-stamped like captions."""
+    room = data.get("room", "general") if isinstance(data, dict) else "general"
+    if rooms.get(sid) != room:
+        return
+    payload = {
+        "sender_sid": sid,
+        "camera": bool(data.get("camera")) if isinstance(data, dict) else False,
+    }
+    if isinstance(data, dict) and "mic" in data:
+        payload["mic"] = bool(data.get("mic"))
+    await sio.emit("meeting_media", payload, room=room, skip_sid=sid)
+
+
+@sio.on("meeting_raise_hand")
+async def meeting_raise_hand(sid, data):
+    """Relay a raise-hand / attention buzz to the room."""
+    room = data.get("room", "general") if isinstance(data, dict) else "general"
+    if rooms.get(sid) != room:
+        return
+    payload = {"sender_sid": sid}
+    if isinstance(data, dict) and isinstance(data.get("name"), str):
+        payload["name"] = data["name"][:80]
+    await sio.emit("meeting_raise_hand", payload, room=room, skip_sid=sid)
 
 
 # ═══════════════════════════════════════════════════════════════
