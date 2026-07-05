@@ -223,7 +223,7 @@
   }
 
   // ---- Helpers ----
-  const pad = (n) => String(n).padStart(2, '0');
+  function pad(n) { return String(n).padStart(2, '0'); } // hoisted — render() runs above
   function fmtDate(ms) {
     const d = new Date(ms);
     return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
