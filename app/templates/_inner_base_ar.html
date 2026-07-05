@@ -78,11 +78,20 @@
     .lp-nav-sep{display:none}
     .lp-nav-brand-tag{display:none}
   }
-  @media (max-width:420px){
+  @media (max-width:540px){
+    /* All phones (incl. Pro Max ~430px) get the slim nav — previously only
+       ≤420px slimmed, so 421-540px widths silently scrolled Sign In and the
+       theme toggle out of the hidden nav-end overflow region. */
     .lp-btn-demo{display:none}
-    .lp-btn-en{display:none} /* the mobile menu keeps an English entry */
     .lp-btn-login{padding:8px 12px;font-size:12.5px}
     .lp-nav-brand-name{height:18px}
+    /* Language switch stays visible as a compact "EN" pill. */
+    .lp-btn-en{flex:none;display:inline-flex;align-items:center;justify-content:center;
+      width:34px;height:34px;padding:0;font-size:0;line-height:0}
+    .lp-btn-en::before{content:"EN";font-size:11.5px;font-weight:800;line-height:1;letter-spacing:.02em}
+  }
+  @media (max-width:460px){
+    .lp-nav-brand-text{display:none} /* logo mark only — frees room for the controls */
   }
   .lp-btn-en,.lp-btn-login,.lp-btn-demo{white-space:nowrap}
 

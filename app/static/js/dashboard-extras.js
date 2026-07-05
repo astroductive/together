@@ -250,7 +250,15 @@
       '.dx-toast{position:fixed;inset-block-end:24px;inset-inline:0;margin-inline:auto;width:max-content;max-width:90vw;background:var(--surface,#16161a);color:var(--text,#eee);border:1px solid var(--border,#2a2a32);border-radius:var(--radius-full,999px);padding:9px 16px;font-size:13px;box-shadow:var(--shadow-lg,0 30px 80px rgba(0,0,0,.55));z-index:100;opacity:0;transform:translateY(8px);pointer-events:none;transition:opacity .2s,transform .2s}',
       '.dx-toast--show{opacity:1;transform:translateY(0)}',
       /* sidebar new-page links */
-      '.dx-nav-sep{height:1px;background:var(--border,#2a2a32);margin:8px 0}'
+      '.dx-nav-sep{height:1px;background:var(--border,#2a2a32);margin:8px 0}',
+      /* FEATURE 12 — scrollable mobile bottom nav (8 destinations) */
+      '@media(max-width:860px){.d-mob-nav{overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none;justify-content:flex-start}.d-mob-nav::-webkit-scrollbar{display:none}.d-mob-nav a{flex:1 0 64px;min-width:64px}}',
+      '.dx-mob-more{position:fixed;inset-inline-end:0;bottom:0;width:46px;z-index:61;pointer-events:none;display:none;align-items:center;justify-content:flex-end;background:linear-gradient(to left,var(--sidebar,var(--surface,#16161a)) 18%,transparent)}',
+      '.dx-mob-more.dx-show{display:flex}',
+      '.dx-mob-more.dx-rtl{background:linear-gradient(to right,var(--sidebar,var(--surface,#16161a)) 18%,transparent)}',
+      '.dx-mob-more svg{width:15px;height:15px;color:var(--accent,#1f8a82);margin-inline-end:5px;animation:dx-nudge 1.5s infinite}',
+      '.dx-mob-more.dx-rtl svg{transform:rotate(180deg)}',
+      '@keyframes dx-nudge{0%,100%{opacity:.3}50%{opacity:1}}'
     ].join('\n');
     var style = el('style', { id: 'dx-style', type: 'text/css' });
     style.appendChild(document.createTextNode(css));
@@ -1216,6 +1224,47 @@
   }
 
   /* ════════════════════════════════════════════════════════════════════════
+   * FEATURE 12 — Mobile bottom nav: add Dictionary/Practice/Analytics and make
+   * the bar horizontally scrollable with a visible "more" cue. Previously only
+   * 5 of the 8 destinations were reachable from a phone.
+   * ══════════════════════════════════════════════════════════════════════*/
+  function installMobileNav() {
+    var nav = byId('mobile-bottom-nav');
+    if (!nav || nav.querySelector('.dx-mob-extra')) return;
+    var q = isAr() ? '?lang=ar' : '';
+
+    function link(href, kind, label) {
+      var a = el('a', { class: 'dx-mob-extra', href: href });
+      a.innerHTML = navSvg(kind) + '<span></span>';
+      a.querySelector('span').textContent = label;
+      return a;
+    }
+    nav.appendChild(link('/dictionary' + q, 'book', t('Dictionary', 'القاموس')));
+    nav.appendChild(link('/practice' + q, 'target', t('Practice', 'تدريب')));
+    nav.appendChild(link('/analytics' + q, 'bar', t('Analytics', 'التحليلات')));
+
+    // Scroll cue: pulsing chevron over a fade at the trailing edge; hidden
+    // once the user scrolls to the end (or when nothing overflows).
+    var cue = el('div', { class: 'dx-mob-more' + (isAr() ? ' dx-rtl' : ''), 'aria-hidden': 'true' });
+    cue.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m9 6 6 6-6 6"/></svg>';
+    nav.insertAdjacentElement('afterend', cue);
+
+    function update() {
+      try {
+        var scrollable = nav.scrollWidth - nav.clientWidth > 4;
+        // RTL scrollLeft goes negative from 0 — Math.abs covers both directions.
+        var atEnd = Math.abs(nav.scrollLeft) + nav.clientWidth >= nav.scrollWidth - 6;
+        cue.classList.toggle('dx-show', scrollable && !atEnd);
+        cue.style.height = nav.offsetHeight + 'px';
+      } catch (e) {}
+    }
+    nav.addEventListener('scroll', update, { passive: true });
+    window.addEventListener('resize', update);
+    update();
+    setTimeout(update, 600); // fonts/safe-area can shift the bar height after load
+  }
+
+  /* ════════════════════════════════════════════════════════════════════════
    * Boot — initialise every feature in isolation.
    * ══════════════════════════════════════════════════════════════════════*/
   function init() {
@@ -1231,6 +1280,7 @@
     safe('feature9-settings', installSettings);
     safe('feature10-meeting-notifications', installMeetingNotifications);
     safe('feature11-vbg', installVbg);
+    safe('feature12-mobile-nav', installMobileNav);
 
     // The dashboard's detection functions may be (re)assigned slightly after we
     // load; re-attempt the hook install a couple of times to be safe.
