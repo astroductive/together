@@ -88,7 +88,7 @@
 <script src="/static/js/socket.io.js"></script>
 <script src="/static/js/sign-diag.js"></script>
 <script src="/static/js/landmark-engine.js"></script>
-<script src="/static/js/meeting-live.js?v=1"></script>
+<script src="/static/js/meeting-live.js?v=2"></script>
 {% endblock %}
 
 
@@ -997,6 +997,10 @@ button.t-nav-item[aria-label="Sign out"]:hover svg{color:var(--danger,#ef4444)}
               <label style="display:flex;gap:8px;align-items:center;font-size:13px;color:var(--text);cursor:pointer">
                 <input type="checkbox" id="modal-create-cam" checked style="width:16px;height:16px;accent-color:var(--accent)"> Join with camera on
               </label>
+            </div>
+            <div id="modal-qr-wrap" style="display:none;flex-direction:column;align-items:center;gap:6px;margin-bottom:14px">
+              <div id="modal-qr" style="width:150px;height:150px;background:#fff;border-radius:12px;padding:6px;box-sizing:content-box"></div>
+              <div style="font-size:11px;color:var(--faint)">Scan to join on a phone</div>
             </div>
             <div style="display:flex;flex-direction:column;gap:10px">
               <button class="t-btn t-btn--accent" id="modal-copy-btn" onclick="copyCreatedCode()">Copy Code &amp; Link</button>
@@ -2211,6 +2215,9 @@ button.t-nav-item[aria-label="Sign out"]:hover svg{color:var(--danger,#ef4444)}
   function onHolisticResults(results) {
     _holisticBusy = false; // WASM has finished — safe to send the next frame
     if (window.SignDiag) SignDiag.frame(results);
+    // Signer self-preview: mirror the tracked skeleton onto the local meeting
+    // tile so the signer can confirm their hands are being read.
+    if (inMeeting && window.MeetLive && MeetLive.ready()) MeetLive.drawSelfSkeleton(results);
     // The <video> element shows the smooth, full-framerate feed underneath
     // (CSS-mirrored). We only paint the skeleton onto the transparent canvas,
     // so display smoothness is independent of inference rate. Landmarks are
@@ -2298,10 +2305,15 @@ button.t-nav-item[aria-label="Sign out"]:hover svg{color:var(--danger,#ef4444)}
         if (window.SignDiag) SignDiag.event('vision', 'rest_gate_on', {});
       }
       if (window._setDetectState) _setDetectState('idle', 'Hands resting — paused', 'hs');
+      // Auto-compose on rest: a signer who rests for ~4s with buffered words
+      // gets their sentence composed + sent automatically (no reach for the
+      // Compose button mid-conversation).
+      if (inMeeting && isDeafHohUser) maybeAutoCompose();
       return;
     } else if (_wasRestingV) {
       if (window.SignDiag) SignDiag.event('vision', 'rest_gate_off', {});
     }
+    _autoComposeArmedAt = 0; // hands active again — cancel the pending auto-compose
 
     const frame = buildLandmarkFrame(results);
 
@@ -3189,6 +3201,19 @@ button.t-nav-item[aria-label="Sign out"]:hover svg{color:var(--danger,#ef4444)}
     } catch (e) { console.warn('[WebRTC] ICE config fetch failed; using STUN only', e); }
   }
 
+  // Attach (or replace) the local video track on a peer connection. Using
+  // replaceTrack on an existing video sender avoids a SECOND m-line each time
+  // the camera is toggled off→on (which previously duplicated the local feed
+  // on every peer). Falls back to addTrack the first time.
+  function setPeerLocalVideo(pc, track) {
+    try {
+      const sender = pc.getSenders().find(s => s.track && s.track.kind === 'video')
+        || pc.getSenders().find(s => !s.track && s.__mlVideo);
+      if (sender) { sender.replaceTrack(track); return; }
+      if (track) { const sn = pc.addTrack(track, meetingCamStream); if (sn) sn.__mlVideo = true; }
+    } catch (_) {}
+  }
+
   // Prefer FRAMERATE over resolution when the encoder is starved (weak
   // machines): without this Chrome's default 'balanced' mode lets the sent
   // stream drop to a slideshow while holding 480p.
@@ -3399,6 +3424,7 @@ button.t-nav-item[aria-label="Sign out"]:hover svg{color:var(--danger,#ef4444)}
   }
 
   function updateParticipantsUI() {
+    if (window.MeetLive && MeetLive.ready() && MeetLive.updateMetric) MeetLive.updateMetric();
     const peerDiv = document.getElementById('participant-peer');
     const n = peerCount();
     if (peerDiv) {
@@ -3444,6 +3470,25 @@ button.t-nav-item[aria-label="Sign out"]:hover svg{color:var(--danger,#ef4444)}
     const url = new URL(window.location.href);
     url.searchParams.set('room', roomId);
     return url.toString();
+  }
+
+  // Fetch the scannable meeting-link QR (server-rendered inline SVG, no
+  // external library — CSP-safe) and drop it into the create dialog.
+  async function renderMeetingQr(roomId) {
+    const wrap = document.getElementById('modal-qr-wrap');
+    const box = document.getElementById('modal-qr');
+    if (!wrap || !box) return;
+    box.innerHTML = '';
+    wrap.style.display = 'flex';
+    try {
+      const link = buildMeetingLink(roomId);
+      const res = await fetch('/api/meeting/qr.svg?text=' + encodeURIComponent(link));
+      if (!res.ok) { wrap.style.display = 'none'; return; }
+      const svg = await res.text();
+      box.innerHTML = svg;
+      const el = box.querySelector('svg');
+      if (el) { el.style.width = '100%'; el.style.height = '100%'; el.style.display = 'block'; }
+    } catch (_) { wrap.style.display = 'none'; }
   }
 
   function getMeetingRoleFlags(role) {
@@ -3499,6 +3544,21 @@ button.t-nav-item[aria-label="Sign out"]:hover svg{color:var(--danger,#ef4444)}
     }
   }
   window.composeMeetingSentence = composeMeetingSentence;
+
+  // Auto-compose on rest (~4s). Armed while resting with a non-empty gloss
+  // buffer; fires once, then waits for new signs.
+  let _autoComposeArmedAt = 0;
+  const AUTO_COMPOSE_MS = 4000;
+  function maybeAutoCompose() {
+    const buf = Array.isArray(window.__meetGlossBuf) ? window.__meetGlossBuf : [];
+    if (buf.length === 0) { _autoComposeArmedAt = 0; return; }
+    const now = Date.now();
+    if (!_autoComposeArmedAt) { _autoComposeArmedAt = now; return; }
+    if (now - _autoComposeArmedAt >= AUTO_COMPOSE_MS) {
+      _autoComposeArmedAt = 0;
+      composeMeetingSentence();
+    }
+  }
 
   function clearMeetingGloss() {
     window.__meetGlossBuf = [];
@@ -3774,14 +3834,18 @@ button.t-nav-item[aria-label="Sign out"]:hover svg{color:var(--danger,#ef4444)}
       camBtn.classList.add('on');
       setMeetingUiState(inMeeting);
 
-      // Add local camera tracks to every existing peer connection now. Adding
-      // tracks triggers onnegotiationneeded → renegotiation per peer.
+      // Attach the camera to every peer (replaceTrack if a sender exists, so
+      // toggling the camera doesn't add duplicate video m-lines).
+      const _vtrack = meetingCamStream.getVideoTracks()[0] || null;
       Object.values(peers).forEach(p => {
-        meetingCamStream.getTracks().forEach(track => {
-          try { p.pc.addTrack(track, meetingCamStream); } catch (_) {}
+        meetingCamStream.getAudioTracks().forEach(track => {
+          try { if (!p.pc.getSenders().some(s => s.track === track)) p.pc.addTrack(track, meetingCamStream); } catch (_) {}
         });
+        if (_vtrack) setPeerLocalVideo(p.pc, _vtrack);
         tuneVideoSenders(p.pc);
       });
+      // Tell peers the camera is ON (clears any "Camera off" overlay).
+      if (window.MeetLive && MeetLive.ready()) MeetLive.emitCameraState(true);
 
       return true;
     } catch (_) {
@@ -3799,6 +3863,12 @@ button.t-nav-item[aria-label="Sign out"]:hover svg{color:var(--danger,#ef4444)}
     const videoEl = document.getElementById('meeting-local-video');
     const camBtn = document.getElementById('meeting-cam-btn');
     const placeholder = document.getElementById('local-video-placeholder');
+
+    // Stop SENDING to peers first (replaceTrack(null)) and tell them the camera
+    // is off — a stopped track alone leaves the remote <video> frozen on its
+    // last decoded frame, so peers show a "Camera off" overlay instead.
+    try { Object.values(peers).forEach(p => setPeerLocalVideo(p.pc, null)); } catch (_) {}
+    if (window.MeetLive && MeetLive.ready()) MeetLive.emitCameraState(false);
 
     if (meetingCamStream) {
       meetingCamStream.getTracks().forEach(t => t.stop());
@@ -3861,6 +3931,20 @@ button.t-nav-item[aria-label="Sign out"]:hover svg{color:var(--danger,#ef4444)}
     }
     setMeetingUiState(false);
     initMeetingRoleUi();
+    // A shared meeting link (?room=CODE) must LAND the recipient on the meeting
+    // feature with the code ready — previously it only filled a hidden input on
+    // the default panel, so the link "did nothing". Switch to SignLine and open
+    // the prefilled join dialog (they still confirm role/model/camera).
+    if (fromQuery) {
+      setTimeout(function () {
+        try { showModule('meeting'); } catch (_) {}
+        const codeInput = document.getElementById('modal-meeting-code');
+        if (codeInput) codeInput.value = fromQuery;
+        if (typeof prefillMeetingModal === 'function') prefillMeetingModal('modal-join');
+        const modal = document.getElementById('join-meeting-modal');
+        if (modal) modal.style.display = 'flex';
+      }, 350);
+    }
   }
 
   // The creator/joiner confirms role + sign-language model + camera in the
@@ -3901,6 +3985,7 @@ button.t-nav-item[aria-label="Sign out"]:hover svg{color:var(--danger,#ef4444)}
     const input = document.getElementById('meeting-room-id');
     if (input) input.value = roomId;
     prefillMeetingModal('modal-create');
+    renderMeetingQr(roomId);
 
     const modal = document.getElementById('create-meeting-modal');
     const codeDisplay = document.getElementById('modal-created-code');
@@ -3989,6 +4074,7 @@ button.t-nav-item[aria-label="Sign out"]:hover svg{color:var(--danger,#ef4444)}
 
 
   async function joinMeeting() {
+    try { if (typeof showModule === 'function') showModule('meeting'); } catch (_) {}
     if (meetingJoinWithCam) await startMeetingCamera();
     // Load ICE servers BEFORE joining: room_peers can arrive immediately
     // after join_room and createPeer needs the TURN credentials by then.
@@ -4085,6 +4171,16 @@ button.t-nav-item[aria-label="Sign out"]:hover svg{color:var(--danger,#ef4444)}
         // Recent room captions replayed to late joiners / rejoins
         socket.on('caption_history', (data) => {
           if (window.MeetLive && MeetLive.ready()) MeetLive.onCaptionHistory(data);
+        });
+
+        // Peer camera/mic state — overlay "Camera off" instead of a frozen frame
+        socket.on('meeting_media', (data) => {
+          if (window.MeetLive && MeetLive.ready()) MeetLive.onMediaState(data);
+        });
+
+        // Raise-hand / attention buzz
+        socket.on('meeting_raise_hand', (data) => {
+          if (window.MeetLive && MeetLive.ready()) MeetLive.onRaiseHand(data);
         });
 
         // ── Mesh signaling ──
@@ -5145,5 +5241,5 @@ function _addReplayBtn(item, logId) {
 })();
 </script>
 
-<script src="/static/js/dashboard-extras.js?v=1"></script>
+<script src="/static/js/dashboard-extras.js?v=2"></script>
 {% endblock %}
