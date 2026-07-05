@@ -203,10 +203,20 @@
     .lp-nav-sep{display:none}
     .lp-nav-brand-tag{display:none}
   }
-  @media (max-width:420px){
-    .lp-btn-en{display:none} /* the mobile menu keeps an English entry */
+  @media (max-width:540px){
+    /* All phones (incl. Pro Max ~430px) get the slim nav — previously only
+       ≤420px slimmed, so 421-540px widths silently scrolled Sign In and the
+       theme toggle out of the hidden nav-end overflow region. */
+    .lp-btn-demo{display:none}
     .lp-btn-login{padding:8px 12px;font-size:12.5px}
     .lp-nav-brand-name{height:18px}
+    /* Language switch stays visible as a compact "EN" pill. */
+    .lp-btn-en{flex:none;display:inline-flex;align-items:center;justify-content:center;
+      width:34px;height:34px;padding:0;font-size:0;line-height:0}
+    .lp-btn-en::before{content:"EN";font-size:11.5px;font-weight:800;line-height:1;letter-spacing:.02em}
+  }
+  @media (max-width:460px){
+    .lp-nav-brand-text{display:none} /* logo mark only — frees room for the controls */
   }
   .lp-btn-en,.lp-btn-login{white-space:nowrap}
 </style>
@@ -473,53 +483,53 @@
     <h2 class="sec-title">ثماني أدوات.<br>منصة واحدة.</h2>
     <p class="sec-sub">كل اتجاهات التواصل بلغة الإشارة — مغطاة، في الوقت الفعلي، بذكاء اصطناعي على الجهاز لا يغادر متصفحك.</p>
     <div class="feat-grid">
-      <a class="feat-card" href="/dashboard?module=vision" style="text-decoration:none;color:inherit">
+      <a class="feat-card" href="/products/handscript?lang=ar" style="text-decoration:none;color:inherit">
         <div class="feat-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg></div>
         <div class="feat-name">HandScript</div>
         <div class="feat-name-ar">يدك تصبح كلمات</div>
         <p class="feat-desc">تعرّف فوري على لغة الإشارة العربية المصرية بنموذج CNN-GRU، يظهر النص أمامك أثناء توقيعك.</p>
         <span class="feat-badge">إشارة → نص</span>
       </a>
-      <a class="feat-card" href="/dashboard?module=speech" style="text-decoration:none;color:inherit">
+      <a class="feat-card" href="/products/voicebridge?lang=ar" style="text-decoration:none;color:inherit">
         <div class="feat-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2M12 19v4M8 23h8"/></svg></div>
         <div class="feat-name">VoiceBridge</div>
         <div class="feat-name-ar">جسر الصوت</div>
         <p class="feat-desc">تحويل الإشارات إلى كلام طبيعي في الوقت الفعلي. مثالي للتواصل المباشر مع السامعين.</p>
         <span class="feat-badge">إشارة → كلام</span>
       </a>
-      <a class="feat-card" href="/dashboard?module=text2sign" style="text-decoration:none;color:inherit">
+      <a class="feat-card" href="/products/signtype?lang=ar" style="text-decoration:none;color:inherit">
         <div class="feat-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></div>
         <div class="feat-name">SignType</div>
         <div class="feat-name-ar">اكتب فأُشير</div>
         <p class="feat-desc">اكتب أي نص وشاهد أفاتار متحركاً يؤديه بلغة الإشارة العربية المصرية بسلاسة.</p>
         <span class="feat-badge">نص → إشارة</span>
       </a>
-      <a class="feat-card" href="/dashboard?module=speech2sign" style="text-decoration:none;color:inherit">
+      <a class="feat-card" href="/products/talkside?lang=ar" style="text-decoration:none;color:inherit">
         <div class="feat-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M4.93 4.93a10 10 0 0 0 0 14.14"/></svg></div>
         <div class="feat-name">TalkSide</div>
         <div class="feat-name-ar">تحدّث فأُشير</div>
         <p class="feat-desc">تحدّث في أي ميكروفون وسيُنشئ النظام ردّاً مرئياً بالإشارة. مثالي لنقاط الوصول.</p>
         <span class="feat-badge">كلام → إشارة</span>
       </a>
-      <a class="feat-card" href="/dashboard?module=meeting" style="text-decoration:none;color:inherit">
+      <a class="feat-card" href="/products/signline?lang=ar" style="text-decoration:none;color:inherit">
         <div class="feat-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M15 10l4.553-2.069A1 1 0 0121 8.869v6.262a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg></div>
         <div class="feat-name">خط التواصل</div>
         <p class="feat-desc">مكالمات فيديو ثنائية الاتجاه مع ترجمة لغة الإشارة في الوقت الفعلي</p>
         <span class="feat-badge">اجتماع مباشر</span>
       </a>
-      <a class="feat-card" href="/dictionary?lang=ar" style="text-decoration:none;color:inherit">
+      <a class="feat-card" href="/products/dictionary?lang=ar" style="text-decoration:none;color:inherit">
         <div class="feat-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg></div>
         <div class="feat-name">القاموس</div>
         <p class="feat-desc">أكثر من 250 إشارة بلغتي ASL والإشارة العربية، ببحث باللغتين وعرض حركي ومقاطع فيديو حقيقية.</p>
         <span class="feat-badge">تصفّح الإشارات</span>
       </a>
-      <a class="feat-card" href="/practice?lang=ar" style="text-decoration:none;color:inherit">
+      <a class="feat-card" href="/products/practice?lang=ar" style="text-decoration:none;color:inherit">
         <div class="feat-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg></div>
         <div class="feat-name">التدريب</div>
         <p class="feat-desc">جولات موجَّهة بإشارة مستهدفة وتقييم فوري بالذكاء الاصطناعي — نموذج التعرّف الفعلي هو مدرّبك.</p>
         <span class="feat-badge">وضع التدريب</span>
       </a>
-      <a class="feat-card" href="/analytics?lang=ar" style="text-decoration:none;color:inherit">
+      <a class="feat-card" href="/products/analytics?lang=ar" style="text-decoration:none;color:inherit">
         <div class="feat-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 20V10M18 20V4M6 20v-4"/></svg></div>
         <div class="feat-name">التحليلات</div>
         <p class="feat-desc">اتجاهات الثقة والإشارات الأكثر استخداماً وتقارير قابلة للتصدير — كلها مخزَّنة بخصوصية على جهازك.</p>
