@@ -2346,6 +2346,13 @@ button.is-busy{opacity:.6;cursor:progress}
     // text ('Forming sentence: …') out of the session log.
   }
 
+  // Escape user-influenced text before innerHTML interpolation (composed
+  // sentences, typed text) — a stray "<" broke row rendering.
+  function escHtml(s) {
+    return String(s == null ? '' : s).replace(/[&<>"']/g,
+      c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  }
+
   function updateLog() {
     const log = document.getElementById('session-log');
     if (signs.length === 0) {
@@ -2355,7 +2362,7 @@ button.is-busy{opacity:.6;cursor:progress}
     log.innerHTML = signs.slice(-20).reverse().map(s =>
       `<div class="d-log-item">
         <span class="d-log-time">${s.time}</span>
-        <span class="d-log-msg${s.kind === 'sentence' ? '' : ' d-log-gloss'}">${s.text}</span>
+        <span class="d-log-msg${s.kind === 'sentence' ? '' : ' d-log-gloss'}">${escHtml(s.text)}</span>
       </div>`
     ).join('');
   }
@@ -2559,7 +2566,7 @@ button.is-busy{opacity:.6;cursor:progress}
     el.innerHTML = t2sHistory.map(h =>
       `<div class="d-log-item">
         <span class="d-log-time">${h.time}</span>
-        <span class="d-log-msg">${h.text}</span>
+        <span class="d-log-msg">${escHtml(h.text)}</span>
       </div>`
     ).join('');
   }
@@ -2810,7 +2817,7 @@ button.is-busy{opacity:.6;cursor:progress}
       const nextText = pendingSpeechText;
       pendingSpeechText = '';
       const el = document.getElementById('speech-output');
-      el.innerHTML = `<span>${nextText}</span>`;
+      el.innerHTML = `<span>${escHtml(nextText)}</span>`;
       setStatus('Animating…', true);
       await s2sAnimateText(nextText);
       setStatus('Mic Active', true);
