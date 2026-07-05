@@ -143,6 +143,7 @@
       <div class="pr-stat"><div class="lbl">الصحيحة</div><div class="val" id="pr-correct">0</div></div>
       <div class="pr-stat"><div class="lbl">الدقة</div><div class="val" id="pr-accuracy">—</div></div>
       <div class="pr-stat"><div class="lbl">المتتالية</div><div class="val" id="pr-streak">0</div></div>
+      <div class="pr-stat"><div class="lbl">أيام متتالية 🔥</div><div class="val" id="pr-daystreak">0</div></div>
     </div>
 
     <div class="pr-grid">
@@ -238,6 +239,78 @@
   function lang() { return $('pr-lang').value === 'arabic' ? 'arabic' : 'english'; }
   function langCode() { return lang() === 'arabic' ? 'ar' : 'en'; }
 
+  // Deep link from the Dictionary ("Practice this sign"): ?word=X&wlang=english|arabic
+  const _params = new URLSearchParams(location.search);
+  let _deepWord = (_params.get('word') || '').trim().toLowerCase();
+  const _deepLang = _params.get('wlang') === 'arabic' ? 'arabic'
+    : (_params.get('wlang') === 'english' ? 'english' : '');
+
+  // ── Daily practice streak (localStorage, shared with the EN page) ────
+  const DAY_KEY = 'together-practice-days';
+  function dayStamp(d) {
+    return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0')
+      + '-' + String(d.getDate()).padStart(2, '0');
+  }
+  function readDayStreak() {
+    try {
+      const o = JSON.parse(localStorage.getItem(DAY_KEY) || 'null');
+      if (o && typeof o.count === 'number' && typeof o.last === 'string') return o;
+    } catch (_) {}
+    return { last: '', count: 0 };
+  }
+  function bumpDayStreak() {
+    const today = dayStamp(new Date());
+    const o = readDayStreak();
+    if (o.last === today) return;
+    const y = new Date(); y.setDate(y.getDate() - 1);
+    const next = { last: today, count: o.last === dayStamp(y) ? o.count + 1 : 1 };
+    try { localStorage.setItem(DAY_KEY, JSON.stringify(next)); } catch (_) {}
+  }
+  function displayDayStreak() {
+    const o = readDayStreak();
+    const today = dayStamp(new Date());
+    const y = new Date(); y.setDate(y.getDate() - 1);
+    // Chain is live only if the last practice day was today or yesterday.
+    const live = (o.last === today || o.last === dayStamp(y)) ? o.count : 0;
+    const el = $('pr-daystreak');
+    if (el) el.textContent = live;
+  }
+
+  // ── Adaptive rounds ──────────────────────────────────────────────────
+  // Owner's call: bias toward HIGH-confidence words (the ones the model
+  // detects fastest / confuses least) using the on-device analytics log.
+  function wordStats(code) {
+    let arr = [];
+    try { arr = JSON.parse(localStorage.getItem('together-analytics') || '[]'); } catch (_) {}
+    if (!Array.isArray(arr)) return {};
+    const agg = {};
+    arr.forEach((e) => {
+      if (!e || e.lang !== code || !e.w) return;
+      const k = String(e.w).toLowerCase();
+      if (!agg[k]) agg[k] = { s: 0, n: 0 };
+      agg[k].s += Number(e.c) || 0; agg[k].n++;
+    });
+    const out = {};
+    Object.keys(agg).forEach((k) => { out[k] = agg[k].s / agg[k].n; });
+    return out;
+  }
+  function pickAdaptive(list, n) {
+    const stats = wordStats(langCode());
+    const pool = list.map((w) => {
+      const conf = stats[(w.word || '').toLowerCase()];
+      // Unseen words keep weight 1; a 100%-confidence word weighs 3.
+      return { w, weight: 1 + (conf ? (conf / 100) * 2 : 0) };
+    });
+    const out = [];
+    while (out.length < Math.min(n, list.length) && pool.length) {
+      const total = pool.reduce((sum, x) => sum + x.weight, 0);
+      let r = Math.random() * total, pick = pool.length - 1;
+      for (let i = 0; i < pool.length; i++) { r -= pool[i].weight; if (r <= 0) { pick = i; break; } }
+      out.push(pool.splice(pick, 1)[0].w);
+    }
+    return out;
+  }
+
   function pickRandom(list, n) {
     const pool = list.slice();
     for (let i = pool.length - 1; i > 0; i--) {
@@ -310,6 +383,7 @@
     const t = curTarget();
     targetData = null;
     stopTargetPlayback();
+    missCount = 0; hintShown = false;
     const myToken = ++targetToken;
 
     $('pr-target-word').textContent = t.word ? (t.word_ar || cap(t.word)) : '—';
@@ -390,6 +464,8 @@
     setPill('correct', 'صحيح', 'correct');
     setResult('صحيح! ✓', 'ok');
 
+    bumpDayStreak();
+    displayDayStreak();
     logAnalytics(t.word, confidence);
 
     // Auto-advance after a short beat so the user sees the green tick.
@@ -540,6 +616,26 @@
   function streaming() { return streamActive && streamSocket && streamSocket.connected; }
 
   // ── Central detection handler (socket OR http both route here) ───────
+  let missCount = 0, hintShown = false;
+
+  // After two wrong detections on the same target, replay the reference in
+  // slow motion (~7 fps vs the normal 16) as a hint.
+  async function showHint() {
+    if (!targetData || !window.SignPlayer) return;
+    setResult('تلميح: شاهد الإشارة مرة أخرى — بالحركة البطيئة.', 'miss');
+    stopTargetPlayback();
+    await SignPlayer.sleep(20);
+    playSignal = { stop: false };
+    const mine = playSignal;
+    try {
+      await SignPlayer.playLandmarkSequence(
+        [{ word: targetData.word || curTarget().word, landmarks: targetData.landmarks, frame_count: targetData.frame_count }],
+        tCanvas, tCtx,
+        { loop: false, signal: mine, fps: 7 }
+      );
+    } catch (_) { /* switching targets mid-replay is fine */ }
+  }
+
   function handleDetectedSign(word, confidence, raw) {
     if (!cameraOn || graded || !round.length) return;
     setLastDetected(word);
@@ -550,6 +646,12 @@
     const gotRaw = (raw  || '').toString().trim().toLowerCase();
     if (target && (gotRaw === target || got === target)) {
       gradeCorrect(word, confidence);
+    } else if (target) {
+      missCount++;
+      if (missCount >= 2 && !hintShown) {
+        hintShown = true;
+        showHint();
+      }
     }
   }
 
@@ -883,10 +985,21 @@
       return;
     }
     clearBanner();
-    round = pickRandom(list, ROUND_SIZE).map((w) => ({
+    round = pickAdaptive(list, ROUND_SIZE).map((w) => ({
       word: w.word, word_ar: w.word_ar, category: w.category || 'general',
       category_ar: w.category_ar, status: 'pending',
     }));
+    // A dictionary deep-link word leads the first round (consumed once).
+    if (_deepWord) {
+      const hit = list.find((w) => (w.word || '').toLowerCase() === _deepWord);
+      if (hit) {
+        round = round.filter((t) => t.word.toLowerCase() !== _deepWord);
+        round.unshift({ word: hit.word, word_ar: hit.word_ar, category: hit.category || 'general',
+          category_ar: hit.category_ar, status: 'pending' });
+        if (round.length > ROUND_SIZE) round.length = ROUND_SIZE;
+      }
+      _deepWord = '';
+    }
     idx = 0;
     graded = false;
     renderList();
@@ -903,6 +1016,7 @@
       // word_ar/category_ar are what the Arabic UI displays.
       VOCAB.english = (data.asl || []).map((w) => ({ word: w.word, word_ar: w.word_ar, category: w.category || 'general', category_ar: w.category_ar }));
       VOCAB.arabic = (data.arabic || []).map((w) => ({ word: w.word, word_ar: w.word_ar, category: w.category || 'general', category_ar: w.category_ar }));
+      if (_deepLang) $('pr-lang').value = _deepLang;
       newRound();
     } catch (err) {
       console.error('[Practice] vocabulary load failed:', err);
@@ -928,5 +1042,6 @@
   window.addEventListener('beforeunload', () => { try { stopCamera(); } catch (_) {} });
 
   renderScore();
+  displayDayStreak();
 </script>
 {% endblock %}

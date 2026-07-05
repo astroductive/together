@@ -48,6 +48,18 @@
   .dc-chip--lang{background:var(--surface-2);color:var(--muted)}
   .dc-play{display:inline-flex;align-items:center;gap:4px;font-size:12px;font-weight:650;color:var(--accent);white-space:nowrap}
 
+  /* Recently viewed strip */
+  .dc-recent{margin-bottom:18px;display:none}
+  .dc-recent.show{display:block}
+  .dc-recent-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
+  .dc-recent-title{font-size:11.5px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--faint)}
+  .dc-recent-clear{font-size:12px;color:var(--muted);background:none;border:none;cursor:pointer;font-family:inherit;padding:2px 6px;border-radius:6px}
+  .dc-recent-clear:hover{color:var(--text);background:var(--surface-2)}
+  .dc-recent-items{display:flex;gap:8px;overflow-x:auto;padding-bottom:4px;scrollbar-width:thin}
+  .dc-recent-pill{flex:none;display:inline-flex;align-items:center;gap:7px;padding:7px 13px;border-radius:var(--radius-full);border:1px solid var(--border);background:var(--surface);color:var(--text);font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;transition:border-color .15s,background .15s}
+  .dc-recent-pill:hover{border-color:var(--accent);background:var(--accent-soft)}
+  .dc-recent-pill .lg{font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase}
+
   .dc-empty{text-align:center;padding:60px 20px;color:var(--muted);font-size:15px}
   .dc-empty svg{width:40px;height:40px;color:var(--faint);margin-bottom:12px}
 
@@ -110,6 +122,14 @@
       </select>
     </div>
 
+    <div class="dc-recent" id="dc-recent">
+      <div class="dc-recent-head">
+        <span class="dc-recent-title">شوهدت مؤخراً</span>
+        <button type="button" class="dc-recent-clear" id="dc-recent-clear">مسح</button>
+      </div>
+      <div class="dc-recent-items" id="dc-recent-items"></div>
+    </div>
+
     <div class="dc-count" id="dc-count"></div>
 
     <div class="dc-grid" id="dc-grid" role="list"></div>
@@ -140,6 +160,7 @@
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px"><polygon points="5 3 19 12 5 21 5 3"/></svg>
         مشاهدة الفيديو
       </button>
+      <a class="t-btn t-btn--soft" id="dc-practice" style="display:none;text-decoration:none">🎯 تدرّب على هذه الإشارة</a>
       <button type="button" class="t-btn t-btn--ghost" id="dc-close-2">إغلاق</button>
     </div>
     <video id="dc-videoel" controls playsinline preload="none" style="display:none;width:100%;margin-top:12px;border-radius:12px;background:#000"></video>
@@ -313,9 +334,58 @@
     } catch (_) { /* ignore — closing mid-frame is fine */ }
   }
 
+  // ── Recently viewed (localStorage, shared with the EN dictionary) ──
+  const RECENT_KEY = 'together-dict-recent';
+  function readRecent() {
+    try {
+      const arr = JSON.parse(localStorage.getItem(RECENT_KEY) || '[]');
+      return Array.isArray(arr) ? arr.filter((r) => r && r.word && r.lang) : [];
+    } catch (_) { return []; }
+  }
+  function pushRecent(sign) {
+    try {
+      let arr = readRecent().filter((r) => !(r.word === sign.word && r.lang === sign.lang));
+      arr.unshift({ word: sign.word, word_ar: sign.word_ar || '', category: sign.category || 'general',
+                    category_ar: sign.category_ar || '', lang: sign.lang });
+      if (arr.length > 12) arr = arr.slice(0, 12);
+      localStorage.setItem(RECENT_KEY, JSON.stringify(arr));
+    } catch (_) { /* localStorage may be unavailable */ }
+    renderRecent();
+  }
+  function renderRecent() {
+    const wrap = $('dc-recent'), items = $('dc-recent-items');
+    if (!wrap || !items) return;
+    const arr = readRecent();
+    wrap.classList.toggle('show', arr.length > 0);
+    items.innerHTML = '';
+    arr.forEach((r) => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'dc-recent-pill';
+      const w = document.createElement('span'); w.textContent = r.word_ar || cap(r.word);
+      const lg = document.createElement('span'); lg.className = 'lg'; lg.textContent = langLabel(r.lang);
+      b.appendChild(w); b.appendChild(lg);
+      b.addEventListener('click', () => openSign({ word: r.word, word_ar: r.word_ar || '',
+        category: r.category || 'general', category_ar: r.category_ar || '', lang: r.lang }));
+      items.appendChild(b);
+    });
+  }
+  $('dc-recent-clear').addEventListener('click', () => {
+    try { localStorage.removeItem(RECENT_KEY); } catch (_) {}
+    renderRecent();
+  });
+  renderRecent();
+
   async function openSign(sign) {
     activeSign = sign;
     activeData = null;
+    pushRecent(sign);
+    const practiceBtn = $('dc-practice');
+    if (practiceBtn) {
+      practiceBtn.href = '/practice?lang=ar&word=' + encodeURIComponent(sign.word)
+        + '&wlang=' + (sign.lang === 'arabic' ? 'arabic' : 'english');
+      practiceBtn.style.display = 'inline-flex';
+    }
     $('dc-modal-word').textContent = sign.word_ar || cap(sign.word);
     $('dc-modal-cat').textContent = (sign.category_ar || cap(sign.category)) + ' · ' + langLabel(sign.lang);
     noanim.style.display = 'none';
