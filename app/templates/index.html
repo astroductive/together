@@ -354,6 +354,17 @@ a.t-user:hover{border-color:var(--accent);background:var(--accent-soft)}
 .d-log-item:hover .d-log-replay{display:flex}
 @media(hover:none){.d-log-replay{display:flex}}
 .d-log-replay:hover{background:var(--accent);color:#fff}
+.t2s-w{cursor:pointer;border-radius:4px;padding:0 2px;text-decoration:underline dotted transparent;text-underline-offset:3px;transition:color .15s,background .15s,text-decoration-color .15s}
+.t2s-w:hover,.t2s-w:focus-visible{color:var(--accent);background:var(--accent-soft);text-decoration-color:var(--accent)}
+.d-undo-toast{position:fixed;inset-block-end:24px;inset-inline:0;margin-inline:auto;width:max-content;max-width:90vw;
+  display:flex;align-items:center;gap:12px;background:var(--surface);color:var(--text);border:1px solid var(--border);
+  border-radius:var(--radius-full,999px);padding:9px 10px 9px 16px;font-size:13px;
+  box-shadow:var(--shadow-lg,0 30px 80px rgba(0,0,0,.55));z-index:100;opacity:0;transform:translateY(8px);
+  pointer-events:none;transition:opacity .2s,transform .2s}
+.d-undo-toast.show{opacity:1;transform:translateY(0);pointer-events:auto}
+.d-undo-toast button{background:var(--accent);color:#fff;border:0;border-radius:var(--radius-full,999px);
+  padding:6px 14px;font-size:12.5px;font-weight:700;cursor:pointer;font-family:inherit}
+@media(max-width:860px){.d-undo-toast{inset-block-end:calc(84px + env(safe-area-inset-bottom,0px))}}
 
 /* ══ Mini usage widget ══ */
 .d-usage-card{display:flex;flex-direction:column;gap:0}
@@ -1874,7 +1885,10 @@ button.t-nav-item[aria-label="Sign out"]:hover svg{color:var(--danger,#ef4444)}
       module, language,
       w: (v && v.videoWidth) || 640,
       h: (v && v.videoHeight) || 480,
+      // ArSL vision opts into segmented commits (see segTrackMotion).
+      segmented: module === 'vision' && String(language || '').toLowerCase().startsWith('ar'),
     });
+    if (module === 'vision') segReset();
     streamActive[module] = true;
     return true;
   }
@@ -2210,6 +2224,64 @@ button.t-nav-item[aria-label="Sign out"]:hover svg{color:var(--danger,#ef4444)}
   }
   const _visionRestGate = makeRestGate();
   const _s2spRestGate = makeRestGate();
+
+  // ── Gesture segmentation (ArSL streaming) ──────────────────────────
+  // Continuous voting can commit a WRONG word from a prefix window of a long
+  // gesture (docs/HANDSCRIPT_BUG_HUNT.md #1). Arabic vision streams opt into
+  // SEGMENTED mode: this motion detector marks gesture boundaries (stillness
+  // between signs / hands dropped) and the server classifies each full
+  // boundary-to-boundary segment exactly once.
+  let _segPrev = null;       // last wrist positions {l:{x,y}, r:{x,y}}
+  let _segStill = 0;         // consecutive still frames
+  let _segHadMotion = false; // true once real gesture motion was seen
+  const SEG_STILL_EPS = 0.012;  // same stillness epsilon as the rest gate
+  const SEG_MOVE_EPS = 0.02;    // definite gesture motion
+  const SEG_STILL_FRAMES = 6;   // ~300ms of stillness at 20fps = boundary
+
+  function _segIsAr(language) {
+    return String(language || streamLang.vision || '').toLowerCase().startsWith('ar');
+  }
+  function segReset() { _segPrev = null; _segStill = 0; _segHadMotion = false; }
+  function segBoundary(why) {
+    _segHadMotion = false;
+    _segStill = 0;
+    if (streaming('vision')) {
+      streamSocket.emit('sign_boundary', { module: 'vision' });
+      if (window.SignDiag) SignDiag.event('vision', 'seg_boundary', { why });
+    }
+  }
+  // Hands left the frame / went to rest: if a gesture was in progress, that IS
+  // its end boundary — commit it. With no motion seen there is nothing to
+  // commit and the streamReset that follows discards the still frames.
+  function segOnGestureEnd(why) {
+    if (_segIsAr() && _segHadMotion) segBoundary(why);
+    else segReset();
+  }
+  function segTrackMotion(results, language) {
+    if (!_segIsAr(language)) { if (_segPrev || _segHadMotion) segReset(); return; }
+    const lh = results.leftHandLandmarks, rh = results.rightHandLandmarks;
+    const cur = {};
+    let motion = 0, n = 0;
+    [['l', lh], ['r', rh]].forEach(([k, hand]) => {
+      if (!hand || !hand[0]) return;
+      cur[k] = { x: hand[0].x, y: hand[0].y };
+      if (_segPrev && _segPrev[k]) {
+        motion += Math.abs(cur[k].x - _segPrev[k].x) + Math.abs(cur[k].y - _segPrev[k].y);
+        n++;
+      }
+    });
+    _segPrev = cur;
+    if (!n) return; // first tracked frame — nothing to compare yet
+    const m = motion / n;
+    if (m > SEG_MOVE_EPS) { _segHadMotion = true; _segStill = 0; return; }
+    if (m < SEG_STILL_EPS) {
+      _segStill++;
+      if (_segStill >= SEG_STILL_FRAMES && _segHadMotion) segBoundary('still');
+    } else {
+      _segStill = 0;
+    }
+  }
+
   let _hsNoHandsFrames = 0, _s2spNoHandsFrames = 0;
 
   function onHolisticResults(results) {
@@ -2268,6 +2340,7 @@ button.t-nav-item[aria-label="Sign out"]:hover svg{color:var(--danger,#ef4444)}
         frameBuffer = [];     // clear sequence so stale frames don't bleed
         voteBuffer = [];      // ONLY clear votes on true gap (not just every missed frame)
         lastPredWord = null;  // allow same sign again after silence (mirrors script)
+        segOnGestureEnd('hands_gone'); // segmented ArSL: hand drop = boundary
         streamReset('vision'); // flush the server-side buffer too (streaming mode)
       }
     }
@@ -2300,6 +2373,7 @@ button.t-nav-item[aria-label="Sign out"]:hover svg{color:var(--danger,#ef4444)}
     const _wasRestingV = _visionRestGate.resting;
     if (_visionRestGate.update(results)) {
       if (!_wasRestingV) {
+        segOnGestureEnd('rest'); // segmented ArSL: entering rest ends the gesture
         frameBuffer = []; voteBuffer = [];
         streamReset('vision');
         if (window.SignDiag) SignDiag.event('vision', 'rest_gate_on', {});
@@ -2329,6 +2403,7 @@ button.t-nav-item[aria-label="Sign out"]:hover svg{color:var(--danger,#ef4444)}
       const single = preparePayload([frame], language)[0];
       if (window.SignDiag) SignDiag.payload('vision', single, { path: 'socket', language });
       s.emit('sign_frame', { module: 'vision', frame: single });
+      segTrackMotion(results, language); // ArSL: watch for the gesture boundary
       return;
     }
 
@@ -2501,50 +2576,60 @@ button.t-nav-item[aria-label="Sign out"]:hover svg{color:var(--danger,#ef4444)}
     }
   }
 
-  // Selected Gemini voice (empty = "Auto", use the browser's built-in voices).
-  let _selectedVoice = localStorage.getItem('tts-voice') || '';
+  // Selected Gemini voice. Default is 'Charon' (backend TTS) — the browser's
+  // auto voice is only used when the user explicitly picks "Auto" ('' stored).
+  const _storedVoice = localStorage.getItem('tts-voice');
+  let _selectedVoice = (_storedVoice === null) ? 'Charon' : _storedVoice;
   function setTtsVoice(v) {
     _selectedVoice = v || '';
     localStorage.setItem('tts-voice', _selectedVoice);
   }
   window.setTtsVoice = setTtsVoice;
 
+  // Browser speechSynthesis path. Returns true once speech actually starts;
+  // false (after cancelling) lets the caller fall through to the backend.
+  async function _speakViaBrowser(text, language) {
+    if (!('speechSynthesis' in window)) return false;
+    try {
+      window.speechSynthesis.cancel();
+      const utt = new SpeechSynthesisUtterance(text);
+      if (language === 'arabic') {
+        const voices = window.speechSynthesis.getVoices();
+        const arVoice = voices.find(v => v.lang.startsWith('ar-EG') || v.lang.startsWith('ar'));
+        if (arVoice) {
+          utt.voice = arVoice;
+          console.log(`[TTS] Using voice: ${arVoice.name}`);
+        } else {
+          utt.lang = 'ar-EG';
+          console.log('[TTS] No Arabic voice found, using ar-EG lang tag');
+        }
+      } else {
+        utt.lang = 'en-US';
+      }
+      utt.rate = 1.0;
+      utt.volume = 1.0;
+      let spoken = false;
+      utt.onstart = () => { spoken = true; console.log('[TTS] Browser speech started'); };
+      utt.onend = () => console.log('[TTS] Browser speech ended');
+      utt.onerror = (e) => console.warn('[TTS] Browser speech error:', e.error);
+      window.speechSynthesis.speak(utt);
+      // Give browser TTS 1.5s to start; if it doesn't, report failure
+      await new Promise(r => setTimeout(r, 1500));
+      if (spoken) return true;
+      console.log('[TTS] Browser TTS did not start');
+      window.speechSynthesis.cancel();
+    } catch (e) {
+      console.warn("[TTS] speechSynthesis error:", e);
+    }
+    return false;
+  }
+
   async function playLocalTts(text, language) {
     console.log(`[TTS] Speaking: "${text}" (${language})`, _selectedVoice ? `voice=${_selectedVoice}` : '(auto)');
-    // When the user picked a specific Gemini voice, skip browser TTS entirely
-    // and go straight to the backend so the chosen voice is actually used.
-    if (!_selectedVoice && 'speechSynthesis' in window) {
-      try {
-        window.speechSynthesis.cancel();
-        const utt = new SpeechSynthesisUtterance(text);
-        if (language === 'arabic') {
-          const voices = window.speechSynthesis.getVoices();
-          const arVoice = voices.find(v => v.lang.startsWith('ar-EG') || v.lang.startsWith('ar'));
-          if (arVoice) {
-            utt.voice = arVoice;
-            console.log(`[TTS] Using voice: ${arVoice.name}`);
-          } else {
-            utt.lang = 'ar-EG';
-            console.log('[TTS] No Arabic voice found, using ar-EG lang tag');
-          }
-        } else {
-          utt.lang = 'en-US';
-        }
-        utt.rate = 1.0;
-        utt.volume = 1.0;
-        let spoken = false;
-        utt.onstart = () => { spoken = true; console.log('[TTS] Browser speech started'); };
-        utt.onend = () => console.log('[TTS] Browser speech ended');
-        utt.onerror = (e) => console.warn('[TTS] Browser speech error:', e.error);
-        window.speechSynthesis.speak(utt);
-        // Give browser TTS 1.5s to start; if it doesn't, fall through to backend
-        await new Promise(r => setTimeout(r, 1500));
-        if (spoken) return;
-        console.log('[TTS] Browser TTS did not start, falling back to backend');
-        window.speechSynthesis.cancel();
-      } catch (e) {
-        console.warn("[TTS] speechSynthesis error, falling back to backend:", e);
-      }
+    // When a specific Gemini voice is selected (default: Charon), skip browser
+    // TTS entirely and go straight to the backend so that voice is used.
+    if (!_selectedVoice) {
+      if (await _speakViaBrowser(text, language)) return;
     }
 
     try {
@@ -2552,7 +2637,13 @@ button.t-nav-item[aria-label="Sign out"]:hover svg{color:var(--danger,#ef4444)}
       if (_selectedVoice) url += `&voice=${encodeURIComponent(_selectedVoice)}`;
       console.log('[TTS] Calling backend TTS...');
       const res = await authFetch(url);
-      if (!res.ok) { console.error('[TTS] Backend returned', res.status); return; }
+      if (!res.ok) {
+        console.error('[TTS] Backend returned', res.status);
+        // Last resort so a selected voice never means silence when the
+        // backend is down: fall back to the browser's built-in voices.
+        if (_selectedVoice) await _speakViaBrowser(text, language);
+        return;
+      }
       const blob = await res.blob();
       const audioUrl = URL.createObjectURL(blob);
       const audio = new Audio(audioUrl);
@@ -2561,6 +2652,7 @@ button.t-nav-item[aria-label="Sign out"]:hover svg{color:var(--danger,#ef4444)}
       await audio.play().catch(e => console.error('[TTS] audio.play() blocked:', e));
     } catch (err) {
       console.error("[TTS Error]", err);
+      if (_selectedVoice) await _speakViaBrowser(text, language);
     }
   }
 
@@ -2647,11 +2739,48 @@ button.t-nav-item[aria-label="Sign out"]:hover svg{color:var(--danger,#ef4444)}
     });
   }
 
+  // Undo for tap-to-remove: removing a chip shows a small toast for ~5s that
+  // restores the word to the same position in the buffer.
+  let _undoTimer = null;
+  function hideUndoToast() {
+    const box = document.getElementById('gloss-undo-toast');
+    if (box) box.classList.remove('show');
+    clearTimeout(_undoTimer);
+  }
+  function showUndoToast(word, onUndo) {
+    let box = document.getElementById('gloss-undo-toast');
+    if (!box) {
+      box = document.createElement('div');
+      box.id = 'gloss-undo-toast';
+      box.className = 'd-undo-toast';
+      box.setAttribute('role', 'status');
+      document.body.appendChild(box);
+    }
+    box.textContent = '';
+    const label = document.createElement('span');
+    label.textContent = `Removed “${word}”`;
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.textContent = 'Undo';
+    btn.addEventListener('click', () => { hideUndoToast(); onUndo(); });
+    box.append(label, btn);
+    box.classList.add('show');
+    clearTimeout(_undoTimer);
+    _undoTimer = setTimeout(hideUndoToast, 5000);
+  }
+
   function renderGlossBuffer() {
     renderGlossChips(
       document.getElementById('transcription-output'),
       glossBuffer,
-      (i) => { glossBuffer.splice(i, 1); renderGlossBuffer(); },
+      (i) => {
+        const [w] = glossBuffer.splice(i, 1);
+        renderGlossBuffer();
+        showUndoToast(w, () => {
+          glossBuffer.splice(Math.min(i, glossBuffer.length), 0, w);
+          renderGlossBuffer();
+        });
+      },
       '<span class="d-box-ph">Waiting for input…</span>'
     );
   }
@@ -2665,7 +2794,14 @@ button.t-nav-item[aria-label="Sign out"]:hover svg{color:var(--danger,#ef4444)}
     renderGlossChips(
       document.getElementById('s2sp-gloss-output'),
       s2spGlossBuf,
-      (i) => { s2spGlossBuf.splice(i, 1); renderS2spGloss(); },
+      (i) => {
+        const [w] = s2spGlossBuf.splice(i, 1);
+        renderS2spGloss();
+        showUndoToast(w, () => {
+          s2spGlossBuf.splice(Math.min(i, s2spGlossBuf.length), 0, w);
+          renderS2spGloss();
+        });
+      },
       '<span class="transcription-placeholder">Signs appear here…</span>'
     );
   }
@@ -2903,10 +3039,56 @@ button.t-nav-item[aria-label="Sign out"]:hover svg{color:var(--danger,#ef4444)}
     el.innerHTML = t2sHistory.map(h =>
       `<div class="d-log-item">
         <span class="d-log-time">${h.time}</span>
-        <span class="d-log-msg">${escHtml(h.text)}</span>
+        <span class="d-log-msg">${t2sMsgHtml(h.text)}</span>
       </div>`
     ).join('');
   }
+
+  // Warning entries render as plain text; normal entries render each word as
+  // a tap-to-replay chip so one sign can be reviewed without resending the
+  // whole sentence.
+  function t2sMsgHtml(text) {
+    if (String(text).startsWith('\u26a0')) return escHtml(text);
+    return String(text).split(/\s+/).filter(Boolean).map(w =>
+      `<span class="t2s-w" role="button" tabindex="0" title="Replay this word" data-w="${escHtml(w)}">${escHtml(w)}</span>`
+    ).join(' ');
+  }
+
+  async function replayT2SWord(word) {
+    word = (word || '').trim();
+    if (!word || avatarPlaying) return;
+    setStatus(`Replaying: ${word}`, true);
+    try {
+      const res = await authFetch('/api/signs/batch', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ words: [word] }),
+      });
+      if (!res.ok) { setStatus(`API Error: ${res.status}`, false); return; }
+      const data = await res.json();
+      if (!data.found.length) { setStatus(`No signs found for: "${word}"`, false); return; }
+      document.getElementById('avatar-placeholder').style.display = 'none';
+      await playLandmarkSequence(data.found, avatarCanvas, avatarCtx);
+      setStatus('Done', false);
+    } catch (e) {
+      setStatus(`Error: ${e.message}`, false);
+    }
+  }
+
+  // Word chips live inside re-rendered innerHTML — delegate from the log.
+  (function () {
+    const el = document.getElementById('t2s-history');
+    if (!el) return;
+    el.addEventListener('click', (e) => {
+      const chip = e.target.closest('.t2s-w');
+      if (chip) replayT2SWord(chip.dataset.w);
+    });
+    el.addEventListener('keydown', (e) => {
+      if (e.key !== 'Enter' && e.key !== ' ') return;
+      const chip = e.target.closest('.t2s-w');
+      if (chip) { e.preventDefault(); replayT2SWord(chip.dataset.w); }
+    });
+  })();
 
 
   // ═══════════════════════════════════════════════════════════
@@ -5133,7 +5315,8 @@ bumpSignCount(0);
     const res = await authFetch('/api/tts/voices');
     if (!res.ok) { sel.style.display = 'none'; return; }
     const data = await res.json();
-    const saved = localStorage.getItem('tts-voice') || '';
+    const stored = localStorage.getItem('tts-voice');
+    const saved = (stored === null) ? 'Charon' : stored;  // mirror the playback default
     let html = '<option value="">Auto (browser)</option>';
     (data.voices || []).forEach(v => {
       html += `<option value="${v}"${v === saved ? ' selected' : ''}>${v}</option>`;
@@ -5241,5 +5424,5 @@ function _addReplayBtn(item, logId) {
 })();
 </script>
 
-<script src="/static/js/dashboard-extras.js?v=2"></script>
+<script src="/static/js/dashboard-extras.js?v=3"></script>
 {% endblock %}

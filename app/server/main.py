@@ -2151,20 +2151,22 @@ _STREAM_MIN_SEQ_AR = 15
 # 0.025s = 40 inferences/s.  Client sends at 20fps so this never over-runs the
 # frame arrival rate; it just means we never throttle on this machine.
 _STREAM_MIN_INTERVAL = float(os.environ.get("STREAM_MIN_INTERVAL_S", "0.025"))
-# NOTE — measured streaming characteristic (kept as-is on purpose): a long
-# Arabic gesture can emit a WRONG early word before the right one ("eat"
+# NOTE — measured streaming characteristic (kept as-is for continuous mode): a
+# long Arabic gesture can emit a WRONG early word before the right one ("eat"
 # streamed frame-by-frame yields "good"@0.99 at ~15 frames, then "eat"@0.99
 # once the window covers the full motion). Spacing the votes out in time was
 # tried and made it WORSE (the correct word never re-fired before the clip
-# ended). The early-commit latency tradeoff stands; the transcript chips'
-# tap-to-remove is the designed correction path. See docs/HANDSCRIPT_BUG_HUNT.md.
+# ended). The real fix is SEGMENTED mode (opt-in via sign_start
+# {segmented:true}): the client's motion detector marks gesture boundaries and
+# the server classifies each full boundary-to-boundary segment exactly once —
+# see sign_boundary below and docs/HANDSCRIPT_BUG_HUNT.md.
 _STREAM_MIN_INTERVAL_AR = float(os.environ.get("STREAM_MIN_INTERVAL_AR_S", "0.025"))
 
 
 class _StreamState:
-    __slots__ = ("frames", "votes", "cooldown", "last_pred", "last_conf", "language", "w", "h", "busy", "last_infer", "dbg_n")
+    __slots__ = ("frames", "votes", "cooldown", "last_pred", "last_conf", "language", "w", "h", "busy", "last_infer", "dbg_n", "segmented")
 
-    def __init__(self, language: str, w: int, h: int):
+    def __init__(self, language: str, w: int, h: int, segmented: bool = False):
         self.frames = _deque(maxlen=_STREAM_SEQ_LENGTH)
         self.votes = _deque(maxlen=_STREAM_VOTE_BUFFER)
         self.cooldown = 0
@@ -2176,6 +2178,9 @@ class _StreamState:
         self.busy = False
         self.last_infer = 0.0
         self.dbg_n = 0  # frames received; drives the throttled SIGN_DEBUG summary
+        # Segmented mode (opt-in): no continuous vote/commit — the client emits
+        # sign_boundary at gesture ends and each full segment is classified once.
+        self.segmented = segmented
 
 
 # keyed by (sid, module) so a client can run vision + speech panels independently
@@ -2191,7 +2196,8 @@ async def sign_start(sid, data):
         h = int((data or {}).get("h") or 480)
     except (TypeError, ValueError):
         w, h = 640, 480
-    _stream_states[(sid, module)] = _StreamState(language, w, h)
+    segmented = bool((data or {}).get("segmented"))
+    _stream_states[(sid, module)] = _StreamState(language, w, h, segmented)
     await sio.emit("sign_ready", {"module": module}, to=sid)
 
 
@@ -2212,6 +2218,61 @@ async def sign_stop(sid, data):
     _stream_states.pop((sid, module), None)
 
 
+@sio.on("sign_boundary")
+async def sign_boundary(sid, data):
+    """Segmented mode: the client's motion detector says the gesture that was
+    streaming just ended. Classify the buffered boundary-to-boundary segment
+    exactly ONCE, emit the result, and clear the buffer. This removes the
+    early-commit phantoms of continuous voting on prefix windows
+    (docs/HANDSCRIPT_BUG_HUNT.md finding #1). No-op unless the stream was
+    started with {segmented: true}."""
+    module = (data or {}).get("module") or "vision"
+    st = _stream_states.get((sid, module))
+    if st is None or not st.segmented or st.busy:
+        return
+    min_seq = (_STREAM_MIN_SEQ_AR if st.language in ("arabic", "ar", "egyptian", "eg")
+               else _STREAM_MIN_SEQ)
+    if len(st.frames) < min_seq:
+        st.frames.clear()  # too short to trust — discard the fragment
+        return
+    st.busy = True
+    try:
+        frames = list(st.frames)
+        st.frames.clear()
+        lang = st.language
+        if lang in ("arabic", "ar", "egyptian", "eg"):
+            engine = get_arabic_engine()
+            if engine is None:
+                return
+            with Timer("stream.segment.arabic"):
+                prediction, confidence = await run_in_threadpool(
+                    engine.predict_sign_from_landmarks, frames, st.w, st.h
+                )
+        else:
+            engine = get_asl_engine()
+            if engine is None:
+                return
+            with Timer("stream.segment.asl"):
+                prediction, confidence = await run_in_threadpool(engine.predict_sign, frames)
+        if not prediction:
+            return
+        st.last_conf = float(confidence)
+        await sio.emit("sign_conf", {"module": module, "confidence": st.last_conf}, to=sid)
+        disp = (ARABIC_TRANSLATIONS.get(prediction.lower(), prediction)
+                if lang in ("arabic", "ar", "egyptian", "eg") else prediction)
+        await sio.emit("sign_detected", {
+            "module": module,
+            "word": disp,
+            "raw": prediction,      # English class key, for target matching
+            "confidence": st.last_conf,
+        }, to=sid)
+    except Exception as e:
+        print(f"[sign_boundary] inference error (sid={sid}, module={module}): {e}")
+    finally:
+        st.busy = False
+        st.last_infer = time.monotonic()
+
+
 @sio.on("sign_frame")
 async def sign_frame(sid, data):
     module = (data or {}).get("module") or "vision"
@@ -2227,6 +2288,44 @@ async def sign_frame(sid, data):
     if SIGN_DEBUG and (st.dbg_n == 1 or st.dbg_n % 100 == 0):
         _debug_payload_summary([frame], st.language, st.w, st.h,
                                f"socket:{module}:frame#{st.dbg_n}")
+
+    if st.segmented:
+        # Segmented mode: no continuous voting — commits happen in
+        # sign_boundary over the full gesture segment. Run a LOW-cadence
+        # inference (~4/s vs 40/s) purely to keep the live confidence
+        # ring/pill fed while the gesture is in progress.
+        min_seq = (_STREAM_MIN_SEQ_AR if st.language in ("arabic", "ar", "egyptian", "eg")
+                   else _STREAM_MIN_SEQ)
+        if st.busy or len(st.frames) < min_seq:
+            return
+        if time.monotonic() - st.last_infer < 0.25:
+            return
+        st.busy = True
+        try:
+            frames = list(st.frames)
+            if st.language in ("arabic", "ar", "egyptian", "eg"):
+                engine = get_arabic_engine()
+                if engine is None:
+                    return
+                with Timer("stream.seg_conf.arabic"):
+                    prediction, confidence = await run_in_threadpool(
+                        engine.predict_sign_from_landmarks, frames, st.w, st.h
+                    )
+            else:
+                engine = get_asl_engine()
+                if engine is None:
+                    return
+                with Timer("stream.seg_conf.asl"):
+                    prediction, confidence = await run_in_threadpool(engine.predict_sign, frames)
+            if prediction:
+                st.last_conf = float(confidence)
+                await sio.emit("sign_conf", {"module": module, "confidence": st.last_conf}, to=sid)
+        except Exception as e:
+            print(f"[sign_frame] segmented conf error (sid={sid}, module={module}): {e}")
+        finally:
+            st.busy = False
+            st.last_infer = time.monotonic()
+        return
 
     # Per-frame cooldown tick (mirrors the script's global_cooldown decrement)
     if st.cooldown > 0:
