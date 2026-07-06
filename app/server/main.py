@@ -1168,7 +1168,11 @@ def translate_arabic_to_english(word: str) -> str:
     if not any('\u0600' <= char <= '\u06FF' for char in word_str):
         return word_str
     
-    clean_w = re.sub(r"[.,\/#!$%\^&\*;:{}=\-_`~()]", "", word_str).strip()
+    clean_w = re.sub(r"[.,\/#!$%\^&\*;:{}=\-_`~()\u061F\u060C\u061B\u066A\u00AB\u00BB\u2026]", "", word_str)
+    # Harakat/tanween diacritics + superscript alef + tatweel defeat the exact
+    # dictionary lookup (e.g. "طِفْل" vs "طفل") and force a nondeterministic LLM
+    # round-trip — strip them before matching.
+    clean_w = re.sub(r"[\u064B-\u065F\u0670\u0640]", "", clean_w).strip()
     if clean_w in ARABIC_TO_ENGLISH:
         return ARABIC_TO_ENGLISH[clean_w]
         
@@ -1673,16 +1677,24 @@ async def get_batch_arabic_sign_landmarks(
         # Translate each word from Arabic to English
         translated_words = [translate_arabic_to_english(w) for w in body.words]
 
-        # Flatten multi-word translations
+        # Flatten multi-word translations. A word whose translation cleans to
+        # nothing must surface in `missing` — it used to vanish silently
+        # (neither played nor listed in the skipped warning).
         all_english_words = []
-        for tw in translated_words:
+        empty_originals = []
+        for orig, tw in zip(body.words, translated_words):
+            parts = []
             for part in tw.split():
                 cleaned = re.sub(r"[^a-z0-9]", "", part.lower().strip())
                 if cleaned:
-                    all_english_words.append(cleaned)
+                    parts.append(cleaned)
+            if parts:
+                all_english_words.extend(parts)
+            else:
+                empty_originals.append(str(orig))
 
         found = []
-        missing = []
+        missing = list(empty_originals)
         prev_matched = None
 
         for w in all_english_words:
@@ -2163,8 +2175,68 @@ _STREAM_MIN_INTERVAL = float(os.environ.get("STREAM_MIN_INTERVAL_S", "0.025"))
 _STREAM_MIN_INTERVAL_AR = float(os.environ.get("STREAM_MIN_INTERVAL_AR_S", "0.025"))
 
 
+# ── Wrist-motion helpers (both wire formats) ─────────────────────────────
+# AR compact 59 = lh21 + pose17 + rh21 → wrists at 0 and 38.
+# EN full 543 = face468 + lh21 + pose33 + rh21 → wrists at 468 and 522.
+# Matches the clients' stillness epsilon (rest gate / segTrackMotion).
+_MOTION_EPS = 0.012
+_STILL_RUN_GATE = 6    # consecutive still frames before inference/buffering pause
+_STILL_RUN_RESET = 20  # a pause this long (~1s) flushes the window when motion resumes
+# Confidence floor for segmented one-shot commits (no vote consensus backs them).
+_SEG_MIN_CONF = float(os.environ.get("SEG_MIN_CONF", "0.6"))
+
+
+def _frame_hand_points(frame):
+    """Wrist + index tip + pinky tip of each hand — wrist alone misses signs
+    articulated by finger motion with a static wrist."""
+    n = len(frame) if frame else 0
+    if n == 59:
+        bases = (0, 38)
+    elif n == 543:
+        bases = (468, 522)
+    else:
+        return ()
+    out = []
+    for b in bases:
+        for off in (0, 8, 20):   # wrist, index tip, pinky tip
+            i = b + off
+            p = frame[i] if i < n else None
+            ok = p is not None and len(p) >= 2 and p[0] is not None and p[1] is not None
+            out.append((p[0], p[1]) if ok else None)
+    return tuple(out)
+
+
+def _frame_motion(prev, cur):
+    """MAX |dx|+|dy| across hand points visible in both frames; None if none.
+    Max, not mean: averaging diluted finger-only or one-hand motion below the
+    stillness epsilon and the gate then flushed buffers MID-gesture (verified:
+    back-to-back words and segmented commits went missing)."""
+    best, n = 0.0, 0
+    for a, b in zip(_frame_hand_points(prev), _frame_hand_points(cur)):
+        if a and b:
+            d = abs(b[0] - a[0]) + abs(b[1] - a[1])
+            if d > best:
+                best = d
+            n += 1
+    return best if n else None
+
+
+def _trim_still_edges(frames, pad=2):
+    """Drop leading/trailing still frames from a gesture segment. Boundary
+    segments include the raise-into-position pause and the trailing think-pause
+    stillness — the model must only see the gesture core."""
+    moving = [i for i in range(1, len(frames))
+              if (_frame_motion(frames[i - 1], frames[i]) or 0.0) > _MOTION_EPS]
+    if not moving:
+        return []
+    a = max(0, moving[0] - pad)
+    b = min(len(frames), moving[-1] + 1 + pad)
+    return frames[a:b]
+
+
 class _StreamState:
-    __slots__ = ("frames", "votes", "cooldown", "last_pred", "last_conf", "language", "w", "h", "busy", "last_infer", "dbg_n", "segmented")
+    __slots__ = ("frames", "votes", "cooldown", "last_pred", "last_conf", "language", "w", "h",
+                 "busy", "last_infer", "dbg_n", "segmented", "prev_wrists_frame", "still_run", "epoch")
 
     def __init__(self, language: str, w: int, h: int, segmented: bool = False):
         self.frames = _deque(maxlen=_STREAM_SEQ_LENGTH)
@@ -2181,6 +2253,15 @@ class _StreamState:
         # Segmented mode (opt-in): no continuous vote/commit — the client emits
         # sign_boundary at gesture ends and each full segment is classified once.
         self.segmented = segmented
+        # Server-side stillness tracking: consecutive arriving frames whose
+        # wrist motion is below _MOTION_EPS. Still hands held in signing space
+        # are NOT a gesture — the AR model classifies such postures at high
+        # confidence (phantom words measured live: 5 commits / 100 still frames).
+        self.prev_wrists_frame = None
+        self.still_run = 0
+        # Bumped on reset/boundary so an in-flight inference started against an
+        # older buffer cannot vote/commit into the new one.
+        self.epoch = 0
 
 
 # keyed by (sid, module) so a client can run vision + speech panels independently
@@ -2210,6 +2291,9 @@ async def sign_reset(sid, data):
         st.frames.clear()
         st.votes.clear()
         st.last_pred = None
+        st.prev_wrists_frame = None
+        st.still_run = 0
+        st.epoch += 1
 
 
 @sio.on("sign_stop")
@@ -2228,17 +2312,35 @@ async def sign_boundary(sid, data):
     started with {segmented: true}."""
     module = (data or {}).get("module") or "vision"
     st = _stream_states.get((sid, module))
-    if st is None or not st.segmented or st.busy:
+    if st is None or not st.segmented:
         return
+    # Snapshot + clear IMMEDIATELY: the boundary is the cut point, and frames
+    # arriving after it belong to the next segment. (Returning early on busy
+    # used to drop the commit entirely AND leak this segment's frames into the
+    # next one — the low-cadence conf inference holds busy ~every 250ms, so
+    # that race was common.)
+    frames = list(st.frames)
+    st.frames.clear()
+    st.epoch += 1
     min_seq = (_STREAM_MIN_SEQ_AR if st.language in ("arabic", "ar", "egyptian", "eg")
                else _STREAM_MIN_SEQ)
-    if len(st.frames) < min_seq:
-        st.frames.clear()  # too short to trust — discard the fragment
+    # Trim the raise-into-position / think-pause stillness off the edges: a
+    # "raise hands then hold" sequence arms the client's motion detector and
+    # fires a boundary, but its trimmed core is tiny — discard, don't classify
+    # (measured live: untrimmed it committed a phantom word at conf 0.97).
+    frames = _trim_still_edges(frames)
+    if len(frames) < min_seq:
+        return  # fragment / no real gesture — nothing to commit
+    # Wait (bounded) for any in-flight conf inference to release the engine.
+    for _ in range(150):
+        if not st.busy:
+            break
+        await _asyncio.sleep(0.01)
+    if st.busy or _stream_states.get((sid, module)) is not st:
+        print(f"[sign_boundary] segment dropped (busy-timeout/stale state) sid={sid} module={module} frames={len(frames)}")
         return
     st.busy = True
     try:
-        frames = list(st.frames)
-        st.frames.clear()
         lang = st.language
         if lang in ("arabic", "ar", "egyptian", "eg"):
             engine = get_arabic_engine()
@@ -2258,6 +2360,12 @@ async def sign_boundary(sid, data):
             return
         st.last_conf = float(confidence)
         await sio.emit("sign_conf", {"module": module, "confidence": st.last_conf}, to=sid)
+        # One-shot commits have no vote consensus behind them (the 0.45 engine
+        # threshold was calibrated for 2/3-vote streaming) — hold segment
+        # commits to a stricter floor. Dropping an uncertain word beats
+        # transcribing a wrong one; the signer just repeats the sign.
+        if float(confidence) < _SEG_MIN_CONF:
+            return
         disp = (ARABIC_TRANSLATIONS.get(prediction.lower(), prediction)
                 if lang in ("arabic", "ar", "egyptian", "eg") else prediction)
         await sio.emit("sign_detected", {
@@ -2282,6 +2390,27 @@ async def sign_frame(sid, data):
     frame = (data or {}).get("frame")
     if frame is None:
         return
+
+    # Stillness tracking BEFORE buffering: still hands held in signing space are
+    # not a gesture. After _STILL_RUN_GATE consecutive still frames the stream
+    # pauses (no buffering, no inference) — measured live, the ArSL model
+    # otherwise commits phantom words on frozen postures (5 per 100 still
+    # frames). Buffers are NOT flushed at pause onset: a still-TAILED gesture
+    # still needs its last votes / its boundary snapshot (flushing here lost
+    # real words — verified). When motion resumes after a LONG pause the window
+    # flushes instead, so a think-pause can't leak the previous gesture's tail
+    # into the next one.
+    _m = _frame_motion(st.prev_wrists_frame, frame) if st.prev_wrists_frame else None
+    st.prev_wrists_frame = frame
+    if _m is not None and _m < _MOTION_EPS:
+        st.still_run += 1
+        if st.still_run >= _STILL_RUN_GATE:
+            return
+    else:
+        if st.still_run >= _STILL_RUN_RESET:
+            st.frames.clear()
+            st.votes.clear()
+        st.still_run = 0
 
     st.frames.append(frame)
     st.dbg_n += 1
@@ -2355,6 +2484,7 @@ async def sign_frame(sid, data):
         return
 
     st.busy = True
+    _epoch = st.epoch
     try:
         frames = list(st.frames)
         lang = st.language
@@ -2376,6 +2506,11 @@ async def sign_frame(sid, data):
             display = prediction or ""
 
         if not prediction:
+            return
+        # The state may have been reset/replaced while inference ran in the
+        # threadpool (hand gap, language switch): a stale prediction must not
+        # vote into the fresh buffer.
+        if _stream_states.get((sid, module)) is not st or st.epoch != _epoch:
             return
 
         # Live confidence for the dashboard ring / sparkline (every inference)
