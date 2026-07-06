@@ -69,3 +69,20 @@
 ---
 
 *E2E rig: `scratchpad/pwrig/handscript.mjs` (kept out of the repo; reproducible from `docs/LIVE_TEST_PROCEDURE.md` + this report). Fixes in this phase are in the same commit as this file.*
+
+---
+
+## Follow-up round: "worked once, weird signs later" (extensive state-machine test)
+
+User-reported: a sign works on the first attempt, later attempts transcribe wrong words (both ASL and ArSL). A 5-lens adversarial code review + a state-machine E2E rig (real model, production socket: repeats with idle gaps, still-hands filler, raise-then-hold, back-to-back words, boundary semantics) reproduced and fixed:
+
+1. **AR phantom words from still hands held in signing space** (pre-existing, the core "weird signs"): the ArSL model classifies frozen postures at high confidence — measured **5 phantom commits per 100 still frames**; a raise-then-hold ("thinking pose") committed phantoms too. Fix: server-side stillness gate — wrist+fingertip motion tracked per arriving frame (MAX across points; mean diluted one-hand/finger motion and broke real gestures); after 6 consecutive still frames the stream pauses (no buffering, no inference) until motion resumes; a pause ≥ 1s flushes the window on resume so a think-pause can't leak the previous gesture's tail into the next. Verified: 0 phantoms in every still/raise-hold scenario, all legitimate detections intact (both languages, 14/14 rig checks).
+2. **Segmented boundary classified junk segments**: raise-then-hold armed the client's motion detector and the boundary committed a phantom at conf 0.97. Fixes: server trims leading/trailing still frames off each segment and discards cores < MIN_SEQ; client requires ≥ 8 moving frames before a boundary (else it resets); one-shot commits get a 0.6 confidence floor (`SEG_MIN_CONF`) since no vote consensus backs them.
+3. **Boundary lost/contaminated under the busy race**: `sign_boundary` used to no-op while the low-cadence conf inference held `busy` (~every 250 ms), dropping the commit AND leaking the segment into the next one. Fix: snapshot+clear at handler entry, bounded wait for the engine, stale-state guard.
+4. **Client dedup swallowed legitimate repeats**: `lastAccepted`/`sameSignCount` never reset on hand drop or rest, so re-signing the same word later needed 3 attempts (users read this as "it stopped working"). Fix: dedup resets on hand gap, rest entry, and each segment boundary.
+5. **Stale inference results crossing resets/language switches**: an in-flight inference could vote into a freshly cleared buffer or emit under a replaced stream state. Fix: per-state `epoch` + identity revalidation after every await.
+6. **SignType "same input, different signs"**: single-word input now bypasses the LLM glosser entirely and gloss runs at temperature 0 (was 0.2) — the same text glosses identically run-to-run. Also fixed: ▶ replay on ⚠ warning rows animated the literal warning text; double-click during the fetch window started two interleaved playbacks (avatar is now claimed before any await); replay no longer clobbers text the user is typing; AR batch words whose translation cleaned to nothing vanished silently (now listed in `missing`); Arabic diacritics/tatweel/punctuation are stripped before dictionary lookup.
+
+**Accepted tradeoffs (documented, not bugs):** adjacent signs merge if the inter-sign pause is under ~300 ms (6 frames); segments whose trimmed core is < 15 frames are dropped (ultra-fast signs — repeat the sign); duplicate commits of the same word in EN continuous mode remain possible on gesture tails (chips are tap-to-remove); a deliberate slow drift can still classify as *some* word — a closed-vocabulary model has no background class.
+
+Gates after the round: pytest 86/86, harness ASL 0.6653 / ArSL 0.95 (unchanged), state-machine rig 14/14, segmentation rig 7/7, SignType rig 3/3, feature-batch rig all green.

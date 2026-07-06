@@ -145,7 +145,7 @@ def gloss_to_sentence(
     prompt = f"{preamble}\n{label_in}: {gloss}\n{label_out}:"
 
     try:
-        out = llm.generate(prompt, temperature=0.2)
+        out = llm.generate(prompt, temperature=0.0)  # deterministic: same text must gloss identically run-to-run
         out = _clean(out) or gloss
     except ProviderError:
         return gloss  # don't cache transient failures
@@ -179,7 +179,7 @@ def english_to_gloss(
     prompt = f"{preamble}\n{label_in}: {sentence}\n{label_out}:"
 
     try:
-        out = llm.generate(prompt, temperature=0.2)
+        out = llm.generate(prompt, temperature=0.0)  # deterministic: same text must gloss identically run-to-run
         out = _clean(out)
         tokens = [t for t in re.split(r"\s+", out) if t]
         if tokens:
