@@ -1939,34 +1939,20 @@ button.is-busy{opacity:.6;cursor:progress}
   let _segPrev = null;       // last wrist positions {l:{x,y}, r:{x,y}}
   let _segStill = 0;         // consecutive still frames
   let _segHadMotion = false; // true once real gesture motion was seen
-  let _segMotionFrames = 0;  // moving frames inside the current segment
   const SEG_STILL_EPS = 0.012;  // same stillness epsilon as the rest gate
   const SEG_MOVE_EPS = 0.02;    // definite gesture motion
   const SEG_STILL_FRAMES = 6;   // ~300ms of stillness at 20fps = boundary
-  const SEG_MIN_MOTION_FRAMES = 8; // fewer moving frames = not a gesture (hand raise/drift)
 
   function _segIsAr(language) {
     return String(language || streamLang.vision || '').toLowerCase().startsWith('ar');
   }
-  function segReset() { _segPrev = null; _segStill = 0; _segHadMotion = false; _segMotionFrames = 0; }
+  function segReset() { _segPrev = null; _segStill = 0; _segHadMotion = false; }
   function segBoundary(why) {
-    // Raising hands into position is motion too — only a segment with enough
-    // MOVING frames is a real gesture; anything less is discarded, not
-    // classified (raise-then-hold committed phantom words at conf ~0.97).
-    const enough = _segMotionFrames >= SEG_MIN_MOTION_FRAMES;
     _segHadMotion = false;
     _segStill = 0;
-    _segMotionFrames = 0;
-    if (!streaming('vision')) return;
-    if (enough) {
+    if (streaming('vision')) {
       streamSocket.emit('sign_boundary', { module: 'vision' });
-      // Boundary commits are deliberate word separations — repeating the same
-      // word across segments is legitimate, so clear the client dedup.
-      lastAccepted = null; sameSignCount = 0;
       if (window.SignDiag) SignDiag.event('vision', 'seg_boundary', { why });
-    } else {
-      streamSocket.emit('sign_reset', { module: 'vision' });
-      if (window.SignDiag) SignDiag.event('vision', 'seg_discard', { why });
     }
   }
   // Hands left the frame / went to rest: if a gesture was in progress, that IS
@@ -1981,32 +1967,17 @@ button.is-busy{opacity:.6;cursor:progress}
     const lh = results.leftHandLandmarks, rh = results.rightHandLandmarks;
     const cur = {};
     let motion = 0, n = 0;
-    // Wrist + index tip + pinky tip, MAX not mean: wrist-only read
-    // finger-articulated signs as stillness, and averaging diluted one-hand
-    // motion below the epsilon (boundaries then fired mid-gesture).
     [['l', lh], ['r', rh]].forEach(([k, hand]) => {
       if (!hand || !hand[0]) return;
-      [0, 8, 20].forEach((li) => {
-        const p = hand[li];
-        if (!p) return;
-        const key = k + li;
-        cur[key] = { x: p.x, y: p.y };
-        if (_segPrev && _segPrev[key]) {
-          const d = Math.abs(p.x - _segPrev[key].x) + Math.abs(p.y - _segPrev[key].y);
-          if (d > motion) motion = d;
-          n++;
-        }
-      });
+      cur[k] = { x: hand[0].x, y: hand[0].y };
+      if (_segPrev && _segPrev[k]) {
+        motion += Math.abs(cur[k].x - _segPrev[k].x) + Math.abs(cur[k].y - _segPrev[k].y);
+        n++;
+      }
     });
     _segPrev = cur;
     if (!n) return; // first tracked frame — nothing to compare yet
-    const m = motion;
-    if (m > SEG_STILL_EPS) {
-      _segMotionFrames++;
-      // Sustained low-band motion is still a gesture — a sign performed slowly
-      // (every frame between the epsilons) must arm the boundary detector too.
-      if (_segMotionFrames >= SEG_MIN_MOTION_FRAMES) _segHadMotion = true;
-    }
+    const m = motion / n;
     if (m > SEG_MOVE_EPS) { _segHadMotion = true; _segStill = 0; return; }
     if (m < SEG_STILL_EPS) {
       _segStill++;
@@ -2055,7 +2026,6 @@ button.is-busy{opacity:.6;cursor:progress}
         frameBuffer = [];     // clear sequence so stale frames don't bleed
         voteBuffer = [];      // ONLY clear votes on true gap (not just every missed frame)
         lastPredWord = null;  // allow same sign again after silence (mirrors script)
-        lastAccepted = null; sameSignCount = 0; // dropping hands separates words — same word may repeat
         segOnGestureEnd('hands_gone'); // segmented ArSL: hand drop = boundary
         streamReset('vision'); // flush the server-side buffer too (streaming mode)
         // (Automatic sentence translation removed: user triggers it via Enter/Button)
@@ -2091,7 +2061,6 @@ button.is-busy{opacity:.6;cursor:progress}
     if (_visionRestGate.update(results)) {
       if (!_wasRestingV) {
         segOnGestureEnd('rest'); // segmented ArSL: entering rest ends the gesture
-        lastAccepted = null; sameSignCount = 0; // resting separates words — same word may repeat
         frameBuffer = []; voteBuffer = [];
         streamReset('vision');
         if (window.SignDiag) SignDiag.event('vision', 'rest_gate_on', {});
@@ -2621,21 +2590,9 @@ button.is-busy{opacity:.6;cursor:progress}
   }
 
   async function sendText2Sign() {
-    // Claim the avatar BEFORE any await: two clicks inside the fetch window
-    // used to start two interleaving playback loops on one canvas.
-    if (avatarPlaying) return;
-    avatarPlaying = true;
-    try {
-      await _sendText2SignInner();
-    } finally {
-      avatarPlaying = false;
-    }
-  }
-
-  async function _sendText2SignInner() {
     const input = document.getElementById('text2sign-input');
     const text = input.value.trim();
-    if (!text) return;
+    if (!text || avatarPlaying) return;
     input.value = '';
 
     t2sHistory.unshift({ text, time: new Date().toLocaleTimeString() });
@@ -2653,18 +2610,10 @@ button.is-busy{opacity:.6;cursor:progress}
     }
     setStatus('Looking up signs…', true);
 
-    // Prefer LLM gloss (ArSL Topic-Comment) for SENTENCES; a single word skips
-    // it — the gloss adds nothing there and its run-to-run variance made the
-    // same input animate different signs.
-    const rawTokens = text.split(/\s+/).filter(Boolean);
-    let words = null;
-    if (rawTokens.length > 1) words = await sentenceToGlossWords(text, 'arabic');
-    if (!words || words.length === 0) words = rawTokens;
-    if (words.length === 0) {
-      setStatus(`لا توجد إشارات لـ: "${text}"`, false);
-      document.getElementById('avatar-placeholder').style.display = 'flex';
-      return;
-    }
+    // Prefer LLM gloss (ArSL Topic-Comment); fall back to raw tokenization.
+    let words = await sentenceToGlossWords(text, 'arabic');
+    if (!words || words.length === 0) words = text.split(/\s+/).filter(Boolean);
+    if (words.length === 0) return;
 
     try {
       const res = await authFetch('/api/signs_ar/batch', {
@@ -2803,7 +2752,6 @@ button.is-busy{opacity:.6;cursor:progress}
       setStatus(`غير موجودة في قاموس الإشارات: ${word}`, false);
       return;
     }
-    avatarPlaying = true; // claim before the fetch (double-click race)
     setStatus(`إعادة تشغيل: ${word}`, true);
     try {
       const res = await authFetch('/api/signs_ar/batch', {
@@ -2819,8 +2767,6 @@ button.is-busy{opacity:.6;cursor:progress}
       setStatus('Done', false);
     } catch (e) {
       setStatus(`Error: ${e.message}`, false);
-    } finally {
-      avatarPlaying = false;
     }
   }
 
@@ -5059,13 +5005,7 @@ const _replayActions = {
   's2sp-log':    function(text) { if (window.speechSynthesis) { const u = new SpeechSynthesisUtterance(text); u.lang='ar-EG'; speechSynthesis.speak(u); } },
   't2s-history': function(text) {
     const inp = document.getElementById('text2sign-input');
-    if (!inp) return;
-    const prior = inp.value;
-    inp.value = text;
-    if (window.sendText2Sign) sendText2Sign();
-    // If the send was rejected (playback in progress) the input still holds
-    // OUR text — restore whatever the user was typing instead of eating it.
-    if (inp.value === text) inp.value = prior;
+    if (inp) { inp.value = text; if (window.sendText2Sign) sendText2Sign(); }
   }
 };
 
@@ -5075,7 +5015,6 @@ function _addReplayBtn(item, logId) {
   if (!textEl) return;
   const text = textEl.textContent.trim();
   if (!text) return;
-  if (text.startsWith('\u26a0')) return; // warnings are not replayable content
   const btn = document.createElement('button');
   btn.className = 'd-log-replay';
   btn.title = 'إعادة';
