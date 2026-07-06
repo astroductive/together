@@ -1591,8 +1591,9 @@ button.is-busy{opacity:.6;cursor:progress}
       module, language,
       w: (v && v.videoWidth) || 640,
       h: (v && v.videoHeight) || 480,
-      // ArSL vision opts into segmented commits (see segTrackMotion).
-      segmented: module === 'vision' && String(language || '').toLowerCase().startsWith('ar'),
+      // Segmented commits are disabled (see the seg block) — parity with
+      // the practice page's continuous voting.
+      segmented: SEG_AR_STREAMING && module === 'vision' && String(language || '').toLowerCase().startsWith('ar'),
     });
     if (module === 'vision') segReset();
     streamActive[module] = true;
@@ -1930,12 +1931,17 @@ button.is-busy{opacity:.6;cursor:progress}
   const _visionRestGate = makeRestGate();
   const _s2spRestGate = makeRestGate();
 
-  // ── Gesture segmentation (ArSL streaming) ──────────────────────────
-  // Continuous voting can commit a WRONG word from a prefix window of a long
-  // gesture (docs/HANDSCRIPT_BUG_HUNT.md #1). Arabic vision streams opt into
-  // SEGMENTED mode: this motion detector marks gesture boundaries (stillness
-  // between signs / hands dropped) and the server classifies each full
-  // boundary-to-boundary segment exactly once.
+  // ── Gesture segmentation (ArSL streaming) — DISABLED ───────────────
+  // Segmented mode (server classifies each boundary-to-boundary gesture once)
+  // was measured live to be a worse trade than Practice's continuous voting:
+  // commits waited for a ~300ms stillness boundary (visibly slower than the
+  // practice page on the same model), and the wrist-only motion detector never
+  // armed on finger-articulated signs, so those never committed AT ALL while
+  // practice recognized them. The dashboards now stream CONTINUOUS, exactly
+  // like practice.html; the server keeps sign_boundary behind the opt-in for
+  // future work. (Tradeoff back in force: a long gesture can early-commit a
+  // wrong prefix word — tap-to-remove chips are the correction path.)
+  const SEG_AR_STREAMING = false;
   let _segPrev = null;       // last wrist positions {l:{x,y}, r:{x,y}}
   let _segStill = 0;         // consecutive still frames
   let _segHadMotion = false; // true once real gesture motion was seen
@@ -1959,10 +1965,11 @@ button.is-busy{opacity:.6;cursor:progress}
   // its end boundary — commit it. With no motion seen there is nothing to
   // commit and the streamReset that follows discards the still frames.
   function segOnGestureEnd(why) {
-    if (_segIsAr() && _segHadMotion) segBoundary(why);
+    if (SEG_AR_STREAMING && _segIsAr() && _segHadMotion) segBoundary(why);
     else segReset();
   }
   function segTrackMotion(results, language) {
+    if (!SEG_AR_STREAMING) return;
     if (!_segIsAr(language)) { if (_segPrev || _segHadMotion) segReset(); return; }
     const lh = results.leftHandLandmarks, rh = results.rightHandLandmarks;
     const cur = {};
