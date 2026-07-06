@@ -2103,10 +2103,13 @@ async def meeting_media(sid, data):
     room = data.get("room", "general") if isinstance(data, dict) else "general"
     if rooms.get(sid) != room:
         return
-    payload = {
-        "sender_sid": sid,
-        "camera": bool(data.get("camera")) if isinstance(data, dict) else False,
-    }
+    # Relay ONLY the fields the sender actually included. Coercing a missing
+    # "camera" key to False broadcast camera:false on every MIC toggle (the
+    # client's mic emit carries no camera field), so arming the mic slapped a
+    # "Camera off" overlay over the speaker's live video on every peer.
+    payload = {"sender_sid": sid}
+    if isinstance(data, dict) and "camera" in data:
+        payload["camera"] = bool(data.get("camera"))
     if isinstance(data, dict) and "mic" in data:
         payload["mic"] = bool(data.get("mic"))
     await sio.emit("meeting_media", payload, room=room, skip_sid=sid)
