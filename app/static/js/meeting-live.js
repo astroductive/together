@@ -1269,34 +1269,39 @@
       if (!words || !words.length) words = normalizeWords(sentence, isArText);
       if (!words.length) continue;
 
-      // Serve every word we can from the cache; fetch only the misses.
+      // The server REWRITES words while resolving them — Arabic words come
+      // back as their English class keys (طفل → baby), English gets
+      // normalized/expanded (I'm → i am), duplicates get merged, and a whole
+      // phrase can match as ONE item. Reconciling the response against the
+      // REQUESTED words therefore missed signs the server actually found and
+      // reported them as "no sign clip" (verified live — ArSL captions never
+      // played at all). Play exactly what the server returns, in its order;
+      // the word cache only serves sentences whose every word hits it.
       var playlist = [];
-      var misses = [];
-      words.forEach(function (w) {
-        if (!cacheGet(langKey, w)) misses.push(w);
-      });
-      var data = null;
-      if (misses.length) {
+      var notFound = [];
+      var allCached = words.every(function (w) { return !!cacheGet(langKey, w); });
+      if (allCached) {
+        playlist = words.map(function (w) { return cacheGet(langKey, w); });
+      } else {
+        var data = null;
         try {
           var res = await opts.authFetch(BATCH_URLS[langKey], {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ words: misses }),
+            body: JSON.stringify({ words: words }),
           });
           if (res.ok) data = await res.json();
         } catch (_) {}
         if (data && Array.isArray(data.found)) {
-          data.found.forEach(function (item) {
-            if (item && item.word) cachePut(langKey, item.word, item);
+          playlist = data.found.filter(function (item) { return item && item.landmarks; });
+          playlist.forEach(function (item) {
+            if (item.word) cachePut(langKey, item.word, item);
           });
+          notFound = Array.isArray(data.missing) ? data.missing.slice() : [];
+        } else {
+          notFound = words.slice(); // request failed — nothing resolvable
         }
       }
-      var notFound = [];
-      words.forEach(function (w) {
-        var item = cacheGet(langKey, w);
-        if (item) playlist.push(item);
-        else notFound.push(w);
-      });
       if (notFound.length) {
         // Surface it where the user is looking instead of failing silently.
         var sep = isArText ? '، ' : ', ';
