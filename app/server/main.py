@@ -1694,7 +1694,9 @@ async def get_batch_arabic_sign_landmarks(
                     continue
                 # video_url parity with the English batch endpoint.
                 video_url = resolve_video_url(matched or w, lang="ar")
-                found.append({"word": w, "landmarks": lms, "frame_count": len(lms),
+                found.append({"word": w,
+                              "word_ar": ARABIC_TRANSLATIONS.get((matched or w).lower(), w),
+                              "landmarks": lms, "frame_count": len(lms),
                               "video_url": video_url})
                 prev_matched = matched
             else:
